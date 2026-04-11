@@ -113,16 +113,42 @@ function filterHiddenEntries(nodes: FileNode[]): FileNode[] {
     });
 }
 
+/** 后端返回的目录条目类型 */
+interface DirEntry {
+  name: string;
+  path: string;
+  isDir: boolean;
+  size: number;
+  modified: number;
+}
+
+/** 将后端 DirEntry 转换为前端 FileNode（不递归加载子目录，按需展开时加载） */
+function dirEntriesToFileNodes(entries: DirEntry[], basePath: string): FileNode[] {
+  return entries.map((entry) => {
+    const relativePath = entry.path.startsWith(basePath)
+      ? entry.path.slice(basePath.length).replace(/^\//, "")
+      : entry.name;
+    return {
+      id: relativePath || entry.name,
+      name: entry.name,
+      path: entry.path,
+      isDir: entry.isDir,
+      children: entry.isDir ? [] : undefined,
+    };
+  });
+}
+
 /** 从后端加载文件树 */
 async function loadFileTree(projectPath: string) {
   const store = useProjectStore.getState();
   store.setLoading(true);
   try {
     const { invoke } = await import("@tauri-apps/api/core");
-    const entries = await invoke<FileNode[]>("list_dir", {
+    const entries = await invoke<DirEntry[]>("list_dir", {
       path: projectPath,
     });
-    store.setFileTree(entries);
+    const fileNodes = dirEntriesToFileNodes(entries, projectPath);
+    store.setFileTree(fileNodes);
   } catch (err) {
     console.warn("Failed to load file tree, using mock data:", err);
     // 开发时使用 mock 数据
