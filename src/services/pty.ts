@@ -39,8 +39,12 @@ export async function onTerminalOutput(
   id: string,
   callback: (data: string) => void
 ): Promise<UnlistenFn> {
-  return listen<{ id: string; data: string }>(`terminal-output-${id}`, (event) => {
-    callback(event.payload.data);
+  return listen<{ terminalId: string; data: number[] }>("terminal-output", (event) => {
+    if (event.payload.terminalId !== id) return;
+    // 后端发送 Vec<u8>，需要解码为字符串
+    const bytes = new Uint8Array(event.payload.data);
+    const text = new TextDecoder().decode(bytes);
+    callback(text);
   });
 }
 
@@ -49,7 +53,8 @@ export async function onTerminalExit(
   id: string,
   callback: (code: number) => void
 ): Promise<UnlistenFn> {
-  return listen<{ id: string; code: number }>(`terminal-exit-${id}`, (event) => {
-    callback(event.payload.code);
+  return listen<{ terminalId: string; exitCode: number | null }>("terminal-exit", (event) => {
+    if (event.payload.terminalId !== id) return;
+    callback(event.payload.exitCode ?? -1);
   });
 }

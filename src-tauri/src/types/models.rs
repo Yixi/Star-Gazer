@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// 项目信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Project {
     pub id: String,
     pub name: String,
@@ -13,6 +14,7 @@ pub struct Project {
 
 /// 目录条目
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DirEntry {
     pub name: String,
     pub path: String,
@@ -23,6 +25,7 @@ pub struct DirEntry {
 
 /// Git 文件变更
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GitFileChange {
     pub path: String,
     pub status: String,
@@ -34,6 +37,7 @@ pub struct GitFileChange {
 
 /// Git 状态摘要
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GitStatusSummary {
     pub branch: String,
     pub ahead: i32,
@@ -45,6 +49,7 @@ pub struct GitStatusSummary {
 
 /// Git 分支信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GitBranch {
     pub name: String,
     pub is_head: bool,
@@ -53,6 +58,7 @@ pub struct GitBranch {
 
 /// Git 日志条目
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GitLogEntry {
     pub hash: String,
     pub short_hash: String,
@@ -71,6 +77,7 @@ pub struct FileChangeEvent {
 
 /// 窗口状态
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WindowState {
     pub width: u32,
     pub height: u32,
@@ -93,6 +100,7 @@ impl Default for WindowState {
 
 /// 面板状态
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PanelState {
     /// 面板 ID
     pub id: String,
@@ -104,6 +112,7 @@ pub struct PanelState {
 
 /// Tab 状态
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TabState {
     /// Tab ID
     pub id: String,
@@ -117,6 +126,7 @@ pub struct TabState {
 
 /// 会话状态 - 记录应用上次关闭时的状态
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Session {
     /// 窗口状态
     pub window: WindowState,
@@ -144,6 +154,7 @@ impl Default for Session {
 
 /// 应用配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AppConfig {
     /// 主题（light/dark/system）
     pub theme: String,

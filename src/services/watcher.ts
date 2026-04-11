@@ -27,7 +27,7 @@ export async function unwatchDir(path: string): Promise<void> {
 export async function onFileChange(
   callback: (event: FileChangeEvent) => void
 ): Promise<UnlistenFn> {
-  return listen<FileChangeEvent>("file-change", (event) => {
+  return listen<FileChangeEvent>("file-changed", (event) => {
     callback(event.payload);
   });
 }

@@ -9,6 +9,7 @@ use tauri::{AppHandle, Emitter};
 
 /// 终端输出事件 payload
 #[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TerminalOutputPayload {
     pub terminal_id: String,
     pub data: Vec<u8>,
@@ -16,6 +17,7 @@ pub struct TerminalOutputPayload {
 
 /// 终端退出事件 payload
 #[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TerminalExitPayload {
     pub terminal_id: String,
     pub exit_code: Option<u32>,

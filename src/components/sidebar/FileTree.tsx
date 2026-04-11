@@ -119,7 +119,7 @@ async function loadFileTree(projectPath: string) {
   store.setLoading(true);
   try {
     const { invoke } = await import("@tauri-apps/api/core");
-    const entries = await invoke<FileNode[]>("list_directory", {
+    const entries = await invoke<FileNode[]>("list_dir", {
       path: projectPath,
     });
     store.setFileTree(entries);

@@ -84,8 +84,8 @@ export function ProjectItem({ project, isActive }: ProjectItemProps) {
 
   const handleRevealInFinder = async () => {
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("reveal_in_finder", { path: project.path });
+      const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
+      await revealItemInDir(project.path);
     } catch {
       console.warn("Reveal in Finder not available");
     }
