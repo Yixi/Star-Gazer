@@ -1,0 +1,364 @@
+/**
+ * Star Gazer 设计系统 — Design Tokens
+ *
+ * 追求 Linear / Raycast / Arc 级别的 UI 质感。
+ * 所有色值、间距、字体、圆角、阴影、动画曲线统一在此定义，
+ * 供 Tailwind CSS 和组件样式引用。
+ */
+
+/* ========================================
+   1. 颜色系统
+   ======================================== */
+
+:root {
+  /* --- 背景层次（从深到浅） --- */
+  --sg-bg-app: #06070a;          /* 应用最底层背景 */
+  --sg-bg-window: #0a0b0f;      /* 窗口背景 */
+  --sg-bg-sidebar: #0d0e13;     /* 侧边栏 & 标题栏 */
+  --sg-bg-canvas: #0f1116;      /* 画布 / 面板背景 */
+  --sg-bg-card: #161820;        /* 卡片主体 */
+  --sg-bg-card-header: #1a1d26; /* 卡片头部 */
+  --sg-bg-code: #0d0f14;        /* 代码区域 / 终端背景 */
+  --sg-bg-elevated: #13151c;    /* 悬浮卡片 / 弹出菜单 */
+
+  /* --- 边框 & 分隔线 --- */
+  --sg-border-primary: #1a1c23;   /* 主要边框（侧边栏/面板分隔） */
+  --sg-border-secondary: #1f2128; /* 次要边框（卡片/按钮） */
+  --sg-border-divider: #2a2f3b;   /* 分隔线（工具栏内部） */
+  --sg-border-subtle: #141620;    /* 微妙边框（几乎不可见） */
+
+  /* --- 文字层次 --- */
+  --sg-text-primary: #e4e6eb;   /* 主要文字 */
+  --sg-text-secondary: #b8bcc4; /* 次要文字 */
+  --sg-text-tertiary: #8b92a3;  /* 辅助文字 */
+  --sg-text-hint: #6b7280;      /* 提示文字 */
+  --sg-text-placeholder: #4a5263; /* 占位文字 */
+  --sg-text-disabled: #3a4150;  /* 禁用文字 */
+
+  /* --- 强调色 --- */
+  --sg-accent: #4a9eff;           /* 主强调色 */
+  --sg-accent-hover: #5eadff;     /* 强调色悬停态 */
+  --sg-accent-active: #3b82f6;    /* 强调色激活态 */
+  --sg-accent-muted: rgba(74, 158, 255, 0.15); /* 柔和强调色背景 */
+
+  /* --- Agent 色盘 --- */
+  --sg-agent-blue: #4a9eff;
+  --sg-agent-orange: #ff8c42;
+  --sg-agent-purple: #a78bfa;
+  --sg-agent-green: #22c55e;
+  --sg-agent-pink: #ec4899;
+  --sg-agent-yellow: #eab308;
+  --sg-agent-cyan: #06b6d4;
+  --sg-agent-red: #ef4444;
+
+  /* Agent 发光色（降低透明度用于 glow / box-shadow） */
+  --sg-glow-blue: rgba(74, 158, 255, 0.5);
+  --sg-glow-orange: rgba(255, 140, 66, 0.5);
+  --sg-glow-purple: rgba(167, 139, 250, 0.5);
+  --sg-glow-green: rgba(34, 197, 94, 0.5);
+  --sg-glow-pink: rgba(236, 72, 153, 0.5);
+  --sg-glow-yellow: rgba(234, 179, 8, 0.5);
+  --sg-glow-cyan: rgba(6, 182, 212, 0.5);
+  --sg-glow-red: rgba(239, 68, 68, 0.5);
+
+  /* --- 状态色 --- */
+  --sg-success: #22c55e;
+  --sg-warning: #febc2e;
+  --sg-error: #ef4444;
+  --sg-info: #4a9eff;
+
+  /* ========================================
+     2. 间距系统（4px 基准）
+     ======================================== */
+  --sg-space-0: 0px;
+  --sg-space-1: 4px;     /* 紧凑间距 */
+  --sg-space-2: 8px;     /* 小间距 */
+  --sg-space-3: 12px;    /* 常规间距 */
+  --sg-space-4: 16px;    /* 标准间距 */
+  --sg-space-5: 20px;    /* 中等间距 */
+  --sg-space-6: 24px;    /* 宽松间距 */
+  --sg-space-8: 32px;    /* 大间距 */
+  --sg-space-10: 40px;   /* 特大间距 */
+  --sg-space-12: 48px;   /* 超大间距 */
+  --sg-space-16: 64px;   /* 巨大间距 */
+
+  /* ========================================
+     3. 字体系统
+     ======================================== */
+  --sg-font-ui: 'Geist Variable', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  --sg-font-mono: 'SF Mono', 'Menlo', 'Consolas', 'DejaVu Sans Mono', monospace;
+  --sg-font-heading: 'Geist Variable', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+
+  /* 字号尺度 */
+  --sg-text-2xs: 9px;
+  --sg-text-xs: 10px;
+  --sg-text-sm: 11px;
+  --sg-text-base: 12px;
+  --sg-text-md: 13px;
+  --sg-text-lg: 14px;
+  --sg-text-xl: 16px;
+  --sg-text-2xl: 18px;
+  --sg-text-3xl: 24px;
+
+  /* 行高 */
+  --sg-leading-tight: 1.25;
+  --sg-leading-normal: 1.5;
+  --sg-leading-relaxed: 1.65;
+  --sg-leading-loose: 1.75;
+
+  /* 字重 */
+  --sg-weight-normal: 400;
+  --sg-weight-medium: 500;
+  --sg-weight-semibold: 600;
+  --sg-weight-bold: 700;
+
+  /* ========================================
+     4. 圆角系统
+     ======================================== */
+  --sg-radius-none: 0px;
+  --sg-radius-xs: 2px;
+  --sg-radius-sm: 3px;
+  --sg-radius-md: 5px;
+  --sg-radius-lg: 8px;
+  --sg-radius-xl: 10px;
+  --sg-radius-2xl: 12px;
+  --sg-radius-full: 9999px;
+
+  /* ========================================
+     5. 阴影系统
+     ======================================== */
+  --sg-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --sg-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --sg-shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.5);
+  --sg-shadow-xl: 0 20px 50px rgba(0, 0, 0, 0.6);
+  --sg-shadow-2xl: 0 30px 80px rgba(0, 0, 0, 0.7);
+
+  /* 卡片拖拽时的加深阴影 */
+  --sg-shadow-card: 0 10px 30px rgba(0, 0, 0, 0.5);
+  --sg-shadow-card-dragging: 0 20px 50px rgba(0, 0, 0, 0.7);
+
+  /* FAB 按钮阴影 */
+  --sg-shadow-fab: 0 10px 30px rgba(74, 158, 255, 0.45);
+  --sg-shadow-fab-hover: 0 14px 40px rgba(74, 158, 255, 0.55);
+
+  /* 发光阴影（用于选中/激活状态） */
+  --sg-shadow-glow-blue: 0 0 12px rgba(74, 158, 255, 0.4);
+  --sg-shadow-glow-orange: 0 0 12px rgba(255, 140, 66, 0.4);
+  --sg-shadow-glow-purple: 0 0 12px rgba(167, 139, 250, 0.4);
+  --sg-shadow-glow-green: 0 0 12px rgba(34, 197, 94, 0.4);
+  --sg-shadow-glow-pink: 0 0 12px rgba(236, 72, 153, 0.4);
+  --sg-shadow-glow-yellow: 0 0 12px rgba(234, 179, 8, 0.4);
+  --sg-shadow-glow-cyan: 0 0 12px rgba(6, 182, 212, 0.4);
+  --sg-shadow-glow-red: 0 0 12px rgba(239, 68, 68, 0.4);
+
+  /* ========================================
+     6. 动画系统
+     ======================================== */
+
+  /* 持续时间 */
+  --sg-duration-instant: 50ms;
+  --sg-duration-fast: 100ms;
+  --sg-duration-normal: 150ms;
+  --sg-duration-moderate: 200ms;
+  --sg-duration-slow: 300ms;
+  --sg-duration-slower: 500ms;
+
+  /* 缓动曲线 */
+  --sg-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --sg-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --sg-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --sg-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);  /* 弹性效果 */
+  --sg-ease-bounce: cubic-bezier(0.68, -0.55, 0.27, 1.55); /* 弹跳效果 */
+  --sg-ease-smooth: cubic-bezier(0.25, 0.1, 0.25, 1);     /* 平滑过渡 */
+
+  /* 复合 transition 快捷方式 */
+  --sg-transition-colors: color var(--sg-duration-normal) var(--sg-ease-in-out),
+    background-color var(--sg-duration-normal) var(--sg-ease-in-out),
+    border-color var(--sg-duration-normal) var(--sg-ease-in-out);
+  --sg-transition-opacity: opacity var(--sg-duration-normal) var(--sg-ease-in-out);
+  --sg-transition-transform: transform var(--sg-duration-normal) var(--sg-ease-out);
+  --sg-transition-shadow: box-shadow var(--sg-duration-normal) var(--sg-ease-in-out);
+
+  /* ========================================
+     7. 布局尺寸
+     ======================================== */
+  --sg-sidebar-width: 240px;
+  --sg-sidebar-collapsed-width: 48px;
+  --sg-panel-width: 540px;
+  --sg-statusbar-height: 24px;
+  --sg-titlebar-height: 36px;
+  --sg-tabbar-height: 36px;
+  --sg-toolbar-height: 36px;
+  --sg-fab-size: 44px;
+
+  /* ========================================
+     8. z-index 分层
+     ======================================== */
+  --sg-z-canvas: 0;
+  --sg-z-card: 10;
+  --sg-z-toolbar: 20;
+  --sg-z-panel: 30;
+  --sg-z-sidebar: 40;
+  --sg-z-fab: 50;
+  --sg-z-modal: 100;
+  --sg-z-toast: 200;
+  --sg-z-tooltip: 300;
+}
+
+/* ========================================
+   Tailwind CSS 自定义主题扩展
+   在 @theme 中注册 design tokens 供 Tailwind 使用
+   ======================================== */
+
+@theme inline {
+  /* Star Gazer 背景色 */
+  --color-sg-bg-app: var(--sg-bg-app);
+  --color-sg-bg-window: var(--sg-bg-window);
+  --color-sg-bg-sidebar: var(--sg-bg-sidebar);
+  --color-sg-bg-canvas: var(--sg-bg-canvas);
+  --color-sg-bg-card: var(--sg-bg-card);
+  --color-sg-bg-card-header: var(--sg-bg-card-header);
+  --color-sg-bg-code: var(--sg-bg-code);
+  --color-sg-bg-elevated: var(--sg-bg-elevated);
+
+  /* Star Gazer 边框色 */
+  --color-sg-border-primary: var(--sg-border-primary);
+  --color-sg-border-secondary: var(--sg-border-secondary);
+  --color-sg-border-divider: var(--sg-border-divider);
+
+  /* Star Gazer 文字色 */
+  --color-sg-text-primary: var(--sg-text-primary);
+  --color-sg-text-secondary: var(--sg-text-secondary);
+  --color-sg-text-tertiary: var(--sg-text-tertiary);
+  --color-sg-text-hint: var(--sg-text-hint);
+
+  /* Star Gazer 强调色 */
+  --color-sg-accent: var(--sg-accent);
+  --color-sg-accent-hover: var(--sg-accent-hover);
+  --color-sg-accent-muted: var(--sg-accent-muted);
+}
+
+/* ========================================
+   全局 Keyframes 动画
+   ======================================== */
+
+/* 脉动蓝点动画 */
+@keyframes sg-pulse-dot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 8px var(--sg-agent-blue);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.7);
+    box-shadow: 0 0 0px var(--sg-agent-blue);
+  }
+}
+
+/* 卡片入场动画 — 从中心缩放弹入 */
+@keyframes sg-card-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 卡片退场动画 — 缩小 + 淡出 */
+@keyframes sg-card-exit {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+/* 面板侧滑入场 */
+@keyframes sg-slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* 面板侧滑退场 */
+@keyframes sg-slide-out-right {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* 淡入动画 */
+@keyframes sg-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 淡出动画 */
+@keyframes sg-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* 从下方淡入 */
+@keyframes sg-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 光标闪烁 */
+@keyframes sg-cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* 旋转加载 */
+@keyframes sg-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 呼吸灯效果 */
+@keyframes sg-breathe {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* 状态变化闪烁 */
+@keyframes sg-status-flash {
+  0% { opacity: 1; }
+  25% { opacity: 0.4; }
+  50% { opacity: 1; }
+  75% { opacity: 0.4; }
+  100% { opacity: 1; }
+}
