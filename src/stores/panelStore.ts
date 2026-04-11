@@ -10,19 +10,35 @@ interface PanelState {
   activeTabId: string | null;
   /** 所有 Tab */
   tabs: PanelTab[];
+  /** Diff 统计信息 (tabId -> { additions, deletions }) */
+  diffStats: Record<string, { additions: number; deletions: number }>;
 
   /** 切换面板显示 */
   togglePanel: () => void;
+  /** 打开面板 */
+  openPanel: () => void;
+  /** 关闭面板 */
+  closePanel: () => void;
   /** 设置面板宽度 */
   setWidth: (width: number) => void;
   /** 打开文件 Tab */
   openTab: (tab: PanelTab) => void;
   /** 关闭 Tab */
   closeTab: (id: string) => void;
+  /** 关闭其他 Tab */
+  closeOtherTabs: (id: string) => void;
+  /** 关闭所有 Tab */
+  closeAllTabs: () => void;
   /** 设置活动 Tab */
   setActiveTab: (id: string) => void;
   /** 标记 Tab 为已修改 */
   markDirty: (id: string, dirty: boolean) => void;
+  /** 设置 Tab 类型 */
+  setTabType: (id: string, type: PanelTab["type"]) => void;
+  /** 重新排序 Tab */
+  reorderTabs: (fromIndex: number, toIndex: number) => void;
+  /** 设置 Diff 统计 */
+  setDiffStat: (tabId: string, additions: number, deletions: number) => void;
 }
 
 export const usePanelStore = create<PanelState>((set) => ({
@@ -30,10 +46,15 @@ export const usePanelStore = create<PanelState>((set) => ({
   width: 540,
   activeTabId: null,
   tabs: [],
+  diffStats: {},
 
   togglePanel: () => set((state) => ({ isOpen: !state.isOpen })),
 
-  setWidth: (width) => set({ width }),
+  openPanel: () => set({ isOpen: true }),
+
+  closePanel: () => set({ isOpen: false }),
+
+  setWidth: (width) => set({ width: Math.max(320, Math.min(900, width)) }),
 
   openTab: (tab) =>
     set((state) => {
@@ -64,10 +85,37 @@ export const usePanelStore = create<PanelState>((set) => ({
       };
     }),
 
+  closeOtherTabs: (id) =>
+    set((state) => ({
+      tabs: state.tabs.filter((t) => t.id === id),
+      activeTabId: id,
+    })),
+
+  closeAllTabs: () =>
+    set({ tabs: [], activeTabId: null, isOpen: false }),
+
   setActiveTab: (id) => set({ activeTabId: id }),
 
   markDirty: (id, dirty) =>
     set((state) => ({
       tabs: state.tabs.map((t) => (t.id === id ? { ...t, isDirty: dirty } : t)),
+    })),
+
+  setTabType: (id, type) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) => (t.id === id ? { ...t, type } : t)),
+    })),
+
+  reorderTabs: (fromIndex, toIndex) =>
+    set((state) => {
+      const newTabs = [...state.tabs];
+      const [removed] = newTabs.splice(fromIndex, 1);
+      newTabs.splice(toIndex, 0, removed);
+      return { tabs: newTabs };
+    }),
+
+  setDiffStat: (tabId, additions, deletions) =>
+    set((state) => ({
+      diffStats: { ...state.diffStats, [tabId]: { additions, deletions } },
     })),
 }));
