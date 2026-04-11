@@ -116,7 +116,7 @@ export function TabBar() {
         ))}
       </div>
 
-      {/* 右侧渐变 fade + 省略号 */}
+      {/* 右侧渐变 fade */}
       {showFadeRight && (
         <div
           className="absolute right-8 top-0 bottom-0 w-8 pointer-events-none"
@@ -126,14 +126,36 @@ export function TabBar() {
         />
       )}
 
+      {/* ⋯ 溢出提示 */}
+      {showFadeRight && (
+        <div
+          className="flex items-center justify-center flex-shrink-0"
+          style={{
+            height: 36,
+            padding: '0 10px',
+            color: '#6b7280',
+            fontSize: 14,
+            borderLeft: '1px solid #1a1c23',
+            background: '#0d0e13',
+          }}
+        >
+          ⋯
+        </div>
+      )}
+
       {/* 面板关闭按钮 */}
       <button
-        className="flex-shrink-0 p-2 hover:bg-white/5 transition-colors"
-        style={{ color: "#8b92a3" }}
+        className="flex-shrink-0 flex items-center justify-center text-[#6b7280] bg-[#0d0e13] hover:bg-[#1a1c23] hover:text-[#e4e6eb] transition-colors"
+        style={{
+          width: 36,
+          height: 36,
+          borderLeft: '1px solid #1a1c23',
+          fontSize: 16,
+        }}
         onClick={closePanel}
         title="关闭面板 (⌘\\)"
       >
-        <X className="w-3.5 h-3.5" />
+        <X style={{ width: 16, height: 16 }} />
       </button>
 
       {/* 右键上下文菜单 */}
@@ -201,10 +223,11 @@ function TabItem({
 }) {
   return (
     <div
-      className="flex items-center gap-1.5 px-3 text-xs cursor-pointer select-none transition-colors relative flex-shrink-0"
+      className={`group flex items-center gap-1.5 px-3 text-xs cursor-pointer select-none transition-colors relative flex-shrink-0 ${
+        isActive ? "bg-[#0f1116]" : "hover:bg-[#13151c]"
+      }`}
       style={{
         height: 36,
-        backgroundColor: isActive ? "#0f1116" : "transparent",
         color: isActive ? "#e4e6eb" : "#8b92a3",
         borderRight: "1px solid #1a1c23",
         opacity: isDragging ? 0.5 : 1,
@@ -242,10 +265,15 @@ function TabItem({
 
       {/* 模式徽章 */}
       <span
-        className="px-1 py-0.5 rounded text-[9px] uppercase flex-shrink-0"
+        className="text-[9px] uppercase flex-shrink-0"
         style={{
-          backgroundColor: tab.type === "diff" ? "rgba(74, 158, 255, 0.15)" : "rgba(139, 146, 163, 0.1)",
-          color: tab.type === "diff" ? "#4a9eff" : "#8b92a3",
+          padding: '1px 5px',
+          borderRadius: 2,
+          fontFamily: "'SF Mono', monospace",
+          fontWeight: 600,
+          letterSpacing: '0.3px',
+          backgroundColor: tab.type === "diff" ? "rgba(74, 158, 255, 0.18)" : "rgba(107, 114, 128, 0.2)",
+          color: tab.type === "diff" ? "#4a9eff" : "#9ca3af",
         }}
       >
         {tab.type}
@@ -253,16 +281,20 @@ function TabItem({
 
       {/* 关闭按钮 */}
       <button
-        className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-white/10 transition-all ml-0.5 flex-shrink-0"
-        style={{ color: "#8b92a3", opacity: isActive ? 0.7 : 0 }}
+        className={`flex items-center justify-center text-[#6b7280] hover:bg-[#2a2f3b] hover:text-[#e4e6eb] transition-all ml-0.5 flex-shrink-0 ${
+          isActive ? "opacity-70 hover:opacity-100" : "opacity-0 group-hover:opacity-100"
+        }`}
+        style={{
+          width: 14,
+          height: 14,
+          borderRadius: 3,
+        }}
         onClick={(e) => {
           e.stopPropagation();
           onClose();
         }}
-        onMouseEnter={(e) => { (e.target as HTMLElement).style.opacity = "1"; }}
-        onMouseLeave={(e) => { (e.target as HTMLElement).style.opacity = isActive ? "0.7" : "0"; }}
       >
-        <X className="w-3 h-3" />
+        <X style={{ width: 11, height: 11 }} />
       </button>
     </div>
   );

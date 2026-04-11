@@ -18,7 +18,7 @@
  * - Hover 时触发关联高亮
  */
 import { useRef, useCallback, useState, useEffect } from "react";
-import { GripHorizontal, X, Minus, Maximize2, Minimize2 } from "lucide-react";
+import { X, Minus, Maximize2, Minimize2 } from "lucide-react";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { useProjectStore } from "@/stores/projectStore";
 import { TerminalView } from "@/components/terminal/TerminalView";
@@ -50,6 +50,7 @@ const STATUS_INDICATOR: Record<
   idle: { color: "#6b7280", label: "空闲", animate: false },
   stopped: { color: "#febc2e", label: "已停止", animate: false },
   error: { color: "#ef4444", label: "错误", animate: true },
+  waiting: { color: "#febc2e", label: "等待审批", animate: true },
 };
 
 /** 拖拽方向枚举 */
@@ -446,9 +447,10 @@ export function AgentCard({ agent }: AgentCardProps) {
       >
         {/* 标题栏 */}
         <div
-          className="flex items-center justify-between px-3 cursor-move select-none"
+          className="flex items-center justify-between cursor-move select-none"
           style={{
             height: HEADER_HEIGHT,
+            padding: "10px 14px",
             background: "var(--sg-bg-card-header)",
             borderBottom:
               displayMode === "minimized"
@@ -459,10 +461,6 @@ export function AgentCard({ agent }: AgentCardProps) {
           onDoubleClick={handleHeaderDoubleClick}
         >
           <div className="flex items-center gap-2 min-w-0">
-            <GripHorizontal
-              className="w-3 h-3 flex-shrink-0"
-              style={{ color: "var(--sg-text-hint)" }}
-            />
             {/* Agent 颜色指示圆点 */}
             <span
               className="w-2 h-2 rounded-full flex-shrink-0"
@@ -511,12 +509,22 @@ export function AgentCard({ agent }: AgentCardProps) {
             >
               {statusInfo.animate && (
                 <PulsingDot
-                  color={agent.status === "error" ? "red" : "green"}
+                  color={agent.status === "error" ? "red" : agent.status === "waiting" ? "yellow" : "green"}
                   size={4}
                 />
               )}
               {statusInfo.label}
             </span>
+            {/* 项目名副标题 */}
+            {agent.cwd && (
+              <span
+                className="text-[10px] truncate max-w-[100px] flex-shrink-0"
+                style={{ color: "var(--sg-text-hint)", marginLeft: "auto" }}
+                title={agent.cwd}
+              >
+                {agent.cwd.split("/").pop() || ""}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-0.5 flex-shrink-0">
             <button
@@ -557,7 +565,7 @@ export function AgentCard({ agent }: AgentCardProps) {
         {/* 终端区域 - 非最小化时显示 */}
         {displayMode !== "minimized" && (
           <div
-            className="flex-1"
+            className="flex flex-col"
             style={{
               height:
                 displayMode === "maximized"
@@ -566,7 +574,24 @@ export function AgentCard({ agent }: AgentCardProps) {
               background: "var(--sg-bg-code)",
             }}
           >
-            <TerminalView terminalId={agent.terminalId} cwd={agent.cwd} agentId={agent.id} />
+            <div className="flex-1 min-h-0">
+              <TerminalView terminalId={agent.terminalId} cwd={agent.cwd} agentId={agent.id} />
+            </div>
+            {/* Approval box - waiting 状态时显示 */}
+            {agent.status === "waiting" && agent.approvalMessage && (
+              <div
+                className="mx-2 mb-2 px-2.5 py-1.5 rounded"
+                style={{
+                  background: "rgba(254, 188, 46, 0.1)",
+                  border: "1px solid rgba(254, 188, 46, 0.35)",
+                  color: "#febc2e",
+                  fontSize: "10px",
+                  fontFamily: "'SF Mono', monospace",
+                }}
+              >
+                {agent.approvalMessage}
+              </div>
+            )}
           </div>
         )}
       </div>

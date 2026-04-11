@@ -79,19 +79,20 @@ export function Sidebar() {
   // Git 状态 — 加载分支名和文件 diff 统计
   const { status: gitStatus } = useGitStatus(activeProject?.path ?? null);
   useEffect(() => {
-    if (!gitStatus) return;
+    if (!gitStatus || !activeProject) return;
     // 更新 Git 分支名
     useProjectStore.getState().setGitBranch(gitStatus.branch);
-    // 更新文件 diff 统计
+    // 更新文件 diff 统计（拼接完整路径，使 FileTree 能匹配）
     const diffStats: Record<string, { additions: number; deletions: number }> = {};
     for (const change of [...gitStatus.staged, ...gitStatus.unstaged]) {
-      diffStats[change.path] = {
+      const fullPath = activeProject.path + '/' + change.path;
+      diffStats[fullPath] = {
         additions: change.additions,
         deletions: change.deletions,
       };
     }
     useProjectStore.getState().setFileDiffStats(diffStats);
-  }, [gitStatus]);
+  }, [gitStatus, activeProject]);
 
   return (
     <aside
@@ -147,58 +148,60 @@ export function Sidebar() {
             animation: "sg-fade-in 150ms var(--sg-ease-out, ease-out) both",
           }}
         >
-          {/* 标题栏 */}
+          {/* 标题栏 — 设计稿: padding 12px 14px */}
           <div
-            className="flex items-center justify-between px-3 py-2 flex-shrink-0 border-b"
-            style={{ borderColor: "var(--sg-border-primary, #1a1c23)" }}
+            className="flex items-center justify-between flex-shrink-0 border-b"
+            style={{
+              padding: "12px 14px",
+              borderColor: "var(--sg-border-primary, #1a1c23)",
+            }}
           >
             <h2
-              className="text-xs font-semibold uppercase tracking-wider"
-              style={{ color: "var(--sg-text-tertiary, #8b92a3)" }}
+              className="font-semibold uppercase"
+              style={{
+                color: "var(--sg-text-tertiary, #8b92a3)",
+                fontSize: 10,
+                letterSpacing: "0.8px",
+              }}
             >
               Projects
             </h2>
             <AddProjectButton />
           </div>
 
-          {/* 项目列表区域 */}
-          <div
-            className="flex-shrink-0 border-b overflow-y-auto"
-            style={{
-              borderColor: "var(--sg-border-primary, #1a1c23)",
-              maxHeight: "30%",
-            }}
-          >
-            <div className="p-1">
-              {projects.map((project) => (
-                <ProjectItem
-                  key={project.id}
-                  project={project}
-                  isActive={activeProject?.id === project.id}
-                />
-              ))}
-              {projects.length === 0 && (
-                <div
-                  className="text-xs text-center py-4"
-                  style={{ color: "var(--sg-text-hint, #6b7280)" }}
-                >
-                  点击 + 添加项目
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* 文件树区域 */}
-          <div className="flex-1 overflow-hidden">
-            {activeProject ? (
-              <FileTree />
-            ) : (
+          {/* 项目 + 文件树统一区域 — 去掉容器 padding，由子项自行控制 */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {projects.length === 0 ? (
               <div
-                className="flex items-center justify-center h-full text-sm"
+                className="text-xs text-center py-4"
                 style={{ color: "var(--sg-text-hint, #6b7280)" }}
               >
-                请选择或添加项目
+                点击 + 添加项目
               </div>
+            ) : (
+              projects.map((project) => {
+                const isActive = activeProject?.id === project.id;
+                return (
+                  <div
+                    key={project.id}
+                    className={
+                      isActive
+                        ? "flex flex-col flex-1 min-h-0"
+                        : "flex-shrink-0"
+                    }
+                  >
+                    <ProjectItem
+                      project={project}
+                      isActive={isActive}
+                    />
+                    {isActive && (
+                      <div className="flex-1 overflow-hidden">
+                        <FileTree />
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>

@@ -12,16 +12,8 @@
  * - 实时写入指示（脉动蓝点）
  * - Hover 关联高亮
  */
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { Tree, NodeRendererProps } from "react-arborist";
-import {
-  ChevronRight,
-  File,
-  FolderOpen,
-  Folder,
-  CircleHelp,
-  AlertCircle,
-} from "lucide-react";
 import { useProjectStore } from "@/stores/projectStore";
 import { usePanelStore } from "@/stores/panelStore";
 import type { FileNode } from "@/types/project";
@@ -47,8 +39,23 @@ const HIDDEN_ENTRIES = new Set([
 export function FileTree() {
   const { fileTree, isLoading, activeProject } = useProjectStore();
   const containerRef = useRef<HTMLDivElement>(null);
+  const [containerHeight, setContainerHeight] = useState(600);
   /** 已加载过子节点的目录 ID 集合，避免重复请求 */
   const loadedDirsRef = useRef<Set<string>>(new Set());
+
+  // 跟踪容器高度变化（ResizeObserver）
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const h = entry.contentRect.height;
+        if (h > 0) setContainerHeight(h);
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // 初始加载文件树
   useEffect(() => {
@@ -116,9 +123,9 @@ export function FileTree() {
         data={filteredTree}
         openByDefault={false}
         width="100%"
-        height={containerRef.current?.clientHeight ?? 600}
+        height={containerHeight}
         indent={16}
-        rowHeight={26}
+        rowHeight={28}
         overscanCount={8}
         idAccessor="id"
         childrenAccessor="children"
@@ -215,16 +222,20 @@ const AGENT_COLOR_HEX: Record<string, string> = {
 };
 
 /**
- * 单个文件树节点 — Hover 关联高亮（核心差异化交互）
+ * 单个文件树节点 — 像素级匹配设计稿
  *
- * 当 Agent 卡片被悬停时：
- * - 被该 Agent 修改的文件：背景渐变 + 左侧 2px 颜色竖条 + 文件名白色加粗
- * - 其他所有文件：变暗到 35% 透明度
- * - 所有过渡使用 300ms ease-in-out 平滑恢复
+ * 设计稿规格（来自 Mockup CSS）：
+ * - .tree-node (文件夹): padding 4px 14px 4px {depth*16+14}px, gap 6px, 13px
+ * - .file (文件): padding 5px 14px 5px {depth*16+14}px, gap 6px, 13px
+ * - Caret: ▼/▶ 文字, 9px, #6b7280, 10px 宽
+ * - 图标: 📂/📁/📄 emoji, 11px
+ * - active-in-panel: 蓝色左边条 + 淡蓝背景
+ * - Agent hover: 背景渐变 + 颜色竖条 + 文件名加粗
  */
 function FileTreeNode({ node, style }: NodeRendererProps<FileNode>) {
   const data = node.data;
   const openTab = usePanelStore((s) => s.openTab);
+  const activeTabId = usePanelStore((s) => s.activeTabId);
   const writingFiles = useProjectStore((s) => s.writingFiles);
   const hoveredAgentId = useProjectStore((s) => s.hoveredAgentId);
   const agentFileMap = useProjectStore((s) => s.agentFileMap);
@@ -232,23 +243,27 @@ function FileTreeNode({ node, style }: NodeRendererProps<FileNode>) {
 
   const isWriting = writingFiles.has(data.path);
 
-  /* ====== Hover 关联高亮核心逻辑 ====== */
+  // 从 fileDiffStats 推导 gitStatus（如果文件有 diff 则认为是 modified）
+  const hasRealDiff = !!fileDiffStats[data.path];
+  const effectiveGitStatus = data.gitStatus || (hasRealDiff ? "modified" : undefined);
+
+  /* ====== Hover 关联高亮 ====== */
   const isHighlightedByAgent =
     hoveredAgentId !== null && agentFileMap[hoveredAgentId]?.includes(data.path);
-  /* 有 Agent 被悬停但当前文件不属于该 Agent → 变暗 */
   const isDimmed = hoveredAgentId !== null && !isHighlightedByAgent;
-
-  /* 获取高亮 Agent 的实际颜色（从文件的 agentColor 派生） */
   const highlightColor = isHighlightedByAgent
     ? AGENT_COLOR_HEX[data.agentColor ?? "blue"] ?? "#4a9eff"
     : undefined;
+
+  /* ====== Active-in-panel ====== */
+  const isActiveInPanel = !data.isDir && activeTabId === data.path;
 
   const handleClick = () => {
     if (node.isInternal) {
       node.toggle();
     } else {
       const hasChanges =
-        data.gitStatus && data.gitStatus !== "unchanged" && data.gitStatus !== "ignored";
+        effectiveGitStatus && effectiveGitStatus !== "unchanged" && effectiveGitStatus !== "ignored";
       openTab({
         id: data.path,
         title: data.name,
@@ -256,119 +271,92 @@ function FileTreeNode({ node, style }: NodeRendererProps<FileNode>) {
         filePath: data.path,
         isDirty: false,
       });
+      usePanelStore.getState().openPanel();
     }
   };
 
   const diffStat = data.diffStat || fileDiffStats[data.path];
+  const isDeleted = effectiveGitStatus === "deleted";
+  const isAdded = effectiveGitStatus === "added";
+  const isUntracked = effectiveGitStatus === "untracked";
 
-  const isUntracked = data.gitStatus === "untracked";
-  const isDeleted = data.gitStatus === "deleted";
-  const isAdded = data.gitStatus === "added";
-  const isConflicted = data.gitStatus === "conflicted";
+  /* 计算行内边距 — 基础 30px（项目名 14px + 一级缩进 16px）+ react-arborist 的深度缩进 */
+  const basePaddingLeft = ((style.paddingLeft as number) || 0) + 30;
 
   return (
     <div
       style={{
         ...style,
-        /* 300ms 平滑过渡 — opacity、background */
+        /* 覆盖 react-arborist 的 paddingLeft，加上基础 14px */
+        paddingLeft: basePaddingLeft,
+        paddingRight: 14,
+        paddingTop: node.isInternal ? 4 : 5,
+        paddingBottom: node.isInternal ? 4 : 5,
+        /* 过渡动画 */
         transition: "opacity 300ms ease, background 300ms ease",
-        /* 变暗效果 — 35% 透明度 */
         opacity: isDimmed ? 0.35 : 1,
-        /* 高亮时背景渐变效果 */
+        /* 背景 — agent hover 优先，active-in-panel 次之 */
         background: isHighlightedByAgent
           ? `linear-gradient(90deg, ${highlightColor}18 0%, transparent 100%)`
-          : "transparent",
+          : isActiveInPanel
+            ? "rgba(74, 158, 255, 0.08)"
+            : "transparent",
         position: "relative",
       }}
-      className="flex items-center pr-2 cursor-pointer hover:bg-white/[0.04] rounded-sm"
+      className="flex items-center cursor-pointer hover:bg-white/[0.04]"
       onClick={handleClick}
     >
-      {/* 左侧 2px 颜色竖条 — 带发光效果，宽度过渡动画 */}
+      {/* 左侧 2px 颜色竖条 */}
       <div
-        className="absolute left-0 top-0 bottom-0 rounded-full"
+        className="absolute left-0 top-0 bottom-0"
         style={{
-          width: isHighlightedByAgent ? 2 : 0,
-          backgroundColor: highlightColor ?? "transparent",
+          width: isHighlightedByAgent || isActiveInPanel ? 2 : 0,
+          backgroundColor: isHighlightedByAgent
+            ? (highlightColor ?? "transparent")
+            : isActiveInPanel
+              ? "#4a9eff"
+              : "transparent",
           boxShadow: isHighlightedByAgent ? `0 0 6px ${highlightColor}60` : "none",
           transition: "width 300ms ease, box-shadow 300ms ease",
         }}
       />
 
-      <div className="flex items-center gap-1 flex-1 min-w-0">
-        {/* 展开/折叠箭头 */}
+      {/* 内容行 — gap 6px 匹配设计稿 */}
+      <div className="flex items-center flex-1 min-w-0" style={{ gap: 6 }}>
+        {/* Caret — ▼/▶ 文字，9px，10px 宽 */}
         {node.isInternal ? (
-          <ChevronRight
-            className="w-3 h-3 flex-shrink-0"
-            style={{
-              transform: node.isOpen ? "rotate(90deg)" : "rotate(0deg)",
-              transition: "transform 150ms ease-out",
-              color: "var(--sg-text-tertiary, #8b92a3)",
-            }}
-          />
+          <span
+            className="flex-shrink-0 text-center leading-none select-none"
+            style={{ color: "#6b7280", fontSize: 9, width: 10 }}
+          >
+            {node.isOpen ? "▼" : "▶"}
+          </span>
         ) : (
-          <span className="w-3 flex-shrink-0" />
+          <span className="flex-shrink-0" style={{ width: 10 }} />
         )}
 
-        {/* 文件/文件夹图标 */}
-        {node.isInternal ? (
-          node.isOpen ? (
-            <FolderOpen
-              className="w-4 h-4 flex-shrink-0"
-              style={{
-                color: data.agentColor
-                  ? AGENT_COLOR_HEX[data.agentColor] ?? `var(--color-agent-${data.agentColor})`
-                  : "var(--sg-text-tertiary, #8b92a3)",
-              }}
-            />
-          ) : (
-            <Folder
-              className="w-4 h-4 flex-shrink-0"
-              style={{
-                color: data.agentColor
-                  ? AGENT_COLOR_HEX[data.agentColor] ?? `var(--color-agent-${data.agentColor})`
-                  : "var(--sg-text-tertiary, #8b92a3)",
-              }}
-            />
-          )
-        ) : (
-          <>
-            {isUntracked && (
-              <CircleHelp
-                className="w-3 h-3 flex-shrink-0"
-                style={{ color: "var(--sg-text-tertiary, #8b92a3)" }}
-              />
-            )}
-            {isConflicted && (
-              <AlertCircle
-                className="w-3 h-3 flex-shrink-0"
-                style={{ color: "var(--sg-error, #ef4444)" }}
-              />
-            )}
-            <File
-              className="w-4 h-4 flex-shrink-0"
-              style={{
-                color: data.agentColor
-                  ? AGENT_COLOR_HEX[data.agentColor] ?? `var(--color-agent-${data.agentColor})`
-                  : "var(--sg-text-tertiary, #8b92a3)",
-              }}
-            />
-          </>
-        )}
+        {/* 图标 — 设计稿使用 emoji 风格，11px */}
+        <span className="flex-shrink-0 select-none" style={{ fontSize: 11, lineHeight: 1 }}>
+          {node.isInternal
+            ? (node.isOpen ? "📂" : "📁")
+            : "📄"}
+        </span>
 
-        {/* 文件名 — 高亮时白色加粗 + 300ms 颜色过渡 */}
+        {/* 文件名 — 13px, agent hover 白色600 / active-in-panel 白色500 */}
         <span
-          className="truncate text-xs"
+          className="truncate"
           style={{
-            color: isHighlightedByAgent
+            fontSize: 13,
+            color: isHighlightedByAgent || isActiveInPanel
               ? "#ffffff"
               : isDeleted
-                ? "var(--sg-error, #ef4444)"
+                ? "#ef4444"
                 : isAdded
-                  ? "var(--sg-success, #22c55e)"
-                  : "var(--sg-text-primary, #e4e6eb)",
+                  ? "#22c55e"
+                  : "#b8bcc4",
             fontStyle: isUntracked ? "italic" : "normal",
             textDecoration: isDeleted ? "line-through" : "none",
-            fontWeight: isHighlightedByAgent ? 600 : 400,
+            fontWeight: isHighlightedByAgent ? 600 : isActiveInPanel ? 500 : 400,
             transition: "color 300ms ease, font-weight 300ms ease",
           }}
         >
@@ -377,32 +365,32 @@ function FileTreeNode({ node, style }: NodeRendererProps<FileNode>) {
 
         {/* 实时写入脉动蓝点 */}
         {isWriting && (
-          <span className="flex-shrink-0 ml-1">
+          <span className="flex-shrink-0">
             <span className="writing-pulse" />
           </span>
         )}
 
-        {/* Git diff 统计 */}
+        {/* Git diff 统计 — 右对齐, 10px, SF Mono */}
         {diffStat && !node.isInternal && (
           <span
-            className="ml-auto flex items-center gap-0.5 text-[10px] flex-shrink-0 tabular-nums"
-            style={{ fontFamily: "var(--sg-font-mono, monospace)" }}
+            className="ml-auto flex items-center flex-shrink-0 tabular-nums"
+            style={{ gap: 4, fontSize: 10, fontFamily: "'SF Mono', Menlo, monospace" }}
           >
             {diffStat.additions > 0 && (
-              <span style={{ color: "var(--sg-success, #22c55e)" }}>+{diffStat.additions}</span>
+              <span style={{ color: "#22c55e" }}>+{diffStat.additions}</span>
             )}
             {diffStat.deletions > 0 && (
-              <span style={{ color: "var(--sg-error, #ef4444)" }}>-{diffStat.deletions}</span>
+              <span style={{ color: "#ef4444" }}>-{diffStat.deletions}</span>
             )}
           </span>
         )}
 
-        {/* Agent 颜色标记圆点 — 高亮时带发光 */}
-        {data.agentColor && !isWriting && (
+        {/* Agent 颜色标记圆点 */}
+        {data.agentColor && !isWriting && !diffStat && (
           <span
             className="w-2 h-2 rounded-full ml-auto flex-shrink-0"
             style={{
-              backgroundColor: AGENT_COLOR_HEX[data.agentColor] ?? `var(--color-agent-${data.agentColor})`,
+              backgroundColor: AGENT_COLOR_HEX[data.agentColor] ?? "#4a9eff",
               boxShadow: isHighlightedByAgent
                 ? `0 0 6px ${AGENT_COLOR_HEX[data.agentColor]}80`
                 : "none",

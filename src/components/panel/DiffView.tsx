@@ -14,6 +14,7 @@ import { usePanelStore } from "@/stores/panelStore";
 import { useProjectStore } from "@/stores/projectStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import "react-diff-view/style/index.css";
+import "@/styles/diff-overrides.css";
 
 interface DiffViewProps {
   filePath: string;

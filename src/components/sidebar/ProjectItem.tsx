@@ -15,8 +15,6 @@
  */
 import { useState, useRef, useEffect } from "react";
 import {
-  ChevronRight,
-  Folder,
   Trash2,
   ExternalLink,
   Terminal,
@@ -113,28 +111,41 @@ export function ProjectItem({ project, isActive }: ProjectItemProps) {
     closeMenu();
   };
 
+  // 获取 git 分支名
+  const gitBranch = useProjectStore((s) => s.gitBranch);
+
   return (
     <>
       <button
-        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors group"
+        className="w-full flex items-center cursor-pointer select-none"
         style={{
-          backgroundColor: isActive ? "rgba(74, 158, 255, 0.1)" : "transparent",
+          padding: isActive ? "6px 14px" : "6px 14px",
+          gap: 6,
+          fontSize: 13,
           color: isActive ? "#e4e6eb" : "#b8bcc4",
+          fontWeight: 500,
+          /* 非活跃（折叠）项目有顶部分隔线 — 参考 mockup .project-collapsed */
+          borderTop: !isActive ? "1px solid #1a1c23" : undefined,
         }}
-        onClick={() => setActiveProject(project)}
+        onClick={() => {
+          if (isActive) {
+            setActiveProject(null);
+          } else {
+            setActiveProject(project);
+          }
+        }}
         onContextMenu={handleContextMenu}
       >
-        <ChevronRight
-          className="w-3 h-3 flex-shrink-0 transition-transform"
-          style={{
-            transform: isActive ? "rotate(90deg)" : "rotate(0deg)",
-            color: "#8b92a3",
-          }}
-        />
-        <Folder
-          className="w-4 h-4 flex-shrink-0"
-          style={{ color: isActive ? "#4a9eff" : "#8b92a3" }}
-        />
+        {/* 文字 caret — ▼ 展开 / ▶ 折叠 */}
+        <span
+          className="flex-shrink-0 text-center leading-none"
+          style={{ color: "#6b7280", fontSize: 9, width: 10 }}
+        >
+          {isActive ? "▼" : "▶"}
+        </span>
+        {/* 文件夹图标 */}
+        <span className="flex-shrink-0" style={{ fontSize: 13 }}>📁</span>
+        {/* 项目名 */}
         <span className="truncate flex-1 text-left">{project.name}</span>
         {/* 运行状态指示 */}
         {hasRunningAgent && (
@@ -142,6 +153,15 @@ export function ProjectItem({ project, isActive }: ProjectItemProps) {
             className="w-2 h-2 rounded-full flex-shrink-0"
             style={{ backgroundColor: "#22c55e" }}
           />
+        )}
+        {/* Git 分支标签 — 仅活跃项目显示 */}
+        {isActive && gitBranch && (
+          <span
+            className="flex-shrink-0"
+            style={{ marginLeft: "auto", fontSize: 10, color: "#6b7280", fontWeight: 400 }}
+          >
+            {gitBranch}
+          </span>
         )}
       </button>
 

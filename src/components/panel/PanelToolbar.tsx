@@ -4,7 +4,7 @@
  * 左：面包屑路径 `project / folder / file.ts`
  * 右：Diff 统计 `+24 -8`、模式切换 diff/file、布局切换 split/unified
  */
-import { ChevronRight, Columns2, AlignJustify, Copy } from "lucide-react";
+import { Columns2, AlignJustify, Copy } from "lucide-react";
 import { usePanelStore } from "@/stores/panelStore";
 import { useProjectStore } from "@/stores/projectStore";
 import { useSettingsStore } from "@/stores/settingsStore";
@@ -39,28 +39,29 @@ export function PanelToolbar({ tab }: PanelToolbarProps) {
 
   return (
     <div
-      className="flex items-center justify-between px-3 flex-shrink-0"
+      className="flex items-center justify-between flex-shrink-0"
       style={{
-        height: 32,
+        padding: '8px 14px',
+        gap: 10,
         borderBottom: "1px solid #1a1c23",
-        backgroundColor: "#0d0e13",
+        backgroundColor: "#0f1116",
       }}
     >
       {/* 左：面包屑路径 */}
-      <div className="flex items-center gap-1 min-w-0 flex-1 overflow-hidden">
+      <div className="flex items-center min-w-0 flex-1 overflow-hidden" style={{ fontFamily: "'SF Mono', Menlo, monospace" }}>
         {breadcrumbs.map((crumb, index) => (
-          <span key={index} className="flex items-center gap-1 flex-shrink-0">
+          <span key={index} className="flex items-center flex-shrink-0">
             {index > 0 && (
-              <ChevronRight
-                className="w-3 h-3 flex-shrink-0"
-                style={{ color: "#6b7280" }}
-              />
+              <span
+                className="flex-shrink-0"
+                style={{ color: "#3a4150", margin: '0 4px', fontSize: 11 }}
+              >/</span>
             )}
             <span
               className="text-[11px] truncate"
               style={{
                 color:
-                  index === breadcrumbs.length - 1 ? "#e4e6eb" : "#8b92a3",
+                  index === breadcrumbs.length - 1 ? "#e4e6eb" : "#6b7280",
                 fontWeight: index === breadcrumbs.length - 1 ? 500 : 400,
                 maxWidth: index === breadcrumbs.length - 1 ? "none" : 100,
               }}
@@ -75,7 +76,15 @@ export function PanelToolbar({ tab }: PanelToolbarProps) {
       <div className="flex items-center gap-2 flex-shrink-0">
         {/* Diff 统计 (仅 diff 模式) */}
         {tab.type === "diff" && stat && (
-          <span className="flex items-center gap-1 text-[11px] tabular-nums">
+          <span
+            className="flex items-center gap-1 text-[11px] tabular-nums"
+            style={{
+              padding: "3px 8px",
+              background: "#0d0e13",
+              border: "1px solid #1a1c23",
+              borderRadius: 4,
+            }}
+          >
             {stat.additions > 0 && (
               <span style={{ color: "#22c55e" }}>+{stat.additions}</span>
             )}
@@ -88,26 +97,37 @@ export function PanelToolbar({ tab }: PanelToolbarProps) {
         {/* 模式切换 diff/file */}
         {hasChanges && (
           <div
-            className="flex items-center rounded-md overflow-hidden"
-            style={{ border: "1px solid #2a2d36" }}
+            className="flex items-center overflow-hidden"
+            style={{
+              background: '#0d0e13',
+              border: '1px solid #1a1c23',
+              borderRadius: 5,
+              padding: 2,
+            }}
           >
             <button
-              className="px-2 py-0.5 text-[10px] uppercase transition-colors"
+              className="text-[10px] uppercase transition-colors"
               style={{
+                padding: '4px 10px',
+                borderRadius: 3,
+                fontWeight: 500,
                 backgroundColor:
-                  tab.type === "diff" ? "rgba(74, 158, 255, 0.15)" : "transparent",
-                color: tab.type === "diff" ? "#4a9eff" : "#8b92a3",
+                  tab.type === "diff" ? "#2a2f3b" : "transparent",
+                color: tab.type === "diff" ? "#e4e6eb" : "#6b7280",
               }}
               onClick={() => setTabType(tab.id, "diff")}
             >
               diff
             </button>
             <button
-              className="px-2 py-0.5 text-[10px] uppercase transition-colors"
+              className="text-[10px] uppercase transition-colors"
               style={{
+                padding: '4px 10px',
+                borderRadius: 3,
+                fontWeight: 500,
                 backgroundColor:
-                  tab.type === "file" ? "rgba(139, 146, 163, 0.1)" : "transparent",
-                color: tab.type === "file" ? "#e4e6eb" : "#8b92a3",
+                  tab.type === "file" ? "#2a2f3b" : "transparent",
+                color: tab.type === "file" ? "#e4e6eb" : "#6b7280",
               }}
               onClick={() => setTabType(tab.id, "file")}
             >
@@ -119,15 +139,22 @@ export function PanelToolbar({ tab }: PanelToolbarProps) {
         {/* Diff 布局切换 split/unified (仅 diff 模式) */}
         {tab.type === "diff" && (
           <div
-            className="flex items-center rounded-md overflow-hidden"
-            style={{ border: "1px solid #2a2d36" }}
+            className="flex items-center overflow-hidden"
+            style={{
+              background: '#0d0e13',
+              border: '1px solid #1a1c23',
+              borderRadius: 5,
+              padding: 2,
+            }}
           >
             <button
-              className="p-1 transition-colors"
+              className="flex items-center justify-center transition-colors"
               style={{
+                padding: '4px 10px',
+                borderRadius: 3,
                 backgroundColor:
-                  diffLayout === "split" ? "rgba(74, 158, 255, 0.15)" : "transparent",
-                color: diffLayout === "split" ? "#4a9eff" : "#8b92a3",
+                  diffLayout === "split" ? "#2a2f3b" : "transparent",
+                color: diffLayout === "split" ? "#e4e6eb" : "#6b7280",
               }}
               onClick={() => setDiffLayout("split")}
               title="Split 视图"
@@ -135,13 +162,13 @@ export function PanelToolbar({ tab }: PanelToolbarProps) {
               <Columns2 className="w-3 h-3" />
             </button>
             <button
-              className="p-1 transition-colors"
+              className="flex items-center justify-center transition-colors"
               style={{
+                padding: '4px 10px',
+                borderRadius: 3,
                 backgroundColor:
-                  diffLayout === "unified"
-                    ? "rgba(74, 158, 255, 0.15)"
-                    : "transparent",
-                color: diffLayout === "unified" ? "#4a9eff" : "#8b92a3",
+                  diffLayout === "unified" ? "#2a2f3b" : "transparent",
+                color: diffLayout === "unified" ? "#e4e6eb" : "#6b7280",
               }}
               onClick={() => setDiffLayout("unified")}
               title="Unified 视图"

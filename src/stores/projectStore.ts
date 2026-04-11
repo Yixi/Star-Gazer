@@ -63,7 +63,11 @@ export const useProjectStore = create<ProjectState>((set) => ({
   agentFileMap: {},
 
   addProject: (project) =>
-    set((state) => ({ projects: [...state.projects, project] })),
+    set((state) => {
+      // 防止重复添加（按 ID 去重）
+      if (state.projects.some((p) => p.id === project.id)) return state;
+      return { projects: [...state.projects, project] };
+    }),
 
   removeProject: (id) =>
     set((state) => ({

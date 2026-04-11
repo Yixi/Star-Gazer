@@ -27,7 +27,9 @@ export interface Agent {
   size: { width: number; height: number };
   /** 当前工作目录 */
   cwd: string;
+  /** 等待审批时的提示信息 */
+  approvalMessage?: string;
 }
 
 /** Agent 运行状态 */
-export type AgentStatus = "idle" | "running" | "stopped" | "error";
+export type AgentStatus = "idle" | "running" | "stopped" | "error" | "waiting";

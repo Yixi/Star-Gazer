@@ -11,6 +11,7 @@
  */
 import { useCanvasStore } from "@/stores/canvasStore";
 import { usePanelStore } from "@/stores/panelStore";
+import { useSettingsStore } from "@/stores/settingsStore";
 
 export function TitleBar() {
   const agents = useCanvasStore((s) => s.agents);
@@ -32,9 +33,10 @@ export function TitleBar() {
       className="flex items-center flex-shrink-0 select-none"
       data-tauri-drag-region
       style={{
-        height: "var(--sg-titlebar-height, 36px)",
-        background: "var(--sg-bg-sidebar, #0d0e13)",
-        borderBottom: "1px solid var(--sg-border-primary, #1a1c23)",
+        padding: '12px 16px',
+        background: '#0d0e13',
+        borderBottom: '1px solid #1a1c23',
+        gap: 8,
       }}
     >
       {/* macOS 红绿灯按钮区域预留 — 原生 decorations 模式下需要 70px 左边距 */}
@@ -45,9 +47,9 @@ export function TitleBar() {
         className="flex-1 text-center truncate"
         data-tauri-drag-region
         style={{
-          fontSize: "var(--sg-text-base, 12px)",
-          color: "var(--sg-text-hint, #6b7280)",
-          fontWeight: "var(--sg-weight-medium, 500)",
+          fontSize: 12,
+          color: '#6b7280',
+          fontWeight: 500,
         }}
       >
         {title}
@@ -55,33 +57,58 @@ export function TitleBar() {
 
       {/* 右侧操作提示 */}
       <div
-        className="flex items-center gap-1 flex-shrink-0 pr-3"
-        style={{ fontSize: "var(--sg-text-sm, 11px)" }}
+        className="flex items-center flex-shrink-0"
+        style={{ gap: 4, fontSize: 11 }}
       >
-        <kbd
-          className="inline-flex items-center justify-center px-1.5 py-0.5 rounded"
+        <button
+          className="transition-colors"
           style={{
-            background: "var(--sg-bg-card-header, #1a1d26)",
-            border: "1px solid var(--sg-border-primary, #1a1c23)",
-            color: "var(--sg-text-tertiary, #8b92a3)",
-            fontSize: "var(--sg-text-xs, 10px)",
+            padding: '4px 8px',
+            background: '#1a1c23',
+            borderRadius: 4,
+            color: '#8b92a3',
+            fontSize: 11,
+            cursor: 'pointer',
+            border: 'none',
+          }}
+          onClick={() => {
+            const settings = useSettingsStore.getState();
+            if (settings.sidebarOpen) {
+              settings.toggleSidebar();
+            }
+            usePanelStore.getState().closePanel();
+          }}
+          title="Focus 模式"
+        >
+          Focus
+        </button>
+        <button
+          className="transition-colors"
+          style={{
+            padding: '4px 8px',
+            background: '#1a1c23',
+            borderRadius: 4,
+            color: '#8b92a3',
+            fontSize: 11,
+            cursor: 'pointer',
+            border: 'none',
           }}
         >
           Cmd+K
-        </kbd>
+        </button>
         {runningCount > 0 && (
           <span
             className="flex items-center gap-1 ml-2"
-            style={{ color: "var(--sg-success, #22c55e)" }}
+            style={{ color: '#22c55e' }}
           >
             <span
               className="w-1.5 h-1.5 rounded-full"
               style={{
-                backgroundColor: "var(--sg-success, #22c55e)",
-                animation: "sg-pulse-dot 1.4s ease-in-out infinite",
+                backgroundColor: '#22c55e',
+                animation: 'sg-pulse-dot 1.4s ease-in-out infinite',
               }}
             />
-            <span style={{ fontSize: "var(--sg-text-xs, 10px)" }}>
+            <span style={{ fontSize: 10 }}>
               {runningCount} 运行中
             </span>
           </span>

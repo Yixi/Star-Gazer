@@ -20,43 +20,58 @@ export function CanvasToolbar() {
     setZoom(1);
   };
 
+  const pillStyle: React.CSSProperties = {
+    padding: "5px 10px",
+    background: "rgba(22, 24, 32, 0.8)",
+    backdropFilter: "blur(8px)",
+    borderRadius: 5,
+    border: "1px solid #1f2128",
+  };
+
   return (
     <div
-      className="absolute top-3 right-4 z-10 flex items-center gap-1 rounded-lg p-1"
-      style={{
-        background: "rgba(22, 24, 32, 0.8)",
-        backdropFilter: "blur(8px)",
-        border: "1px solid #1f2128",
-      }}
+      className="absolute z-10 flex items-center text-[10px] text-[#8b92a3]"
+      style={{ top: 12, right: 16, gap: 6 }}
     >
+      {/* 缩放控件 pill */}
+      <div className="flex items-center gap-1" style={pillStyle}>
+        <button
+          className="p-1 rounded hover:bg-white/10 hover:text-white transition-colors"
+          onClick={handleZoomOut}
+          title="缩小"
+        >
+          <ZoomOut className="w-3.5 h-3.5" />
+        </button>
+        <button
+          className="hover:text-white min-w-[36px] text-center px-1 rounded hover:bg-white/10 transition-colors"
+          onClick={handleZoomReset}
+          title="点击重置为 100%"
+        >
+          {Math.round(zoom * 100)}%
+        </button>
+        <button
+          className="p-1 rounded hover:bg-white/10 hover:text-white transition-colors"
+          onClick={handleZoomIn}
+          title="放大"
+        >
+          <ZoomIn className="w-3.5 h-3.5" />
+        </button>
+        <div className="w-px h-3.5 bg-[#1f2128] mx-0.5" />
+        <button
+          className="p-1 rounded hover:bg-white/10 hover:text-white transition-colors"
+          onClick={handleResetView}
+          title="重置视图"
+        >
+          <Maximize2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      {/* 布局模式 pill */}
       <button
-        className="p-1.5 rounded-md hover:bg-white/10 text-[#8b92a3] hover:text-white transition-colors"
-        onClick={handleZoomOut}
-        title="缩小"
+        className="hover:text-white hover:bg-white/10 transition-colors"
+        style={pillStyle}
+        title="布局模式"
       >
-        <ZoomOut className="w-3.5 h-3.5" />
-      </button>
-      <button
-        className="text-[10px] text-[#8b92a3] hover:text-white min-w-[40px] text-center px-1.5 py-1 rounded-md hover:bg-white/10 transition-colors"
-        onClick={handleZoomReset}
-        title="点击重置为 100%"
-      >
-        {Math.round(zoom * 100)}%
-      </button>
-      <button
-        className="p-1.5 rounded-md hover:bg-white/10 text-[#8b92a3] hover:text-white transition-colors"
-        onClick={handleZoomIn}
-        title="放大"
-      >
-        <ZoomIn className="w-3.5 h-3.5" />
-      </button>
-      <div className="w-px h-4 bg-[#1f2128] mx-0.5" />
-      <button
-        className="p-1.5 rounded-md hover:bg-white/10 text-[#8b92a3] hover:text-white transition-colors"
-        onClick={handleResetView}
-        title="重置视图"
-      >
-        <Maximize2 className="w-3.5 h-3.5" />
+        Layout: default
       </button>
     </div>
   );
