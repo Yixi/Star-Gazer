@@ -1,16 +1,11 @@
 [package]
 name = "stargazer"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "Star Gazer - Mac 原生轻量开发工作台，为 vibe coding 时代设计"
+authors = ["yixi"]
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
-# The `_lib` suffix may seem redundant but it is necessary
-# to make the lib name unique and wouldn't conflict with the bin name.
-# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "stargazer_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
@@ -18,8 +13,29 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+# Tauri 核心
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+
+# 序列化
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# 异步运行时
+tokio = { version = "1", features = ["full"] }
+
+# PTY（终端伪终端）
+portable-pty = "0.8"
+
+# 文件监听
+notify = { version = "8", features = ["macos_fsevent"] }
+
+# 日志
+log = "0.4"
+env_logger = "0.11"
+
+# UUID（用于终端和 Agent 实例 ID）
+uuid = { version = "1", features = ["v4"] }

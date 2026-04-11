@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "stargazer",
+  "productName": "Star Gazer",
   "version": "0.1.0",
   "identifier": "com.yixi.stargazer",
   "build": {
@@ -12,9 +12,14 @@
   "app": {
     "windows": [
       {
-        "title": "stargazer",
-        "width": 800,
-        "height": 600
+        "title": "Star Gazer",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 640,
+        "decorations": true,
+        "resizable": true,
+        "center": true
       }
     ],
     "security": {

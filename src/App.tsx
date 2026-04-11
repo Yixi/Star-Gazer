@@ -1,50 +1,42 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+/**
+ * Star Gazer - 主布局
+ *
+ * 布局结构：
+ * ┌──────────────────────────────────────────┐
+ * │ Sidebar │     Canvas (画布)     │ Panel  │
+ * │ (240px) │                       │(540px) │
+ * │         │                       │ 侧滑   │
+ * ├─────────┴───────────────────────┴────────┤
+ * │             StatusBar (24px)              │
+ * └──────────────────────────────────────────┘
+ */
+import { Sidebar } from "@/components/sidebar/Sidebar";
+import { Canvas } from "@/components/canvas/Canvas";
+import { SlidePanel } from "@/components/panel/SlidePanel";
+import { StatusBar } from "@/components/statusbar/StatusBar";
+import { CommandPalette } from "@/components/command-palette/CommandPalette";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
-
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <div className="flex flex-col h-screen w-screen overflow-hidden dark">
+      {/* 主内容区域 */}
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* 左侧边栏 */}
+        <Sidebar />
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+        {/* 画布主区域 */}
+        <Canvas />
+
+        {/* 右侧滑文件审查面板 */}
+        <SlidePanel />
       </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+      {/* 底部状态栏 */}
+      <StatusBar />
+
+      {/* 命令面板（浮层） */}
+      <CommandPalette />
+    </div>
   );
 }
 
