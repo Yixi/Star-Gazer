@@ -6,6 +6,8 @@ pub mod services;
 pub mod types;
 
 use commands::{fs, git, project, terminal};
+use services::pty_manager::PtyManager;
+use tauri::{AppHandle, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -17,6 +19,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .manage(PtyManager::new())
         .invoke_handler(tauri::generate_handler![
             // 终端命令
             terminal::create_terminal,
@@ -41,6 +44,15 @@ pub fn run() {
             project::add_project,
             project::remove_project,
         ])
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                // 应用窗口销毁时清理所有 PTY 进程
+                let app: &AppHandle = window.app_handle();
+                if let Some(pty_manager) = app.try_state::<PtyManager>() {
+                    pty_manager.close_all();
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("启动 Star Gazer 失败");
 }

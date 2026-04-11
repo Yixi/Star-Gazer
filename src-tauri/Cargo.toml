@@ -39,3 +39,6 @@ env_logger = "0.11"
 
 # UUID（用于终端和 Agent 实例 ID）
 uuid = { version = "1", features = ["v4"] }
+
+# 系统调用（用于 PTY 进程信号管理）
+libc = "0.2"
