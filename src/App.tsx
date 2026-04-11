@@ -19,8 +19,11 @@ import { SlidePanel } from "@/components/panel/SlidePanel";
 import { StatusBar } from "@/components/statusbar/StatusBar";
 import { CommandPalette } from "@/components/command-palette/CommandPalette";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
+import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 
 function App() {
+  // 注册全局快捷键（Cmd+W 关闭 Tab、Cmd+S 保存等）
+  useGlobalShortcuts();
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden dark">
       {/* 应用标题栏 */}

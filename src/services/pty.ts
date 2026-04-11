@@ -10,9 +10,10 @@ export async function createTerminal(
   id: string,
   cwd: string,
   cols: number,
-  rows: number
+  rows: number,
+  command?: string
 ): Promise<number> {
-  return invoke("create_terminal", { id, cwd, cols, rows });
+  return invoke("create_terminal", { id, cwd, cols, rows, command: command ?? null });
 }
 
 /** 向终端写入数据 */

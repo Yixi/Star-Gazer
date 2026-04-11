@@ -1,5 +1,6 @@
 /**
  * 添加项目按钮 - 调用 Tauri dialog 插件选择文件夹
+ * 选择后同时持久化到后端（add_project 命令）并更新前端 store
  */
 import { Plus } from "lucide-react";
 import { useProjectStore } from "@/stores/projectStore";
@@ -23,15 +24,30 @@ export function AddProjectButton({ collapsed }: AddProjectButtonProps) {
       });
 
       if (selected && typeof selected === "string") {
-        const name = selected.split("/").pop() || selected;
-        const project = {
-          id: `project-${Date.now()}`,
-          name,
-          path: selected,
-          lastOpened: Date.now(),
-        };
-        addProject(project);
-        setActiveProject(project);
+        // 调用后端持久化项目
+        try {
+          const { invoke } = await import("@tauri-apps/api/core");
+          const project = await invoke<{
+            id: string;
+            name: string;
+            path: string;
+            lastOpened: number;
+          }>("add_project", { path: selected });
+          addProject(project);
+          setActiveProject(project);
+        } catch (backendErr) {
+          // 后端调用失败时回退到前端创建
+          console.warn("Backend add_project failed, creating locally:", backendErr);
+          const name = selected.split("/").pop() || selected;
+          const project = {
+            id: `project-${Date.now()}`,
+            name,
+            path: selected,
+            lastOpened: Date.now(),
+          };
+          addProject(project);
+          setActiveProject(project);
+        }
       }
     } catch (err) {
       // 在非 Tauri 环境下（开发时）使用 mock

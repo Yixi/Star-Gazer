@@ -107,7 +107,7 @@ export function CommandPalette() {
   // 收集所有文件（���平化文件树）
   const allFiles = flattenFileTree(fileTree);
 
-  // 添加项目
+  // 添加项目 - 持久化到后端
   const handleAddProject = async () => {
     try {
       const { open: openDialog } = await import("@tauri-apps/plugin-dialog");
@@ -117,15 +117,28 @@ export function CommandPalette() {
         title: "选择项目文件夹",
       });
       if (selected && typeof selected === "string") {
-        const name = selected.split("/").pop() || selected;
-        const project = {
-          id: `project-${Date.now()}`,
-          name,
-          path: selected,
-          lastOpened: Date.now(),
-        };
-        addProject(project);
-        setActiveProject(project);
+        try {
+          const { invoke } = await import("@tauri-apps/api/core");
+          const project = await invoke<{
+            id: string;
+            name: string;
+            path: string;
+            lastOpened: number;
+          }>("add_project", { path: selected });
+          addProject(project);
+          setActiveProject(project);
+        } catch (backendErr) {
+          console.warn("Backend add_project failed, creating locally:", backendErr);
+          const name = selected.split("/").pop() || selected;
+          const project = {
+            id: `project-${Date.now()}`,
+            name,
+            path: selected,
+            lastOpened: Date.now(),
+          };
+          addProject(project);
+          setActiveProject(project);
+        }
       }
     } catch (err) {
       console.warn("Tauri dialog not available:", err);

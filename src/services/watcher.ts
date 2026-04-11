@@ -7,10 +7,10 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 /** 文件变更事件类型 */
 export type FileChangeKind = "create" | "modify" | "remove" | "rename";
 
-/** 文件变更事件 */
+/** 文件变更事件（与后端 FileChangeEvent 结构对齐） */
 export interface FileChangeEvent {
   kind: FileChangeKind;
-  paths: string[];
+  path: string;
 }
 
 /** 开始监听目录 */

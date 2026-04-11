@@ -144,7 +144,7 @@ export function Canvas() {
     []
   );
 
-  /** 监听键盘事件 - 空格键用于平移模式 */
+  /** 监听键盘事件 - 空格键平移、Cmd+N 新建 Agent、Esc 退出最大化 */
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === "Space" && !e.repeat) {
@@ -153,6 +153,11 @@ export function Canvas() {
         if (tag === "INPUT" || tag === "TEXTAREA") return;
         e.preventDefault();
         isSpaceHeld.current = true;
+      }
+      // Cmd+N 创建新 Agent
+      if (e.key === "n" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setShowPicker(true);
       }
       // Esc 退出最大化的卡片
       if (e.code === "Escape") {

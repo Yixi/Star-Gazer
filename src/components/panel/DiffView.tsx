@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { parseDiff, Diff, Hunk } from "react-diff-view";
 import type { FileData } from "react-diff-view";
 import { usePanelStore } from "@/stores/panelStore";
+import { useProjectStore } from "@/stores/projectStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import "react-diff-view/style/index.css";
 
@@ -25,6 +26,7 @@ export function DiffView({ filePath, tabId }: DiffViewProps) {
   const [error, setError] = useState<string | null>(null);
   const diffLayout = useSettingsStore((s) => s.diffLayout);
   const setDiffStat = usePanelStore((s) => s.setDiffStat);
+  const activeProject = useProjectStore((s) => s.activeProject);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,8 +37,9 @@ export function DiffView({ filePath, tabId }: DiffViewProps) {
       try {
         // 从后端获取 git diff
         const { invoke } = await import("@tauri-apps/api/core");
+        const repoPath = activeProject?.path ?? getRepoPath(filePath);
         const rawDiff = await invoke<string>("git_diff", {
-          repoPath: getRepoPath(filePath),
+          repoPath,
           filePath,
         });
 
@@ -77,7 +80,7 @@ export function DiffView({ filePath, tabId }: DiffViewProps) {
 
     loadDiff();
     return () => { cancelled = true; };
-  }, [filePath, tabId, setDiffStat]);
+  }, [filePath, tabId, setDiffStat, activeProject?.path]);
 
   if (isLoading) {
     return (

@@ -21,21 +21,23 @@ export function SlidePanel() {
   const resizeRef = useRef<HTMLDivElement>(null);
   const isResizing = useRef(false);
 
-  // 快捷键关闭：Esc, Cmd+\
+  const togglePanel = usePanelStore((s) => s.togglePanel);
+
+  // 快捷键：Esc 关闭面板, Cmd+\ 切换面板开关
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isOpen) {
         e.preventDefault();
         closePanel();
       }
-      if (e.key === "\\" && (e.metaKey || e.ctrlKey) && isOpen) {
+      if (e.key === "\\" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        closePanel();
+        togglePanel();
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, closePanel]);
+  }, [isOpen, closePanel, togglePanel]);
 
   // 分隔线拖拽调整宽度
   const handleResizeStart = useCallback(
