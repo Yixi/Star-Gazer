@@ -1,0 +1,114 @@
+/**
+ * Star Gazer 全局动画工具类
+ *
+ * 提供可复用的动画 CSS class，配合 design-tokens.css 中的 keyframes。
+ * 在组件中通过 className 直接使用。
+ */
+
+/* ========================================
+   入场/退场动画
+   ======================================== */
+
+/* 淡入 */
+.sg-animate-fade-in {
+  animation: sg-fade-in var(--sg-duration-slow, 300ms) var(--sg-ease-out, ease-out) both;
+}
+
+/* 从下方淡入 */
+.sg-animate-fade-in-up {
+  animation: sg-fade-in-up var(--sg-duration-slow, 300ms) var(--sg-ease-out, ease-out) both;
+}
+
+/* 卡片入场（弹性缩放） */
+.sg-animate-card-enter {
+  animation: sg-card-enter var(--sg-duration-slow, 300ms) var(--sg-ease-spring, cubic-bezier(0.34, 1.56, 0.64, 1)) both;
+}
+
+/* 卡片退场（缩小淡出） */
+.sg-animate-card-exit {
+  animation: sg-card-exit var(--sg-duration-moderate, 200ms) var(--sg-ease-in, cubic-bezier(0.4, 0, 1, 1)) forwards;
+}
+
+/* ========================================
+   持续动画
+   ======================================== */
+
+/* 脉动圆点 */
+.sg-animate-pulse {
+  animation: sg-pulse-dot 1.4s ease-in-out infinite;
+}
+
+/* 呼吸灯 */
+.sg-animate-breathe {
+  animation: sg-breathe 3s ease-in-out infinite;
+}
+
+/* 旋转加载 */
+.sg-animate-spin {
+  animation: sg-spin 1s linear infinite;
+}
+
+/* 光标闪烁 */
+.sg-animate-cursor-blink {
+  animation: sg-cursor-blink 1s steps(1) infinite;
+}
+
+/* ========================================
+   过渡效果工具类
+   ======================================== */
+
+/* 快速颜色过渡 */
+.sg-transition-colors {
+  transition: color var(--sg-duration-normal, 150ms) var(--sg-ease-in-out, ease),
+    background-color var(--sg-duration-normal, 150ms) var(--sg-ease-in-out, ease),
+    border-color var(--sg-duration-normal, 150ms) var(--sg-ease-in-out, ease);
+}
+
+/* 平滑全属性过渡 */
+.sg-transition-all {
+  transition: all var(--sg-duration-normal, 150ms) var(--sg-ease-in-out, ease);
+}
+
+/* 变换过渡（位置、缩放） */
+.sg-transition-transform {
+  transition: transform var(--sg-duration-normal, 150ms) var(--sg-ease-out, ease-out);
+}
+
+/* 阴影过渡 */
+.sg-transition-shadow {
+  transition: box-shadow var(--sg-duration-normal, 150ms) var(--sg-ease-in-out, ease);
+}
+
+/* 透明度过渡 */
+.sg-transition-opacity {
+  transition: opacity var(--sg-duration-normal, 150ms) var(--sg-ease-in-out, ease);
+}
+
+/* 宽度过渡（用于 sidebar 折叠） */
+.sg-transition-width {
+  transition: width var(--sg-duration-moderate, 200ms) var(--sg-ease-out, ease-out);
+}
+
+/* 慢速恢复过渡（用于 hover 关联高亮离开） */
+.sg-transition-slow {
+  transition: all var(--sg-duration-slow, 300ms) var(--sg-ease-in-out, ease);
+}
+
+/* ========================================
+   交互反馈
+   ======================================== */
+
+/* 悬停放大 */
+.sg-hover-scale:hover {
+  transform: scale(1.02);
+}
+
+/* 点击缩小反馈 */
+.sg-active-shrink:active {
+  transform: scale(0.97);
+}
+
+/* 悬停发光边框（需配合 data-color 属性或自定义变量） */
+.sg-hover-glow:hover {
+  box-shadow: 0 0 12px rgba(74, 158, 255, 0.3);
+}
