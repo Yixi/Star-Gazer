@@ -10,7 +10,7 @@
  * - 支持 256 色和 true color
  * - 通过 Tauri IPC 与后端 PTY 双向通信
  */
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useTerminal } from "@/hooks/useTerminal";
 
 interface TerminalViewProps {
@@ -21,11 +21,9 @@ interface TerminalViewProps {
 
 export function TerminalView({ terminalId, cwd, agentId }: TerminalViewProps) {
   const { containerRef, init, fit } = useTerminal({ terminalId, cwd, agentId });
-  const initializedRef = useRef(false);
 
+  // 初始化终端 — 竞态防护由 useTerminal 内部的 initPendingRef 处理
   useEffect(() => {
-    if (initializedRef.current) return;
-    initializedRef.current = true;
     init();
   }, [init]);
 

@@ -32,6 +32,10 @@ import { useProjectStore } from "@/stores/projectStore";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { usePanelStore } from "@/stores/panelStore";
 import { useSettingsStore } from "@/stores/settingsStore";
+import type { FileNode } from "@/types/project";
+
+/** 稳定空数组，避免 Zustand selector 无限循环 */
+const EMPTY_FILE_TREE: FileNode[] = [];
 
 type PaletteMode = "command" | "file" | "agent";
 
@@ -41,7 +45,10 @@ export function CommandPalette() {
   const [search, setSearch] = useState("");
 
   const projects = useProjectStore((s) => s.projects);
-  const fileTree = useProjectStore((s) => s.fileTree);
+  const fileTree = useProjectStore((s) => {
+    if (!s.activeProject) return EMPTY_FILE_TREE;
+    return s.projectFileTrees[s.activeProject.id] ?? EMPTY_FILE_TREE;
+  });
   const agents = useCanvasStore((s) => s.agents);
   const toggleSidebar = useSettingsStore((s) => s.toggleSidebar);
   const sidebarOpen = useSettingsStore((s) => s.sidebarOpen);

@@ -1,5 +1,5 @@
 /**
- * 侧滑文件审查面板 - 从右侧推入（非覆盖）
+ * 侧滑文件审查面板 - 从 Sidebar 右侧推入（非覆盖）
  *
  * 规格：
  * - 默认 540px 宽，可拖拽调整（320-900px）
@@ -49,7 +49,7 @@ export function SlidePanel() {
 
       const handleMove = (me: MouseEvent) => {
         if (!isResizing.current) return;
-        const delta = startX - me.clientX;
+        const delta = me.clientX - startX;
         setWidth(startWidth + delta);
       };
 
@@ -74,42 +74,20 @@ export function SlidePanel() {
     setWidth(540);
   }, [setWidth]);
 
-  if (!isOpen) return null;
-
   return (
     <div
-      className="flex-shrink-0 h-full flex"
+      className="flex-shrink-0 h-full flex overflow-hidden"
       style={{
-        width,
-        transition: "width 150ms ease-out",
+        width: isOpen ? width : 0,
+        transition: "width 200ms ease-out",
       }}
     >
-      {/* 分隔线 - 可拖拽 */}
-      <div
-        ref={resizeRef}
-        className="w-1 h-full cursor-col-resize group flex-shrink-0 relative"
-        style={{ backgroundColor: "#1a1c23" }}
-        onMouseDown={handleResizeStart}
-        onDoubleClick={handleDoubleClick}
-      >
-        {/* 悬停高亮 */}
-        <div
-          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ backgroundColor: "#4a9eff" }}
-        />
-        {/* 中间握把 */}
-        <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ backgroundColor: "#4a9eff" }}
-        />
-      </div>
-
       {/* 面板内容 */}
       <div
         className="flex flex-col h-full flex-1 min-w-0"
         style={{
           backgroundColor: "#0f1116",
-          borderLeft: "1px solid #1a1c23",
+          borderRight: "1px solid #1a1c23",
         }}
       >
         {/* Tab 栏 */}
@@ -135,6 +113,26 @@ export function SlidePanel() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* 分隔线 - 可拖拽（面板右侧，与 Canvas 之间） */}
+      <div
+        ref={resizeRef}
+        className="w-1 h-full cursor-col-resize group flex-shrink-0 relative"
+        style={{ backgroundColor: "#1a1c23" }}
+        onMouseDown={handleResizeStart}
+        onDoubleClick={handleDoubleClick}
+      >
+        {/* 悬停高亮 */}
+        <div
+          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ backgroundColor: "#4a9eff" }}
+        />
+        {/* 中间握把 */}
+        <div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ backgroundColor: "#4a9eff" }}
+        />
       </div>
     </div>
   );

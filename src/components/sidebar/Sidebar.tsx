@@ -22,7 +22,7 @@ import type { FileChangeEvent } from "@/services/watcher";
 export function Sidebar() {
   const { sidebarWidth, sidebarOpen, sidebarCollapsedWidth, toggleSidebar } =
     useSettingsStore();
-  const { projects, activeProject } = useProjectStore();
+  const { projects, activeProject, expandedProjectIds } = useProjectStore();
 
   // Cmd+B 切换侧边栏
   useEffect(() => {
@@ -64,7 +64,7 @@ export function Sidebar() {
                 children: entry.isDir ? [] : undefined,
               };
             });
-            useProjectStore.getState().setFileTree(fileNodes);
+            useProjectStore.getState().setProjectFileTree(activeProject.id, fileNodes);
           } catch (err) {
             console.warn("文件监听触发的文件树刷新失败:", err);
           }
@@ -179,29 +179,24 @@ export function Sidebar() {
                 点击 + 添加项目
               </div>
             ) : (
-              projects.map((project) => {
-                const isActive = activeProject?.id === project.id;
-                return (
-                  <div
-                    key={project.id}
-                    className={
-                      isActive
-                        ? "flex flex-col flex-1 min-h-0"
-                        : "flex-shrink-0"
-                    }
-                  >
-                    <ProjectItem
-                      project={project}
-                      isActive={isActive}
-                    />
-                    {isActive && (
-                      <div className="flex-1 overflow-hidden">
-                        <FileTree />
-                      </div>
-                    )}
-                  </div>
-                );
-              })
+              <div className="flex-1 overflow-y-auto">
+                {projects.map((project) => {
+                  const isActive = activeProject?.id === project.id;
+                  const isExpanded = !!expandedProjectIds[project.id];
+                  return (
+                    <div key={project.id} className="flex flex-col flex-shrink-0">
+                      <ProjectItem
+                        project={project}
+                        isActive={isActive}
+                        isExpanded={isExpanded}
+                      />
+                      {isExpanded && (
+                        <FileTree project={project} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>

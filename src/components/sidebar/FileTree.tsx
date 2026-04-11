@@ -36,42 +36,53 @@ const HIDDEN_ENTRIES = new Set([
   ".turbo",
 ]);
 
-export function FileTree() {
-  const { fileTree, isLoading, activeProject } = useProjectStore();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [containerHeight, setContainerHeight] = useState(600);
+import type { Project } from "@/types/project";
+
+/** 稳定的空数组引用，避免 Zustand selector 返回新引用导致无限循环 */
+const EMPTY_TREE: FileNode[] = [];
+
+interface FileTreeProps {
+  project: Project;
+}
+
+const ROW_HEIGHT = 28;
+
+export function FileTree({ project }: FileTreeProps) {
+  const fileTree = useProjectStore((s) => s.projectFileTrees[project.id] ?? EMPTY_TREE);
+  const isLoading = useProjectStore((s) => s.isLoading);
   /** 已加载过子节点的目录 ID 集合，避免重复请求 */
   const loadedDirsRef = useRef<Set<string>>(new Set());
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const treeRef = useRef<any>(null);
+  const [treeHeight, setTreeHeight] = useState(0);
 
-  // 跟踪容器高度变化（ResizeObserver）
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const h = entry.contentRect.height;
-        if (h > 0) setContainerHeight(h);
+  /** 从 tree ref 重新计算实际内容高度 */
+  const recalcHeight = useCallback(() => {
+    requestAnimationFrame(() => {
+      const count = treeRef.current?.visibleNodes?.length;
+      if (count != null && count > 0) {
+        setTreeHeight(count * ROW_HEIGHT);
       }
     });
-    ro.observe(el);
-    return () => ro.disconnect();
   }, []);
 
   // 初始加载文件树
   useEffect(() => {
-    if (!activeProject) return;
     loadedDirsRef.current.clear();
-    loadFileTree(activeProject.path);
-  }, [activeProject?.path]);
+    loadFileTree(project.id, project.path);
+  }, [project.id, project.path]);
+
+  // 文件树数据变化时重算高度
+  useEffect(() => {
+    setTreeHeight(filterHiddenEntries(fileTree).length * ROW_HEIGHT);
+    recalcHeight();
+  }, [fileTree, recalcHeight]);
 
   /** 展开/折叠回调 — 展开时按需加载子目录内容 */
   const handleToggle = useCallback(
     async (id: string) => {
-      if (!activeProject) return;
-      // 在 fileTree 中查找该节点
       const node = findNodeById(fileTree, id);
       if (!node || !node.isDir) return;
-      // 仅在首次展开且 children 为空时加载
       if (loadedDirsRef.current.has(id)) return;
       if (node.children && node.children.length > 0) return;
 
@@ -81,15 +92,16 @@ export function FileTree() {
         const entries = await invoke<DirEntry[]>("list_dir", {
           path: node.path,
         });
-        const childNodes = dirEntriesToFileNodes(entries, activeProject.path);
-        useProjectStore.getState().updateNodeChildren(id, childNodes);
+        const childNodes = dirEntriesToFileNodes(entries, project.path);
+        useProjectStore.getState().updateNodeChildren(project.id, id, childNodes);
       } catch (err) {
         console.warn("Failed to load children for", node.path, err);
-        // 加载失败则允许重试
         loadedDirsRef.current.delete(id);
       }
+      // 展开/折叠后重算高度
+      recalcHeight();
     },
-    [activeProject, fileTree]
+    [project.id, project.path, fileTree, recalcHeight]
   );
 
   if (isLoading) {
@@ -117,15 +129,18 @@ export function FileTree() {
   // 过滤隐藏文件
   const filteredTree = filterHiddenEntries(fileTree);
 
+  const actualHeight = treeHeight || filteredTree.length * ROW_HEIGHT;
+
   return (
-    <div ref={containerRef} className="h-full overflow-hidden">
+    <div>
       <Tree<FileNode>
+        ref={treeRef}
         data={filteredTree}
         openByDefault={false}
         width="100%"
-        height={containerHeight}
+        height={actualHeight}
         indent={16}
-        rowHeight={28}
+        rowHeight={ROW_HEIGHT}
         overscanCount={8}
         idAccessor="id"
         childrenAccessor="children"
@@ -190,7 +205,7 @@ function dirEntriesToFileNodes(entries: DirEntry[], basePath: string): FileNode[
 }
 
 /** 从后端加载文件树 */
-async function loadFileTree(projectPath: string) {
+async function loadFileTree(projectId: string, projectPath: string) {
   const store = useProjectStore.getState();
   store.setLoading(true);
   try {
@@ -199,11 +214,10 @@ async function loadFileTree(projectPath: string) {
       path: projectPath,
     });
     const fileNodes = dirEntriesToFileNodes(entries, projectPath);
-    store.setFileTree(fileNodes);
+    store.setProjectFileTree(projectId, fileNodes);
   } catch (err) {
     console.warn("Failed to load file tree, using mock data:", err);
-    // 开发时使用 mock 数据
-    store.setFileTree(getMockFileTree());
+    store.setProjectFileTree(projectId, getMockFileTree());
   } finally {
     store.setLoading(false);
   }

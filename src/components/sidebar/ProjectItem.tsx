@@ -30,10 +30,12 @@ import type { Project } from "@/types/project";
 interface ProjectItemProps {
   project: Project;
   isActive: boolean;
+  isExpanded: boolean;
 }
 
-export function ProjectItem({ project, isActive }: ProjectItemProps) {
+export function ProjectItem({ project, isActive, isExpanded }: ProjectItemProps) {
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
+  const toggleProjectExpanded = useProjectStore((s) => s.toggleProjectExpanded);
   const removeProject = useProjectStore((s) => s.removeProject);
   const agents = useCanvasStore((s) => s.agents);
 
@@ -124,15 +126,13 @@ export function ProjectItem({ project, isActive }: ProjectItemProps) {
           fontSize: 13,
           color: isActive ? "#e4e6eb" : "#b8bcc4",
           fontWeight: 500,
-          /* 非活跃（折叠）项目有顶部分隔线 — 参考 mockup .project-collapsed */
-          borderTop: !isActive ? "1px solid #1a1c23" : undefined,
+          /* 折叠项目有顶部分隔线 — 参考 mockup .project-collapsed */
+          borderTop: !isExpanded ? "1px solid #1a1c23" : undefined,
         }}
         onClick={() => {
-          if (isActive) {
-            setActiveProject(null);
-          } else {
-            setActiveProject(project);
-          }
+          toggleProjectExpanded(project.id);
+          // 同时设为 active（用于 git/文件监听）
+          setActiveProject(project);
         }}
         onContextMenu={handleContextMenu}
       >
@@ -141,7 +141,7 @@ export function ProjectItem({ project, isActive }: ProjectItemProps) {
           className="flex-shrink-0 text-center leading-none"
           style={{ color: "#6b7280", fontSize: 9, width: 10 }}
         >
-          {isActive ? "▼" : "▶"}
+          {isExpanded ? "▼" : "▶"}
         </span>
         {/* 文件夹图标 */}
         <span className="flex-shrink-0" style={{ fontSize: 13 }}>📁</span>
@@ -155,7 +155,7 @@ export function ProjectItem({ project, isActive }: ProjectItemProps) {
           />
         )}
         {/* Git 分支标签 — 仅活跃项目显示 */}
-        {isActive && gitBranch && (
+        {isExpanded && gitBranch && (
           <span
             className="flex-shrink-0"
             style={{ marginLeft: "auto", fontSize: 10, color: "#6b7280", fontWeight: 400 }}

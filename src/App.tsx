@@ -3,14 +3,14 @@
  *
  * 布局结构（flex 横向）：
  * ┌──────────────────────────────────────────┐
- * │ Sidebar │     Canvas (画布)     │ Panel  │
- * │ (240px) │     (flex-1)          │(540px) │
- * │         │                       │ 推入式 │
- * ├─────────┴───────────────────────┴────────┤
+ * │ Sidebar │ Panel  │     Canvas (画布)     │
+ * │ (240px) │(540px) │     (flex-1)          │
+ * │         │ 推入式 │                       │
+ * ├─────────┴────────┴───────────────────────┤
  * │             StatusBar (24px)              │
  * └──────────────────────────────────────────┘
  *
- * 面板打开时推画布到左侧（非覆盖），150ms 动画
+ * 面板打开时推画布到右侧（非覆盖），150ms 动画
  */
 import { useEffect } from "react";
 import { TitleBar } from "@/components/titlebar/TitleBar";
@@ -65,14 +65,14 @@ function App() {
           <Sidebar />
         </ErrorBoundary>
 
+        {/* 侧滑文件审查面板 - Sidebar 右侧推入式布局 */}
+        <ErrorBoundary name="SlidePanel">
+          <SlidePanel />
+        </ErrorBoundary>
+
         {/* 画布主区域 - flex-1 自适应 */}
         <ErrorBoundary name="Canvas">
           <Canvas />
-        </ErrorBoundary>
-
-        {/* 右侧滑文件审查面板 - 推入式布局 */}
-        <ErrorBoundary name="SlidePanel">
-          <SlidePanel />
         </ErrorBoundary>
       </div>
 

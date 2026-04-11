@@ -59,11 +59,14 @@ export function useTerminal({ terminalId, cwd, agentId, fontSize = 12 }: UseTerm
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const initPendingRef = useRef(false);
 
   /** 初始化终端 */
   const init = useCallback(async () => {
     if (!containerRef.current) return;
     if (terminalRef.current) return; // 防止重复初始化
+    if (initPendingRef.current) return; // 防止并发初始化（async 竞态）
+    initPendingRef.current = true;
 
     const terminal = new Terminal({
       fontSize,
@@ -121,7 +124,11 @@ export function useTerminal({ terminalId, cwd, agentId, fontSize = 12 }: UseTerm
         status: "active",
       });
     } catch (err) {
-      terminal.writeln(`\x1b[31m无法创建终端进程: ${err}\x1b[0m`);
+      // Fallback: 在终端中显示友好提示（浏览器预览模式下 Tauri IPC 不可用）
+      terminal.writeln('\x1b[33m⚠ 终端功能需要在 Tauri 桌面环境中运行\x1b[0m');
+      terminal.writeln('\x1b[90m当前为浏览器预览模式\x1b[0m');
+      terminal.writeln('');
+      terminal.writeln(`\x1b[90m错误详情: ${err}\x1b[0m`);
       return;
     }
 
@@ -161,6 +168,7 @@ export function useTerminal({ terminalId, cwd, agentId, fontSize = 12 }: UseTerm
       terminalRef.current?.dispose();
       terminalRef.current = null;
       fitAddonRef.current = null;
+      initPendingRef.current = false;
       ptyService.closeTerminal(terminalId).catch(console.error);
       useTerminalStore.getState().removeTerminal(terminalId);
     };
