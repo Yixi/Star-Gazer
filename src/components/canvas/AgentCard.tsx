@@ -12,8 +12,7 @@
 import { useRef, useCallback, useState, useEffect } from "react";
 import { GripHorizontal, X, Minimize2, Maximize2 } from "lucide-react";
 import { useCanvasStore } from "@/stores/canvasStore";
-import { useHoverStore } from "@/stores/hoverStore";
-import { AGENT_COLORS } from "@/lib/colors";
+import { useProjectStore } from "@/stores/projectStore";
 import { TerminalView } from "@/components/terminal/TerminalView";
 import { PulsingDot } from "@/components/ui/PulsingDot";
 import type { Agent, AgentColor } from "@/types/agent";
@@ -21,18 +20,6 @@ import type { Agent, AgentColor } from "@/types/agent";
 interface AgentCardProps {
   agent: Agent;
 }
-
-/** Agent 颜色到 CSS 变量的发光映射 */
-const GLOW_MAP: Record<AgentColor, string> = {
-  blue: "var(--sg-shadow-glow-blue, 0 0 12px rgba(74,158,255,0.4))",
-  orange: "var(--sg-shadow-glow-orange, 0 0 12px rgba(255,140,66,0.4))",
-  purple: "var(--sg-shadow-glow-purple, 0 0 12px rgba(167,139,250,0.4))",
-  green: "var(--sg-shadow-glow-green, 0 0 12px rgba(34,197,94,0.4))",
-  pink: "var(--sg-shadow-glow-pink, 0 0 12px rgba(236,72,153,0.4))",
-  yellow: "var(--sg-shadow-glow-yellow, 0 0 12px rgba(234,179,8,0.4))",
-  cyan: "var(--sg-shadow-glow-cyan, 0 0 12px rgba(6,182,212,0.4))",
-  red: "var(--sg-shadow-glow-red, 0 0 12px rgba(239,68,68,0.4))",
-};
 
 /** Agent 颜色到具体 HEX 的映射 */
 const COLOR_HEX: Record<AgentColor, string> = {
@@ -60,7 +47,7 @@ const STATUS_INDICATOR: Record<
 export function AgentCard({ agent }: AgentCardProps) {
   const { selectedAgentId, selectAgent, updateAgentPosition, removeAgent } =
     useCanvasStore();
-  const { setHoveredAgent, clearHover } = useHoverStore();
+  const setHoveredAgent = useProjectStore((s) => s.setHoveredAgent);
   const isDragging = useRef(false);
   const dragOffset = useRef({ x: 0, y: 0 });
 
@@ -73,7 +60,6 @@ export function AgentCard({ agent }: AgentCardProps) {
   /** 鼠标悬停 */
   const [isHovered, setIsHovered] = useState(false);
 
-  const colors = AGENT_COLORS[agent.color];
   const isSelected = selectedAgentId === agent.id;
   const statusInfo = STATUS_INDICATOR[agent.status];
   const colorHex = COLOR_HEX[agent.color];
@@ -169,11 +155,11 @@ export function AgentCard({ agent }: AgentCardProps) {
       onClick={() => selectAgent(agent.id)}
       onMouseEnter={() => {
         setIsHovered(true);
-        setHoveredAgent(agent.id, agent.color);
+        setHoveredAgent(agent.id);
       }}
       onMouseLeave={() => {
         setIsHovered(false);
-        clearHover();
+        setHoveredAgent(null);
       }}
       data-agent-id={agent.id}
       data-agent-color={agent.color}
