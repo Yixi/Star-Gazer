@@ -69,14 +69,28 @@ export function ProjectItem({ project, isActive }: ProjectItemProps) {
 
   const closeMenu = () => setContextMenu(null);
 
-  const handleRemove = () => {
+  const handleRemove = async () => {
+    // 从后端持久化中移除
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("remove_project", { id: project.id });
+    } catch (err) {
+      console.warn("Backend remove_project failed:", err);
+    }
     removeProject(project.id);
     closeMenu();
   };
 
-  const handleCloseProject = () => {
+  const handleCloseProject = async () => {
     if (isActive) {
       setActiveProject(null);
+    }
+    // 从后端持久化中移除
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("remove_project", { id: project.id });
+    } catch (err) {
+      console.warn("Backend remove_project failed:", err);
     }
     removeProject(project.id);
     closeMenu();
