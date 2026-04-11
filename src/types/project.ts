@@ -26,6 +26,8 @@ export interface FileNode {
   gitStatus?: GitFileStatus;
   /** 关联的 Agent 颜色（如果被 Agent 修改） */
   agentColor?: string;
+  /** Diff 统计 */
+  diffStat?: { additions: number; deletions: number };
 }
 
 /** Git 文件状态 */

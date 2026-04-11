@@ -101,6 +101,77 @@ body {
   background: oklch(0.45 0 0);
 }
 
+/* 实时写入脉动蓝点动画 - 6px, 1.4s 周期 */
+.writing-pulse {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #4a9eff;
+  animation: writingPulse 1.4s ease-in-out infinite;
+  box-shadow: 0 0 4px 1px rgba(74, 158, 255, 0.4);
+}
+
+@keyframes writingPulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(0.8);
+    box-shadow: 0 0 2px 0px rgba(74, 158, 255, 0.2);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+    box-shadow: 0 0 8px 2px rgba(74, 158, 255, 0.6);
+  }
+}
+
+/* react-arborist 容器样式覆盖 */
+[role="tree"] {
+  outline: none;
+}
+[role="treeitem"] {
+  outline: none;
+}
+
+/* Slide panel 动画 */
+.slide-panel-enter {
+  transition: width 150ms ease-out;
+}
+
+/* Tab 拖拽样式 */
+.tab-dragging {
+  opacity: 0.5;
+}
+
+/* react-diff-view styles */
+.diff-gutter {
+  width: 40px;
+  text-align: right;
+  padding: 0 8px;
+  color: #6b7280;
+  user-select: none;
+  font-size: 11px;
+}
+.diff-code {
+  padding: 0 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.diff-code-insert {
+  background-color: rgba(34, 197, 94, 0.1);
+}
+.diff-code-delete {
+  background-color: rgba(239, 68, 68, 0.1);
+}
+.diff-gutter-insert {
+  background-color: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+.diff-gutter-delete {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
