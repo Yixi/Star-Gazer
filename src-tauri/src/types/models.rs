@@ -47,9 +47,20 @@ pub struct GitBranch {
     pub upstream: Option<String>,
 }
 
+/// Git 日志条目
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitLogEntry {
+    pub hash: String,
+    pub short_hash: String,
+    pub author_name: String,
+    pub author_email: String,
+    pub timestamp: u64,
+    pub message: String,
+}
+
 /// 文件变更事件
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileChangeEvent {
+    pub path: String,
     pub kind: String,
-    pub paths: Vec<String>,
 }
