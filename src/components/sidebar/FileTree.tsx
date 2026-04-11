@@ -12,7 +12,7 @@
  * - 实时写入指示（脉动蓝点）
  * - Hover 关联高亮
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { Tree, NodeRendererProps } from "react-arborist";
 import {
   ChevronRight,
@@ -47,12 +47,43 @@ const HIDDEN_ENTRIES = new Set([
 export function FileTree() {
   const { fileTree, isLoading, activeProject } = useProjectStore();
   const containerRef = useRef<HTMLDivElement>(null);
+  /** 已加载过子节点的目录 ID 集合，避免重复请求 */
+  const loadedDirsRef = useRef<Set<string>>(new Set());
 
   // 初始加载文件树
   useEffect(() => {
     if (!activeProject) return;
+    loadedDirsRef.current.clear();
     loadFileTree(activeProject.path);
   }, [activeProject?.path]);
+
+  /** 展开/折叠回调 — 展开时按需加载子目录内容 */
+  const handleToggle = useCallback(
+    async (id: string) => {
+      if (!activeProject) return;
+      // 在 fileTree 中查找该节点
+      const node = findNodeById(fileTree, id);
+      if (!node || !node.isDir) return;
+      // 仅在首次展开且 children 为空时加载
+      if (loadedDirsRef.current.has(id)) return;
+      if (node.children && node.children.length > 0) return;
+
+      loadedDirsRef.current.add(id);
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const entries = await invoke<DirEntry[]>("list_dir", {
+          path: node.path,
+        });
+        const childNodes = dirEntriesToFileNodes(entries, activeProject.path);
+        useProjectStore.getState().updateNodeChildren(id, childNodes);
+      } catch (err) {
+        console.warn("Failed to load children for", node.path, err);
+        // 加载失败则允许重试
+        loadedDirsRef.current.delete(id);
+      }
+    },
+    [activeProject, fileTree]
+  );
 
   if (isLoading) {
     return (
@@ -91,6 +122,7 @@ export function FileTree() {
         overscanCount={8}
         idAccessor="id"
         childrenAccessor="children"
+        onToggle={handleToggle}
         disableDrag
         disableDrop
         disableEdit
@@ -99,6 +131,18 @@ export function FileTree() {
       </Tree>
     </div>
   );
+}
+
+/** 在文件树中递归查找指定 ID 的节点 */
+function findNodeById(nodes: FileNode[], id: string): FileNode | undefined {
+  for (const node of nodes) {
+    if (node.id === id) return node;
+    if (node.children) {
+      const found = findNodeById(node.children, id);
+      if (found) return found;
+    }
+  }
+  return undefined;
 }
 
 /** 递归过滤隐藏条目 */

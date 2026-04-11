@@ -47,6 +47,8 @@ interface ProjectState {
   setHoveredAgent: (agentId: string | null) => void;
   /** 设置 agent 文件映射 */
   setAgentFileMap: (map: Record<string, string[]>) => void;
+  /** 更新指定目录节点的子节点（按需加载） */
+  updateNodeChildren: (nodeId: string, children: FileNode[]) => void;
 }
 
 export const useProjectStore = create<ProjectState>((set) => ({
@@ -94,4 +96,19 @@ export const useProjectStore = create<ProjectState>((set) => ({
   setHoveredAgent: (agentId) => set({ hoveredAgentId: agentId }),
 
   setAgentFileMap: (map) => set({ agentFileMap: map }),
+
+  updateNodeChildren: (nodeId, children) =>
+    set((state) => {
+      const updateChildren = (nodes: FileNode[]): FileNode[] =>
+        nodes.map((node) => {
+          if (node.id === nodeId) {
+            return { ...node, children };
+          }
+          if (node.children) {
+            return { ...node, children: updateChildren(node.children) };
+          }
+          return node;
+        });
+      return { fileTree: updateChildren(state.fileTree) };
+    }),
 }));
