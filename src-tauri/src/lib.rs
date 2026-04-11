@@ -5,10 +5,11 @@ pub mod commands;
 pub mod services;
 pub mod types;
 
-use commands::{fs, git, project, terminal};
+use commands::{fs, git, project, session, terminal};
 use services::file_watcher::FileWatcherManager;
 use services::project_manager::ProjectManager;
 use services::pty_manager::PtyManager;
+use services::session_manager::SessionManager;
 use tauri::{AppHandle, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -24,6 +25,7 @@ pub fn run() {
         .manage(PtyManager::new())
         .manage(FileWatcherManager::new())
         .manage(ProjectManager::new())
+        .manage(SessionManager::new())
         .invoke_handler(tauri::generate_handler![
             // 终端命令
             terminal::create_terminal,
@@ -49,6 +51,11 @@ pub fn run() {
             project::list_projects,
             project::add_project,
             project::remove_project,
+            // 会话与配置命令
+            session::get_session,
+            session::save_session,
+            session::get_config,
+            session::save_config,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
