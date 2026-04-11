@@ -4,7 +4,7 @@
  * 显示全局信息：Git 分支、Agent 数量、缩放级别等
  * 使用 design tokens CSS 变量
  */
-import { GitBranch, Bot, Zap } from "lucide-react";
+import { GitBranch, Bot } from "lucide-react";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { useProjectStore } from "@/stores/projectStore";
 import { PulsingDot } from "@/components/ui/PulsingDot";
