@@ -132,7 +132,26 @@ async function loadFileTree(projectPath: string) {
   }
 }
 
-/** 单个文件树节点 */
+/** Agent 颜色到 HEX 值映射（用于精确的高亮颜色） */
+const AGENT_COLOR_HEX: Record<string, string> = {
+  blue: "#4a9eff",
+  orange: "#ff8c42",
+  purple: "#a78bfa",
+  green: "#22c55e",
+  pink: "#ec4899",
+  yellow: "#eab308",
+  cyan: "#06b6d4",
+  red: "#ef4444",
+};
+
+/**
+ * 单个文件树节点 — Hover 关联高亮（核心差异化交互）
+ *
+ * 当 Agent 卡片被悬停时：
+ * - 被该 Agent 修改的文件：背景渐变 + 左侧 2px 颜色竖条 + 文件名白色加粗
+ * - 其他所有文件：变暗到 35% 透明度
+ * - 所有过渡使用 300ms ease-in-out 平滑恢复
+ */
 function FileTreeNode({ node, style }: NodeRendererProps<FileNode>) {
   const data = node.data;
   const openTab = usePanelStore((s) => s.openTab);
@@ -143,21 +162,21 @@ function FileTreeNode({ node, style }: NodeRendererProps<FileNode>) {
 
   const isWriting = writingFiles.has(data.path);
 
-  // 检查文件是否被 hover 的 agent 修改
+  /* ====== Hover 关联高亮核心逻辑 ====== */
   const isHighlightedByAgent =
-    hoveredAgentId && agentFileMap[hoveredAgentId]?.includes(data.path);
-  const isOtherAgentFile =
-    hoveredAgentId &&
-    !isHighlightedByAgent &&
-    Object.entries(agentFileMap).some(
-      ([agentId, files]) => agentId !== hoveredAgentId && files.includes(data.path)
-    );
+    hoveredAgentId !== null && agentFileMap[hoveredAgentId]?.includes(data.path);
+  /* 有 Agent 被悬停但当前文件不属于该 Agent → 变暗 */
+  const isDimmed = hoveredAgentId !== null && !isHighlightedByAgent;
+
+  /* 获取高亮 Agent 的实际颜色（从文件的 agentColor 派生） */
+  const highlightColor = isHighlightedByAgent
+    ? AGENT_COLOR_HEX[data.agentColor ?? "blue"] ?? "#4a9eff"
+    : undefined;
 
   const handleClick = () => {
     if (node.isInternal) {
       node.toggle();
     } else {
-      // 改动文件默认 diff 模式，未改动文件 file 模式
       const hasChanges =
         data.gitStatus && data.gitStatus !== "unchanged" && data.gitStatus !== "ignored";
       openTab({
@@ -170,54 +189,50 @@ function FileTreeNode({ node, style }: NodeRendererProps<FileNode>) {
     }
   };
 
-  // 获取 diff 统计
   const diffStat = data.diffStat || fileDiffStats[data.path];
 
-  // 样式计算
   const isUntracked = data.gitStatus === "untracked";
   const isDeleted = data.gitStatus === "deleted";
   const isAdded = data.gitStatus === "added";
   const isConflicted = data.gitStatus === "conflicted";
 
-  // hover 关联高亮
-  let opacity = 1;
-  let bgHighlight = "transparent";
-  if (hoveredAgentId) {
-    if (isHighlightedByAgent) {
-      bgHighlight = "rgba(74, 158, 255, 0.08)";
-    } else if (isOtherAgentFile) {
-      opacity = 0.35;
-    }
-  }
-
   return (
     <div
       style={{
         ...style,
-        opacity,
+        /* 300ms 平滑过渡 — opacity、background */
+        transition: "opacity 300ms ease, background 300ms ease",
+        /* 变暗效果 — 35% 透明度 */
+        opacity: isDimmed ? 0.35 : 1,
+        /* 高亮时背景渐变效果 */
+        background: isHighlightedByAgent
+          ? `linear-gradient(90deg, ${highlightColor}18 0%, transparent 100%)`
+          : "transparent",
+        position: "relative",
       }}
-      className="flex items-center pr-2 cursor-pointer hover:bg-white/[0.04] transition-colors rounded-sm"
+      className="flex items-center pr-2 cursor-pointer hover:bg-white/[0.04] rounded-sm"
       onClick={handleClick}
     >
-      {/* Agent hover 高亮左边条 */}
-      {isHighlightedByAgent && (
-        <div
-          className="absolute left-0 top-0 bottom-0 w-0.5"
-          style={{ backgroundColor: "#4a9eff" }}
-        />
-      )}
-
+      {/* 左侧 2px 颜色竖条 — 带发光效果，宽度过渡动画 */}
       <div
-        className="flex items-center gap-1 flex-1 min-w-0"
-        style={{ background: bgHighlight }}
-      >
+        className="absolute left-0 top-0 bottom-0 rounded-full"
+        style={{
+          width: isHighlightedByAgent ? 2 : 0,
+          backgroundColor: highlightColor ?? "transparent",
+          boxShadow: isHighlightedByAgent ? `0 0 6px ${highlightColor}60` : "none",
+          transition: "width 300ms ease, box-shadow 300ms ease",
+        }}
+      />
+
+      <div className="flex items-center gap-1 flex-1 min-w-0">
         {/* 展开/折叠箭头 */}
         {node.isInternal ? (
           <ChevronRight
-            className="w-3 h-3 flex-shrink-0 transition-transform"
+            className="w-3 h-3 flex-shrink-0"
             style={{
               transform: node.isOpen ? "rotate(90deg)" : "rotate(0deg)",
-              color: "#8b92a3",
+              transition: "transform 150ms ease-out",
+              color: "var(--sg-text-tertiary, #8b92a3)",
             }}
           />
         ) : (
@@ -231,8 +246,8 @@ function FileTreeNode({ node, style }: NodeRendererProps<FileNode>) {
               className="w-4 h-4 flex-shrink-0"
               style={{
                 color: data.agentColor
-                  ? `var(--color-agent-${data.agentColor})`
-                  : "#8b92a3",
+                  ? AGENT_COLOR_HEX[data.agentColor] ?? `var(--color-agent-${data.agentColor})`
+                  : "var(--sg-text-tertiary, #8b92a3)",
               }}
             />
           ) : (
@@ -240,52 +255,51 @@ function FileTreeNode({ node, style }: NodeRendererProps<FileNode>) {
               className="w-4 h-4 flex-shrink-0"
               style={{
                 color: data.agentColor
-                  ? `var(--color-agent-${data.agentColor})`
-                  : "#8b92a3",
+                  ? AGENT_COLOR_HEX[data.agentColor] ?? `var(--color-agent-${data.agentColor})`
+                  : "var(--sg-text-tertiary, #8b92a3)",
               }}
             />
           )
         ) : (
           <>
-            {/* 未跟踪文件前缀 ? */}
             {isUntracked && (
               <CircleHelp
                 className="w-3 h-3 flex-shrink-0"
-                style={{ color: "#8b92a3" }}
+                style={{ color: "var(--sg-text-tertiary, #8b92a3)" }}
               />
             )}
-            {/* 冲突文件前缀 ! */}
             {isConflicted && (
               <AlertCircle
                 className="w-3 h-3 flex-shrink-0"
-                style={{ color: "#ef4444" }}
+                style={{ color: "var(--sg-error, #ef4444)" }}
               />
             )}
             <File
               className="w-4 h-4 flex-shrink-0"
               style={{
                 color: data.agentColor
-                  ? `var(--color-agent-${data.agentColor})`
-                  : "#8b92a3",
+                  ? AGENT_COLOR_HEX[data.agentColor] ?? `var(--color-agent-${data.agentColor})`
+                  : "var(--sg-text-tertiary, #8b92a3)",
               }}
             />
           </>
         )}
 
-        {/* 文件名 */}
+        {/* 文件名 — 高亮时白色加粗 + 300ms 颜色过渡 */}
         <span
           className="truncate text-xs"
           style={{
             color: isHighlightedByAgent
               ? "#ffffff"
               : isDeleted
-                ? "#ef4444"
+                ? "var(--sg-error, #ef4444)"
                 : isAdded
-                  ? "#22c55e"
-                  : "#e4e6eb",
+                  ? "var(--sg-success, #22c55e)"
+                  : "var(--sg-text-primary, #e4e6eb)",
             fontStyle: isUntracked ? "italic" : "normal",
             textDecoration: isDeleted ? "line-through" : "none",
             fontWeight: isHighlightedByAgent ? 600 : 400,
+            transition: "color 300ms ease, font-weight 300ms ease",
           }}
         >
           {data.name}
@@ -300,22 +314,29 @@ function FileTreeNode({ node, style }: NodeRendererProps<FileNode>) {
 
         {/* Git diff 统计 */}
         {diffStat && !node.isInternal && (
-          <span className="ml-auto flex items-center gap-0.5 text-[10px] flex-shrink-0 tabular-nums">
+          <span
+            className="ml-auto flex items-center gap-0.5 text-[10px] flex-shrink-0 tabular-nums"
+            style={{ fontFamily: "var(--sg-font-mono, monospace)" }}
+          >
             {diffStat.additions > 0 && (
-              <span style={{ color: "#22c55e" }}>+{diffStat.additions}</span>
+              <span style={{ color: "var(--sg-success, #22c55e)" }}>+{diffStat.additions}</span>
             )}
             {diffStat.deletions > 0 && (
-              <span style={{ color: "#ef4444" }}>-{diffStat.deletions}</span>
+              <span style={{ color: "var(--sg-error, #ef4444)" }}>-{diffStat.deletions}</span>
             )}
           </span>
         )}
 
-        {/* Agent 颜色标记 */}
+        {/* Agent 颜色标记圆点 — 高亮时带发光 */}
         {data.agentColor && !isWriting && (
           <span
             className="w-2 h-2 rounded-full ml-auto flex-shrink-0"
             style={{
-              backgroundColor: `var(--color-agent-${data.agentColor})`,
+              backgroundColor: AGENT_COLOR_HEX[data.agentColor] ?? `var(--color-agent-${data.agentColor})`,
+              boxShadow: isHighlightedByAgent
+                ? `0 0 6px ${AGENT_COLOR_HEX[data.agentColor]}80`
+                : "none",
+              transition: "box-shadow 300ms ease",
             }}
           />
         )}
