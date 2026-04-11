@@ -4,7 +4,7 @@
  * 左：面包屑路径 `project / folder / file.ts`
  * 右：Diff 统计 `+24 -8`、模式切换 diff/file、布局切换 split/unified
  */
-import { Columns2, AlignJustify, Copy } from "lucide-react";
+import { Columns2, AlignJustify, Copy, Eye, FileCode } from "lucide-react";
 import { usePanelStore } from "@/stores/panelStore";
 import { useProjectStore } from "@/stores/projectStore";
 import { useSettingsStore } from "@/stores/settingsStore";
@@ -28,6 +28,11 @@ export function PanelToolbar({ tab }: PanelToolbarProps) {
   const fileDiffStats = useProjectStore((s) => s.fileDiffStats);
   const hasChanges = !!fileDiffStats[tab.filePath] ||
     tab.type === "diff";
+
+  // 是否为可预览文件（markdown、图片等）
+  const ext = tab.filePath.split(".").pop()?.toLowerCase() ?? "";
+  const isPreviewable = ["md", "mdx"].includes(ext);
+  const isImageFile = ["png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "bmp"].includes(ext);
 
   const handleCopyPath = async () => {
     try {
@@ -132,6 +137,54 @@ export function PanelToolbar({ tab }: PanelToolbarProps) {
               onClick={() => setTabType(tab.id, "file")}
             >
               file
+            </button>
+          </div>
+        )}
+
+        {/* Markdown/可预览文件 — preview/source 切换 */}
+        {(isPreviewable || isImageFile) && (
+          <div
+            className="flex items-center overflow-hidden"
+            style={{
+              background: '#0d0e13',
+              border: '1px solid #1a1c23',
+              borderRadius: 5,
+              padding: 2,
+            }}
+          >
+            <button
+              className="flex items-center gap-1 transition-colors"
+              style={{
+                padding: '4px 10px',
+                borderRadius: 3,
+                fontSize: 10,
+                fontWeight: 500,
+                backgroundColor:
+                  tab.type === "markdown" ? "#2a2f3b" : "transparent",
+                color: tab.type === "markdown" ? "#e4e6eb" : "#6b7280",
+              }}
+              onClick={() => setTabType(tab.id, "markdown")}
+              title="预览模式"
+            >
+              <Eye className="w-3 h-3" />
+              <span className="uppercase">Preview</span>
+            </button>
+            <button
+              className="flex items-center gap-1 transition-colors"
+              style={{
+                padding: '4px 10px',
+                borderRadius: 3,
+                fontSize: 10,
+                fontWeight: 500,
+                backgroundColor:
+                  tab.type === "file" ? "#2a2f3b" : "transparent",
+                color: tab.type === "file" ? "#e4e6eb" : "#6b7280",
+              }}
+              onClick={() => setTabType(tab.id, "file")}
+              title="源码模式"
+            >
+              <FileCode className="w-3 h-3" />
+              <span className="uppercase">Source</span>
             </button>
           </div>
         )}

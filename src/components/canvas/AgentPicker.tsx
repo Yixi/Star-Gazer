@@ -87,7 +87,7 @@ export function AgentPicker({ onClose }: AgentPickerProps) {
         x: 100 + agents.length * 40,
         y: 100 + agents.length * 40,
       },
-      size: { width: 480, height: 360 },
+      size: { width: 680, height: 480 },
       cwd: project?.path ?? "/tmp",
     };
 

@@ -14,6 +14,7 @@
  * - Remove from Star Gazer
  */
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   Trash2,
   ExternalLink,
@@ -165,14 +166,15 @@ export function ProjectItem({ project, isActive, isExpanded }: ProjectItemProps)
         )}
       </button>
 
-      {/* 右键上下文菜单 */}
-      {contextMenu && (
+      {/* 右键上下文菜单 — 通过 Portal 渲染到 body，避免被 Sidebar/Panel 遮挡 */}
+      {contextMenu && createPortal(
         <div
           ref={menuRef}
-          className="fixed z-50 rounded-lg shadow-xl py-1 min-w-[200px]"
+          className="fixed rounded-lg shadow-xl py-1 min-w-[200px]"
           style={{
             left: contextMenu.x,
             top: contextMenu.y,
+            zIndex: 9999,
             backgroundColor: "#1a1c23",
             border: "1px solid #2a2d36",
           }}
@@ -230,7 +232,8 @@ export function ProjectItem({ project, isActive, isExpanded }: ProjectItemProps)
             onClick={handleRemove}
             danger
           />
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

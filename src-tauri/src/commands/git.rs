@@ -32,3 +32,9 @@ pub async fn git_log(repo_path: String, limit: Option<u32>) -> Result<Vec<GitLog
     log::info!("获取 Git 日志: {} (limit={})", repo_path, limit);
     GitService::log(&repo_path, limit)
 }
+
+/// 获取被 gitignore 忽略的文件列表
+#[tauri::command]
+pub async fn git_ignored(repo_path: String) -> Result<Vec<String>, String> {
+    GitService::ignored_paths(&repo_path)
+}

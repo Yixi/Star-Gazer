@@ -265,4 +265,20 @@ impl GitService {
     pub fn is_git_repo(path: &str) -> bool {
         Self::exec(path, &["rev-parse", "--git-dir"]).is_ok()
     }
+
+    /// 获取被 gitignore 忽略的文件/目录路径列表
+    /// 使用 `git status --porcelain --ignored` 获取 ignored 条目
+    pub fn ignored_paths(repo_path: &str) -> Result<Vec<String>, String> {
+        let output = Self::exec(repo_path, &[
+            "status", "--porcelain", "--ignored", "--untracked-files=all",
+        ])?;
+        let mut ignored = Vec::new();
+        for line in output.lines() {
+            // 被忽略的文件以 "!! " 开头
+            if let Some(path) = line.strip_prefix("!! ") {
+                ignored.push(path.trim_end_matches('/').to_string());
+            }
+        }
+        Ok(ignored)
+    }
 }

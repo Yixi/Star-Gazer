@@ -18,23 +18,8 @@ import { useProjectStore } from "@/stores/projectStore";
 import { usePanelStore } from "@/stores/panelStore";
 import type { FileNode } from "@/types/project";
 
-/** 需要隐藏的目录/文件名 */
-const HIDDEN_ENTRIES = new Set([
-  ".git",
-  "node_modules",
-  ".DS_Store",
-  ".next",
-  ".nuxt",
-  "__pycache__",
-  ".pytest_cache",
-  ".mypy_cache",
-  "target",
-  ".idea",
-  ".vscode",
-  "dist",
-  "build",
-  ".turbo",
-]);
+/** 始终隐藏的条目（git 内部目录和 macOS 系统文件） */
+const ALWAYS_HIDDEN = new Set([".git", ".DS_Store"]);
 
 import type { Project } from "@/types/project";
 
@@ -55,6 +40,8 @@ export function FileTree({ project }: FileTreeProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const treeRef = useRef<any>(null);
   const [treeHeight, setTreeHeight] = useState(0);
+  /** gitignore 忽略的相对路径集合 */
+  const [ignoredPaths, setIgnoredPaths] = useState<Set<string>>(new Set());
 
   /** 从 tree ref 重新计算实际内容高度 */
   const recalcHeight = useCallback(() => {
@@ -66,23 +53,37 @@ export function FileTree({ project }: FileTreeProps) {
     });
   }, []);
 
-  // 初始加载文件树
+  // 初始加载文件树 + gitignore 列表
   useEffect(() => {
     loadedDirsRef.current.clear();
     loadFileTree(project.id, project.path);
+    // 加载 gitignore 文件列表
+    (async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const ignored = await invoke<string[]>("git_ignored", { repoPath: project.path });
+        setIgnoredPaths(new Set(ignored));
+      } catch {
+        // 非 git 仓库或命令不可用时忽略
+      }
+    })();
   }, [project.id, project.path]);
 
   // 文件树数据变化时重算高度
   useEffect(() => {
-    setTreeHeight(filterHiddenEntries(fileTree).length * ROW_HEIGHT);
+    setTreeHeight(filterHidden(fileTree).length * ROW_HEIGHT);
     recalcHeight();
   }, [fileTree, recalcHeight]);
 
   /** 展开/折叠回调 — 展开时按需加载子目录内容 */
   const handleToggle = useCallback(
     async (id: string) => {
+      // 无论展开还是折叠，都需要在下一帧重算高度
+      requestAnimationFrame(() => recalcHeight());
+
       const node = findNodeById(fileTree, id);
       if (!node || !node.isDir) return;
+      // 已加载过子节点 或 已有子节点数据，不需重复加载
       if (loadedDirsRef.current.has(id)) return;
       if (node.children && node.children.length > 0) return;
 
@@ -98,8 +99,8 @@ export function FileTree({ project }: FileTreeProps) {
         console.warn("Failed to load children for", node.path, err);
         loadedDirsRef.current.delete(id);
       }
-      // 展开/折叠后重算高度
-      recalcHeight();
+      // 加载完子节点后再次重算
+      requestAnimationFrame(() => recalcHeight());
     },
     [project.id, project.path, fileTree, recalcHeight]
   );
@@ -126,13 +127,13 @@ export function FileTree({ project }: FileTreeProps) {
     );
   }
 
-  // 过滤隐藏文件
-  const filteredTree = filterHiddenEntries(fileTree);
+  // 过滤始终隐藏的条目（.git, .DS_Store）
+  const filteredTree = filterHidden(fileTree);
 
   const actualHeight = treeHeight || filteredTree.length * ROW_HEIGHT;
 
   return (
-    <div>
+    <div className="filetree-container">
       <Tree<FileNode>
         ref={treeRef}
         data={filteredTree}
@@ -149,7 +150,7 @@ export function FileTree({ project }: FileTreeProps) {
         disableDrop
         disableEdit
       >
-        {FileTreeNode}
+        {(props) => <FileTreeNode {...props} ignoredPaths={ignoredPaths} projectPath={project.path} />}
       </Tree>
     </div>
   );
@@ -167,13 +168,13 @@ function findNodeById(nodes: FileNode[], id: string): FileNode | undefined {
   return undefined;
 }
 
-/** 递归过滤隐藏条目 */
-function filterHiddenEntries(nodes: FileNode[]): FileNode[] {
+/** 递归过滤始终隐藏的条目（.git, .DS_Store） */
+function filterHidden(nodes: FileNode[]): FileNode[] {
   return nodes
-    .filter((node) => !HIDDEN_ENTRIES.has(node.name))
+    .filter((node) => !ALWAYS_HIDDEN.has(node.name))
     .map((node) => {
       if (node.children) {
-        return { ...node, children: filterHiddenEntries(node.children) };
+        return { ...node, children: filterHidden(node.children) };
       }
       return node;
     });
@@ -246,7 +247,7 @@ const AGENT_COLOR_HEX: Record<string, string> = {
  * - active-in-panel: 蓝色左边条 + 淡蓝背景
  * - Agent hover: 背景渐变 + 颜色竖条 + 文件名加粗
  */
-function FileTreeNode({ node, style }: NodeRendererProps<FileNode>) {
+function FileTreeNode({ node, style, ignoredPaths, projectPath }: NodeRendererProps<FileNode> & { ignoredPaths: Set<string>; projectPath: string }) {
   const data = node.data;
   const openTab = usePanelStore((s) => s.openTab);
   const activeTabId = usePanelStore((s) => s.activeTabId);
@@ -256,6 +257,12 @@ function FileTreeNode({ node, style }: NodeRendererProps<FileNode>) {
   const fileDiffStats = useProjectStore((s) => s.fileDiffStats);
 
   const isWriting = writingFiles.has(data.path);
+
+  // 检查是否在 gitignore 中（用相对路径匹配）
+  const relativePath = data.path.startsWith(projectPath)
+    ? data.path.slice(projectPath.length).replace(/^\//, "")
+    : data.name;
+  const isGitIgnored = ignoredPaths.has(relativePath) || ignoredPaths.has(relativePath + "/");
 
   // 从 fileDiffStats 推导 gitStatus（如果文件有 diff 则认为是 modified）
   const hasRealDiff = !!fileDiffStats[data.path];
@@ -278,10 +285,12 @@ function FileTreeNode({ node, style }: NodeRendererProps<FileNode>) {
     } else {
       const hasChanges =
         effectiveGitStatus && effectiveGitStatus !== "unchanged" && effectiveGitStatus !== "ignored";
+      const ext = data.name.split(".").pop()?.toLowerCase();
+      const isPreviewable = ext === "md" || ext === "mdx" || ["png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "bmp"].includes(ext ?? "");
       openTab({
         id: data.path,
         title: data.name,
-        type: hasChanges ? "diff" : "file",
+        type: isPreviewable ? "markdown" : hasChanges ? "diff" : "file",
         filePath: data.path,
         isDirty: false,
       });
@@ -363,11 +372,13 @@ function FileTreeNode({ node, style }: NodeRendererProps<FileNode>) {
             fontSize: 13,
             color: isHighlightedByAgent || isActiveInPanel
               ? "#ffffff"
-              : isDeleted
-                ? "#ef4444"
-                : isAdded
-                  ? "#22c55e"
-                  : "#b8bcc4",
+              : isGitIgnored
+                ? "#4a5263"
+                : isDeleted
+                  ? "#ef4444"
+                  : isAdded
+                    ? "#22c55e"
+                    : "#b8bcc4",
             fontStyle: isUntracked ? "italic" : "normal",
             textDecoration: isDeleted ? "line-through" : "none",
             fontWeight: isHighlightedByAgent ? 600 : isActiveInPanel ? 500 : 400,

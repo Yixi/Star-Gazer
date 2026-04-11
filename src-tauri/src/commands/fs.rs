@@ -33,8 +33,8 @@ pub async fn list_dir(path: String) -> Result<Vec<DirEntry>, String> {
         let metadata = entry.metadata().await.map_err(|e| e.to_string())?;
         let name = entry.file_name().to_string_lossy().to_string();
 
-        // 跳过隐藏文件（以 . 开头）
-        if name.starts_with('.') {
+        // 只跳过 .git 目录（内部 git 存储，不适合浏览）
+        if name == ".git" {
             continue;
         }
 

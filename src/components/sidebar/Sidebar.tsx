@@ -36,11 +36,12 @@ export function Sidebar() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [toggleSidebar]);
 
-  // 文件监听 — 变更时重新加载文件树
+  // Git 状态 — 加载分支名和文件 diff 统计
+  const { status: gitStatus, refresh: refreshGitStatus } = useGitStatus(activeProject?.path ?? null);
+
+  // 文件监听 — 变更时重新加载文件树 + 刷新 git 状态
   const handleFileChange = useCallback(
     (_event: FileChangeEvent) => {
-      // 文件变更时，触发文件树重新加载（通过 FileTree 内的 loadFileTree）
-      // 这里简单地更新 fileTree 根节点来触发刷新
       if (activeProject) {
         const loadFileTree = async () => {
           try {
@@ -70,14 +71,13 @@ export function Sidebar() {
           }
         };
         loadFileTree();
+        // 文件变化后也刷新 git 状态
+        refreshGitStatus();
       }
     },
-    [activeProject]
+    [activeProject, refreshGitStatus]
   );
   useFileWatcher(activeProject?.path ?? null, handleFileChange);
-
-  // Git 状态 — 加载分支名和文件 diff 统计
-  const { status: gitStatus } = useGitStatus(activeProject?.path ?? null);
   useEffect(() => {
     if (!gitStatus || !activeProject) return;
     // 更新 Git 分支名

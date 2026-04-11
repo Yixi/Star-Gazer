@@ -66,6 +66,10 @@ const starGazerTheme = EditorView.theme({
     color: "#e4e6eb",
     fontSize: "13px",
     fontFamily: "'Geist Mono', 'SF Mono', 'Fira Code', monospace",
+    height: "100%",
+  },
+  ".cm-scroller": {
+    overflow: "auto",
   },
   ".cm-gutters": {
     backgroundColor: "#0d0e13",
@@ -153,7 +157,7 @@ export function FileEditor({ filePath, tabId }: FileEditorProps) {
         ]),
         oneDark,
         starGazerTheme,
-        EditorView.lineWrapping,
+        // 不启用 lineWrapping — 代码文件不换行，超出宽度时用横向滚动条
         // 监听文档变更标记 dirty
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {

@@ -12,6 +12,7 @@ import { TabBar } from "./TabBar";
 import { PanelToolbar } from "./PanelToolbar";
 import { FileEditor } from "./FileEditor";
 import { DiffView } from "./DiffView";
+import { MarkdownPreview } from "./MarkdownPreview";
 
 export function SlidePanel() {
   const { isOpen, width, activeTabId, tabs, setWidth, closePanel } =
@@ -96,11 +97,13 @@ export function SlidePanel() {
         {/* 工具栏 */}
         {activeTab && <PanelToolbar tab={activeTab} />}
 
-        {/* 内容区域 */}
-        <div className="flex-1 overflow-auto">
+        {/* 内容区域 — 不设 overflow，由子组件（CodeMirror/DiffView）自行管理滚动 */}
+        <div className="flex-1 min-h-0 overflow-hidden">
           {activeTab ? (
             activeTab.type === "diff" ? (
               <DiffView filePath={activeTab.filePath} tabId={activeTab.id} />
+            ) : activeTab.type === "markdown" ? (
+              <MarkdownPreview filePath={activeTab.filePath} />
             ) : (
               <FileEditor filePath={activeTab.filePath} tabId={activeTab.id} />
             )

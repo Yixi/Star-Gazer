@@ -144,6 +144,11 @@ hr,
   scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
 }
 
+/* react-arborist 内部滚动条隐藏 — 由外层 Sidebar 统一管理滚动 */
+.filetree-container [role="tree"] {
+  overflow: hidden !important;
+}
+
 /* 实时写入脉动蓝点动画 - 6px, 1.4s 周期 */
 .writing-pulse {
   display: inline-block;
