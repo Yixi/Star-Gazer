@@ -1,18 +1,28 @@
 //! 项目管理相关 Tauri 命令
 
+use crate::services::project_manager::ProjectManager;
 use crate::types::models::Project;
+use tauri::State;
 
 /// 获取项目列表
 #[tauri::command]
-pub async fn list_projects() -> Result<Vec<Project>, String> {
-    // TODO: 从本地存储中读取项目列表
-    Ok(vec![])
+pub async fn list_projects(
+    project_manager: State<'_, ProjectManager>,
+) -> Result<Vec<Project>, String> {
+    project_manager.list()
 }
 
 /// 添加项目
 #[tauri::command]
-pub async fn add_project(path: String) -> Result<Project, String> {
-    // TODO: 验证路径有效性，保存到本地存储
+pub async fn add_project(
+    project_manager: State<'_, ProjectManager>,
+    path: String,
+) -> Result<Project, String> {
+    // 验证路径存在
+    if !std::path::Path::new(&path).exists() {
+        return Err(format!("路径不存在: {}", path));
+    }
+
     let name = std::path::Path::new(&path)
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
@@ -28,13 +38,17 @@ pub async fn add_project(path: String) -> Result<Project, String> {
             .as_secs(),
     };
 
+    project_manager.add(project.clone())?;
+    log::info!("添加项目: {} ({})", project.name, project.path);
     Ok(project)
 }
 
 /// 移除项目（不删除文件）
 #[tauri::command]
-pub async fn remove_project(id: String) -> Result<(), String> {
-    // TODO: 从本地存储中移除项目
+pub async fn remove_project(
+    project_manager: State<'_, ProjectManager>,
+    id: String,
+) -> Result<(), String> {
     log::info!("移除项目: {}", id);
-    Ok(())
+    project_manager.remove(&id)
 }

@@ -7,6 +7,7 @@ pub mod types;
 
 use commands::{fs, git, project, terminal};
 use services::file_watcher::FileWatcherManager;
+use services::project_manager::ProjectManager;
 use services::pty_manager::PtyManager;
 use tauri::{AppHandle, Manager};
 
@@ -22,6 +23,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .manage(PtyManager::new())
         .manage(FileWatcherManager::new())
+        .manage(ProjectManager::new())
         .invoke_handler(tauri::generate_handler![
             // 终端命令
             terminal::create_terminal,
