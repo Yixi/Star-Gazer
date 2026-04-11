@@ -8,13 +8,16 @@
  * - 内容使用 150ms 淡入/淡出
  * - Cmd+B 快捷键切换
  */
-import { useEffect } from "react";
+import { useEffect, useCallback } from "react";
 import { FolderOpen } from "lucide-react";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useProjectStore } from "@/stores/projectStore";
+import { useFileWatcher } from "@/hooks/useFileWatcher";
+import { useGitStatus } from "@/hooks/useGitStatus";
 import { FileTree } from "./FileTree";
 import { ProjectItem } from "./ProjectItem";
 import { AddProjectButton } from "./AddProjectButton";
+import type { FileChangeEvent } from "@/services/watcher";
 
 export function Sidebar() {
   const { sidebarWidth, sidebarOpen, sidebarCollapsedWidth, toggleSidebar } =
@@ -32,6 +35,63 @@ export function Sidebar() {
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [toggleSidebar]);
+
+  // 文件监听 — 变更时重新加载文件树
+  const handleFileChange = useCallback(
+    (_event: FileChangeEvent) => {
+      // 文件变更时，触发文件树重新加载（通过 FileTree 内的 loadFileTree）
+      // 这里简单地更新 fileTree 根节点来触发刷新
+      if (activeProject) {
+        const loadFileTree = async () => {
+          try {
+            const { invoke } = await import("@tauri-apps/api/core");
+            const entries = await invoke<Array<{
+              name: string;
+              path: string;
+              isDir: boolean;
+              size: number;
+              modified: number;
+            }>>("list_dir", { path: activeProject.path });
+            const fileNodes = entries.map((entry) => {
+              const relativePath = entry.path.startsWith(activeProject.path)
+                ? entry.path.slice(activeProject.path.length).replace(/^\//, "")
+                : entry.name;
+              return {
+                id: relativePath || entry.name,
+                name: entry.name,
+                path: entry.path,
+                isDir: entry.isDir,
+                children: entry.isDir ? [] : undefined,
+              };
+            });
+            useProjectStore.getState().setFileTree(fileNodes);
+          } catch (err) {
+            console.warn("文件监听触发的文件树刷新失败:", err);
+          }
+        };
+        loadFileTree();
+      }
+    },
+    [activeProject]
+  );
+  useFileWatcher(activeProject?.path ?? null, handleFileChange);
+
+  // Git 状态 — 加载分支名和文件 diff 统计
+  const { status: gitStatus } = useGitStatus(activeProject?.path ?? null);
+  useEffect(() => {
+    if (!gitStatus) return;
+    // 更新 Git 分支名
+    useProjectStore.getState().setGitBranch(gitStatus.branch);
+    // 更新文件 diff 统计
+    const diffStats: Record<string, { additions: number; deletions: number }> = {};
+    for (const change of [...gitStatus.staged, ...gitStatus.unstaged]) {
+      diffStats[change.path] = {
+        additions: change.additions,
+        deletions: change.deletions,
+      };
+    }
+    useProjectStore.getState().setFileDiffStats(diffStats);
+  }, [gitStatus]);
 
   return (
     <aside
