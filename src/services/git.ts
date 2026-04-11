@@ -25,6 +25,20 @@ export interface GitStatusSummary {
 export interface GitFileChange {
   path: string;
   status: string;
+  /** 新增行数 */
+  additions: number;
+  /** 删除行数 */
+  deletions: number;
+}
+
+/** Git 日志条目 */
+export interface GitLogEntry {
+  hash: string;
+  shortHash: string;
+  authorName: string;
+  authorEmail: string;
+  timestamp: number;
+  message: string;
 }
 
 /** 获取 Git 仓库状态 */
@@ -46,6 +60,6 @@ export async function gitBranches(repoPath: string): Promise<GitBranch[]> {
 export async function gitLog(
   repoPath: string,
   limit: number = 50
-): Promise<string> {
+): Promise<GitLogEntry[]> {
   return invoke("git_log", { repoPath, limit });
 }
