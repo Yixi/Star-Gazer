@@ -64,17 +64,26 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* 全局基础样式 */
+/* ========================================
+   全局基础样式
+   ======================================== */
 * {
   border-color: var(--color-border);
 }
 
 body {
-  background-color: var(--color-background);
-  color: var(--color-foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  overflow: hidden; /* 防止全局滚动 */
+  background-color: var(--sg-bg-app, var(--color-background));
+  color: var(--sg-text-primary, var(--color-foreground));
+  font-family: var(--sg-font-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+  overflow: hidden;
+  /* 使用 macOS 风格的字体渲染 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
+/* ========================================
+   选择与交互状态
+   ======================================== */
 
 /* 禁用文本选择（终端和画布区域） */
 .no-select {
@@ -82,10 +91,32 @@ body {
   -webkit-user-select: none;
 }
 
-/* 自定义滚动条 */
+/* 所有交互元素的 focus 可见性（键盘导航） */
+:focus-visible {
+  outline: 2px solid var(--sg-accent, #4a9eff);
+  outline-offset: 2px;
+  border-radius: var(--sg-radius-sm, 3px);
+}
+
+/* 按钮和链接的通用 hover 过渡 */
+button,
+a,
+[role="button"] {
+  transition: background-color 150ms ease, color 150ms ease, opacity 150ms ease, box-shadow 150ms ease, transform 100ms ease;
+}
+
+/* 所有分隔线使用统一颜色 */
+hr,
+[data-slot="separator"] {
+  border-color: var(--sg-border-divider, #2a2f3b);
+}
+
+/* ========================================
+   自定义滚动条（统一样式）
+   ======================================== */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -93,12 +124,23 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.35 0 0);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.45 0 0);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* 仅在 hover 时显示滚动条 */
+::-webkit-scrollbar-thumb {
+  transition: background 200ms ease;
+}
+
+/* Firefox 滚动条 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
 }
 
 /* 实时写入脉动蓝点动画 - 6px, 1.4s 周期 */
