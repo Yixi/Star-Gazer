@@ -16,10 +16,12 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import * as ptyService from "@/services/pty";
+import { useTerminalStore } from "@/stores/terminalStore";
 
 interface UseTerminalOptions {
   terminalId: string;
   cwd: string;
+  agentId?: string;
   fontSize?: number;
 }
 
@@ -53,7 +55,7 @@ const TERMINAL_THEME = {
   brightWhite: "#e4e6eb",
 };
 
-export function useTerminal({ terminalId, cwd, fontSize = 12 }: UseTerminalOptions) {
+export function useTerminal({ terminalId, cwd, agentId, fontSize = 12 }: UseTerminalOptions) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -108,7 +110,16 @@ export function useTerminal({ terminalId, cwd, fontSize = 12 }: UseTerminalOptio
     // 创建后端 PTY
     const { cols, rows } = terminal;
     try {
-      await ptyService.createTerminal(terminalId, cwd, cols, rows);
+      const pid = await ptyService.createTerminal(terminalId, cwd, cols, rows);
+      // 更新 terminalStore
+      useTerminalStore.getState().addTerminal({
+        id: terminalId,
+        agentId: agentId ?? terminalId,
+        pid,
+        cols,
+        rows,
+        status: "active",
+      });
     } catch (err) {
       terminal.writeln(`\x1b[31m无法创建终端进程: ${err}\x1b[0m`);
       return;
@@ -127,8 +138,9 @@ export function useTerminal({ terminalId, cwd, fontSize = 12 }: UseTerminalOptio
     // PTY 退出
     await ptyService.onTerminalExit(terminalId, (code) => {
       terminal.writeln(`\r\n\x1b[90m[进程已退出，退出码: ${code}]\x1b[0m`);
+      useTerminalStore.getState().setTerminalStatus(terminalId, "closed");
     });
-  }, [terminalId, cwd, fontSize]);
+  }, [terminalId, cwd, agentId, fontSize]);
 
   /** 调整尺寸 */
   const fit = useCallback(() => {
@@ -150,6 +162,7 @@ export function useTerminal({ terminalId, cwd, fontSize = 12 }: UseTerminalOptio
       terminalRef.current = null;
       fitAddonRef.current = null;
       ptyService.closeTerminal(terminalId).catch(console.error);
+      useTerminalStore.getState().removeTerminal(terminalId);
     };
   }, [terminalId]);
 

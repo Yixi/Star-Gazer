@@ -16,10 +16,11 @@ import { useTerminal } from "@/hooks/useTerminal";
 interface TerminalViewProps {
   terminalId: string;
   cwd: string;
+  agentId?: string;
 }
 
-export function TerminalView({ terminalId, cwd }: TerminalViewProps) {
-  const { containerRef, init, fit } = useTerminal({ terminalId, cwd });
+export function TerminalView({ terminalId, cwd, agentId }: TerminalViewProps) {
+  const { containerRef, init, fit } = useTerminal({ terminalId, cwd, agentId });
   const initializedRef = useRef(false);
 
   useEffect(() => {

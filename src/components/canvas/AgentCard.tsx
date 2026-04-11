@@ -566,7 +566,7 @@ export function AgentCard({ agent }: AgentCardProps) {
               background: "var(--sg-bg-code)",
             }}
           >
-            <TerminalView terminalId={agent.terminalId} cwd={agent.cwd} />
+            <TerminalView terminalId={agent.terminalId} cwd={agent.cwd} agentId={agent.id} />
           </div>
         )}
       </div>
