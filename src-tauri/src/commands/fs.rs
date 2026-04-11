@@ -1,7 +1,9 @@
 //! 文件系统相关 Tauri 命令
 
+use crate::services::file_watcher::FileWatcherManager;
 use crate::types::models::DirEntry;
 use std::path::Path;
+use tauri::{AppHandle, State};
 
 /// 读取文件内容
 #[tauri::command]
@@ -95,4 +97,25 @@ pub async fn rename_entry(old_path: String, new_path: String) -> Result<(), Stri
 #[tauri::command]
 pub async fn path_exists(path: String) -> Result<bool, String> {
     Ok(Path::new(&path).exists())
+}
+
+/// 开始监听目录文件变更
+#[tauri::command]
+pub async fn watch_dir(
+    app: AppHandle,
+    watcher: State<'_, FileWatcherManager>,
+    path: String,
+) -> Result<(), String> {
+    log::info!("开始监听目录: {}", path);
+    watcher.watch(app, &path)
+}
+
+/// 停止监听目录文件变更
+#[tauri::command]
+pub async fn unwatch_dir(
+    watcher: State<'_, FileWatcherManager>,
+    path: String,
+) -> Result<(), String> {
+    log::info!("停止监听目录: {}", path);
+    watcher.unwatch(&path)
 }

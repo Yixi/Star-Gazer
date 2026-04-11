@@ -6,6 +6,7 @@ pub mod services;
 pub mod types;
 
 use commands::{fs, git, project, terminal};
+use services::file_watcher::FileWatcherManager;
 use services::pty_manager::PtyManager;
 use tauri::{AppHandle, Manager};
 
@@ -20,6 +21,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(PtyManager::new())
+        .manage(FileWatcherManager::new())
         .invoke_handler(tauri::generate_handler![
             // 终端命令
             terminal::create_terminal,
@@ -39,6 +41,8 @@ pub fn run() {
             fs::remove_entry,
             fs::rename_entry,
             fs::path_exists,
+            fs::watch_dir,
+            fs::unwatch_dir,
             // 项目管理命令
             project::list_projects,
             project::add_project,
@@ -46,10 +50,13 @@ pub fn run() {
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
-                // 应用窗口销毁时清理所有 PTY 进程
+                // 应用窗口销毁时清理所有 PTY 进程和文件监听
                 let app: &AppHandle = window.app_handle();
                 if let Some(pty_manager) = app.try_state::<PtyManager>() {
                     pty_manager.close_all();
+                }
+                if let Some(watcher) = app.try_state::<FileWatcherManager>() {
+                    watcher.unwatch_all();
                 }
             }
         })
