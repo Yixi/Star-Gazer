@@ -117,10 +117,10 @@ export function Canvas() {
     startInertia();
   }, [setIsPanning, startInertia]);
 
-  /** 滚轮缩放 - 以光标位置为中心 */
+  /** 滚轮/触控板事件 - 缩放或平移 */
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
-      // Cmd+滚轮 或 触控板双指缩放（ctrlKey 在触控板缩放时为 true）
+      // Cmd+滚轮 或 触控板双指缩放（ctrlKey 在触控板 pinch 时为 true）
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         e.stopPropagation();
@@ -139,9 +139,17 @@ export function Canvas() {
         };
 
         state.zoomAtPoint(delta, point);
+      } else {
+        // 普通滚轮/触控板两指滑动 → 平移画布
+        e.preventDefault();
+        const state = useCanvasStore.getState();
+        setViewport({
+          x: state.viewport.x - e.deltaX,
+          y: state.viewport.y - e.deltaY,
+        });
       }
     },
-    []
+    [setViewport]
   );
 
   /** 监听键盘事件 - 空格键平移、Cmd+N 新建 Agent、Esc 退出最大化 */
@@ -191,9 +199,8 @@ export function Canvas() {
     if (!el) return;
 
     const preventDefaultWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-      }
+      // 阻止浏览器默认行为（缩放 + 页面滚动）
+      e.preventDefault();
     };
 
     el.addEventListener("wheel", preventDefaultWheel, { passive: false });
@@ -226,9 +233,10 @@ export function Canvas() {
         data-canvas-layer="true"
         className="absolute inset-0"
         style={{
-          transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${zoom})`,
+          transform: `translate(${viewport.x}px, ${viewport.y}px)`,
           transformOrigin: "0 0",
           willChange: "transform",
+          zoom: zoom,
         }}
       >
         {/* Agent 卡片 */}

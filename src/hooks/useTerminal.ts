@@ -2,19 +2,20 @@
  * 终端 Hook - 管理 xterm.js 实例与 PTY 后端的连接
  *
  * 功能：
- * - 初始化 @xterm/xterm 终端实例
- * - 加载 WebGL 渲染器（@xterm/addon-webgl）
+ * - 初始化 @xterm/xterm 终端实例（DOM 渲染器，支持 CSS zoom 无模糊）
  * - 加载 FitAddon 自适应大小
  * - 深色主题：背景 #0d0f14，SF Mono 字体
  * - 支持 256 色 和 true color
  * - 通过 Tauri IPC 创建后端 PTY 并双向通信
  *   - 监听 terminal-output event 写入 xterm
  *   - 用户键入时调用 write_terminal command 发送到后端
+ *
+ * 兼容 React 18 Strict Mode（dev 模式下双重挂载/卸载）：
+ * 使用 generation counter 忽略已清理 PTY 的过时事件
  */
 import { useEffect, useRef, useCallback } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { WebglAddon } from "@xterm/addon-webgl";
 import * as ptyService from "@/services/pty";
 import { useTerminalStore } from "@/stores/terminalStore";
 
@@ -22,7 +23,10 @@ interface UseTerminalOptions {
   terminalId: string;
   cwd: string;
   agentId?: string;
+  command?: string | null;
   fontSize?: number;
+  onReady?: () => void;
+  onExit?: (code: number) => void;
 }
 
 /**
@@ -55,11 +59,21 @@ const TERMINAL_THEME = {
   brightWhite: "#e4e6eb",
 };
 
-export function useTerminal({ terminalId, cwd, agentId, fontSize = 12 }: UseTerminalOptions) {
+export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, onReady, onExit }: UseTerminalOptions) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const initPendingRef = useRef(false);
+  // 存储事件取消监听函数，清理时调用避免内存泄漏
+  const unlistenersRef = useRef<Array<() => void>>([]);
+  // Generation counter：每次 init 递增，cleanup 也递增
+  // 事件回调只在 generation 匹配时处理，防止 Strict Mode 下旧 PTY 的事件污染新实例
+  const generationRef = useRef(0);
+  // 用 ref 持有回调，避免回调变化导致 init 重建
+  const onReadyRef = useRef(onReady);
+  const onExitRef = useRef(onExit);
+  onReadyRef.current = onReady;
+  onExitRef.current = onExit;
 
   /** 初始化终端 */
   const init = useCallback(async () => {
@@ -68,9 +82,12 @@ export function useTerminal({ terminalId, cwd, agentId, fontSize = 12 }: UseTerm
     if (initPendingRef.current) return; // 防止并发初始化（async 竞态）
     initPendingRef.current = true;
 
+    // 记录当前 generation，后续所有异步回调都验证此值
+    const myGeneration = ++generationRef.current;
+
     const terminal = new Terminal({
       fontSize,
-      fontFamily: "'SF Mono', Menlo, Monaco, 'Courier New', monospace",
+      fontFamily: "'MesloLGS NF', 'Hack Nerd Font', 'FiraCode Nerd Font', 'SF Mono', Menlo, Monaco, 'Courier New', monospace",
       fontWeight: "400",
       fontWeightBold: "600",
       letterSpacing: 0,
@@ -81,7 +98,6 @@ export function useTerminal({ terminalId, cwd, agentId, fontSize = 12 }: UseTerm
       cursorWidth: 2,
       allowProposedApi: true,
       scrollback: 5000,
-      // 启用 true color 支持
       allowTransparency: true,
     });
 
@@ -90,17 +106,9 @@ export function useTerminal({ terminalId, cwd, agentId, fontSize = 12 }: UseTerm
 
     terminal.open(containerRef.current);
 
-    // 尝试加载 WebGL 加速渲染
-    try {
-      const webglAddon = new WebglAddon();
-      webglAddon.onContextLoss(() => {
-        webglAddon.dispose();
-        console.warn("WebGL 上下文丢失，回退到 Canvas 渲染");
-      });
-      terminal.loadAddon(webglAddon);
-    } catch {
-      console.warn("WebGL 渲染不可用，使用 Canvas 回退");
-    }
+    // 使用默认 DOM 渲染器（不加载 WebGL）
+    // DOM 渲染器天然支持 CSS zoom，画布缩放时文字保持清晰
+    // WebGL 使用固定分辨率 canvas，CSS zoom 会导致像素拉伸模糊
 
     // 延迟 fit 以确保容器尺寸已确定
     requestAnimationFrame(() => {
@@ -110,10 +118,46 @@ export function useTerminal({ terminalId, cwd, agentId, fontSize = 12 }: UseTerm
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
+    // 先注册事件监听，再创建 PTY，避免丢失 shell 初始输出（prompt 等）
+    // 所有回调都检查 generation 防止 Strict Mode 下旧 PTY 事件污染
+
+    // 终端输入 -> PTY
+    terminal.onData((data) => {
+      if (generationRef.current !== myGeneration) return;
+      ptyService.writeTerminal(terminalId, data);
+    });
+
+    // PTY 输出 -> 终端
+    const unlistenOutput = await ptyService.onTerminalOutput(terminalId, (data) => {
+      if (generationRef.current !== myGeneration) return;
+      terminal.write(data);
+    });
+    unlistenersRef.current.push(unlistenOutput);
+
+    // Strict Mode 可能已在 await 期间触发 cleanup，检查 generation
+    if (generationRef.current !== myGeneration) return;
+
+    // PTY 退出
+    const unlistenExit = await ptyService.onTerminalExit(terminalId, (code) => {
+      if (generationRef.current !== myGeneration) return;
+      terminal.writeln(`\r\n\x1b[90m[进程已退出，退出码: ${code}]\x1b[0m`);
+      useTerminalStore.getState().setTerminalStatus(terminalId, "closed");
+      onExitRef.current?.(code);
+    });
+    unlistenersRef.current.push(unlistenExit);
+
+    if (generationRef.current !== myGeneration) return;
+
     // 创建后端 PTY
     const { cols, rows } = terminal;
     try {
-      const pid = await ptyService.createTerminal(terminalId, cwd, cols, rows);
+      const pid = await ptyService.createTerminal(
+        terminalId, cwd, cols, rows,
+        command ?? undefined
+      );
+
+      if (generationRef.current !== myGeneration) return;
+
       // 更新 terminalStore
       useTerminalStore.getState().addTerminal({
         id: terminalId,
@@ -123,31 +167,25 @@ export function useTerminal({ terminalId, cwd, agentId, fontSize = 12 }: UseTerm
         rows,
         status: "active",
       });
+      // 通知外部 PTY 已就绪
+      onReadyRef.current?.();
+
+      // 如果指定了 agent 命令，等待 shell 初始化后自动输入
+      if (command) {
+        setTimeout(() => {
+          if (generationRef.current !== myGeneration) return;
+          ptyService.writeTerminal(terminalId, command + "\n");
+        }, 500);
+      }
     } catch (err) {
-      // Fallback: 在终端中显示友好提示（浏览器预览模式下 Tauri IPC 不可用）
+      if (generationRef.current !== myGeneration) return;
       terminal.writeln('\x1b[33m⚠ 终端功能需要在 Tauri 桌面环境中运行\x1b[0m');
       terminal.writeln('\x1b[90m当前为浏览器预览模式\x1b[0m');
       terminal.writeln('');
       terminal.writeln(`\x1b[90m错误详情: ${err}\x1b[0m`);
       return;
     }
-
-    // 终端输入 -> PTY（用户键入时调用 write_terminal command）
-    terminal.onData((data) => {
-      ptyService.writeTerminal(terminalId, data);
-    });
-
-    // PTY 输出 -> 终端（监听 terminal-output event 写入 xterm）
-    await ptyService.onTerminalOutput(terminalId, (data) => {
-      terminal.write(data);
-    });
-
-    // PTY 退出
-    await ptyService.onTerminalExit(terminalId, (code) => {
-      terminal.writeln(`\r\n\x1b[90m[进程已退出，退出码: ${code}]\x1b[0m`);
-      useTerminalStore.getState().setTerminalStatus(terminalId, "closed");
-    });
-  }, [terminalId, cwd, agentId, fontSize]);
+  }, [terminalId, cwd, agentId, command, fontSize]);
 
   /** 调整尺寸 */
   const fit = useCallback(() => {
@@ -165,10 +203,19 @@ export function useTerminal({ terminalId, cwd, agentId, fontSize = 12 }: UseTerm
   /** 清理 */
   useEffect(() => {
     return () => {
+      // 递增 generation 使当前 init 的所有异步回调失效
+      generationRef.current++;
+      // 移除 Tauri 事件监听器
+      for (const unlisten of unlistenersRef.current) {
+        unlisten();
+      }
+      unlistenersRef.current = [];
+      // 销毁 xterm 实例
       terminalRef.current?.dispose();
       terminalRef.current = null;
       fitAddonRef.current = null;
       initPendingRef.current = false;
+      // 关闭后端 PTY 进程
       ptyService.closeTerminal(terminalId).catch(console.error);
       useTerminalStore.getState().removeTerminal(terminalId);
     };

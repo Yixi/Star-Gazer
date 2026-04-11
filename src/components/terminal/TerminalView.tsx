@@ -11,16 +11,20 @@
  * - 通过 Tauri IPC 与后端 PTY 双向通信
  */
 import { useEffect } from "react";
+import "@xterm/xterm/css/xterm.css";
 import { useTerminal } from "@/hooks/useTerminal";
 
 interface TerminalViewProps {
   terminalId: string;
   cwd: string;
   agentId?: string;
+  command?: string | null;
+  onReady?: () => void;
+  onExit?: (code: number) => void;
 }
 
-export function TerminalView({ terminalId, cwd, agentId }: TerminalViewProps) {
-  const { containerRef, init, fit } = useTerminal({ terminalId, cwd, agentId });
+export function TerminalView({ terminalId, cwd, agentId, command, onReady, onExit }: TerminalViewProps) {
+  const { containerRef, init, fit } = useTerminal({ terminalId, cwd, agentId, command, onReady, onExit });
 
   // 初始化终端 — 竞态防护由 useTerminal 内部的 initPendingRef 处理
   useEffect(() => {

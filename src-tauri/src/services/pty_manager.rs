@@ -51,7 +51,7 @@ impl PtyManager {
         cwd: &str,
         cols: u16,
         rows: u16,
-        command: Option<String>,
+        _command: Option<String>,
     ) -> Result<u32, String> {
         let pty_system = native_pty_system();
 
@@ -65,29 +65,23 @@ impl PtyManager {
             })
             .map_err(|e| format!("创建 PTY 失败: {}", e))?;
 
-        // 配置命令
-        let mut cmd = if let Some(ref command_str) = command {
-            // 自定义命令（如 claude、opencode、codex）
-            let parts: Vec<&str> = command_str.split_whitespace().collect();
-            if parts.is_empty() {
-                return Err("命令不能为空".to_string());
-            }
-            let mut builder = CommandBuilder::new(parts[0]);
-            for arg in &parts[1..] {
-                builder.arg(arg);
-            }
-            builder
-        } else {
-            // 默认使用 zsh
-            let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-            CommandBuilder::new(shell)
-        };
+        // 获取用户默认 shell
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+
+        // 始终启动交互式 login shell（参考 VSCode 方案）
+        // macOS GUI 应用从 Finder 启动时不继承 .zshrc/.zprofile 中的 PATH
+        // Agent 命令（claude、codex 等）通过前端在 shell 就绪后自动输入执行
+        // 这样 agent 退出后用户仍可继续使用 shell
+        let mut cmd = CommandBuilder::new(&shell);
+        cmd.arg("-l");
 
         // 设置工作目录
         cmd.cwd(cwd);
 
-        // 设置环境变量 TERM
+        // 设置终端环境变量
         cmd.env("TERM", "xterm-256color");
+        cmd.env("COLORTERM", "truecolor");
+        cmd.env("LANG", std::env::var("LANG").unwrap_or_else(|_| "en_US.UTF-8".to_string()));
 
         // 在 slave 上启动进程
         let child = pair
@@ -116,10 +110,18 @@ impl PtyManager {
             writer,
         };
 
-        self.instances
-            .lock()
-            .map_err(|e| e.to_string())?
-            .insert(id.to_string(), instance);
+        // 如果同 ID 的旧实例存在（React Strict Mode 双重挂载），先清理
+        let mut instances = self.instances.lock().map_err(|e| e.to_string())?;
+        if let Some(old) = instances.remove(id) {
+            log::info!("清理同 ID 旧 PTY 实例: id={}", id);
+            drop(old.writer);
+            drop(old.master);
+            if old.pid > 0 {
+                unsafe { libc::kill(old.pid as i32, libc::SIGTERM); }
+            }
+        }
+        instances.insert(id.to_string(), instance);
+        drop(instances);
 
         // 启动异步任务读取 PTY 输出
         let terminal_id = id.to_string();

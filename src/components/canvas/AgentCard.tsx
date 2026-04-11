@@ -17,13 +17,14 @@
  * - 关闭退场动画（缩小 + 淡出）
  * - Hover 时触发关联高亮
  */
-import { useRef, useCallback, useState, useEffect } from "react";
+import { useRef, useCallback, useMemo, useState, useEffect } from "react";
 import { X, Minus, Maximize2, Minimize2 } from "lucide-react";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { useProjectStore } from "@/stores/projectStore";
 import { TerminalView } from "@/components/terminal/TerminalView";
 import { PulsingDot } from "@/components/ui/PulsingDot";
 import type { Agent, AgentColor } from "@/types/agent";
+import { AGENT_COMMANDS } from "@/types/agent";
 
 interface AgentCardProps {
   agent: Agent;
@@ -65,7 +66,7 @@ const MIN_HEIGHT = 200;
 /** 头部高度 */
 const HEADER_HEIGHT = 36;
 /** 调整手柄的检测区域宽度 */
-const RESIZE_EDGE = 6;
+const RESIZE_EDGE = 8;
 
 export function AgentCard({ agent }: AgentCardProps) {
   const {
@@ -73,6 +74,7 @@ export function AgentCard({ agent }: AgentCardProps) {
     selectAgent,
     updateAgentPosition,
     updateAgentSize,
+    updateAgentStatus,
     removeAgent,
     setCardDisplayMode,
     getCardDisplayMode,
@@ -110,6 +112,22 @@ export function AgentCard({ agent }: AgentCardProps) {
   const displayMode = getCardDisplayMode(agent.id);
   const statusInfo = STATUS_INDICATOR[agent.status];
   const colorHex = COLOR_HEX[agent.color];
+
+  // 根据 agentType 解析实际启动命令
+  const terminalCommand = useMemo(() => {
+    if (agent.command) return agent.command;
+    return AGENT_COMMANDS[agent.agentType] ?? null;
+  }, [agent.agentType, agent.command]);
+
+  // 终端就绪回调 — PTY 创建成功后标记 agent 为 running
+  const handleTerminalReady = useCallback(() => {
+    updateAgentStatus(agent.id, "running");
+  }, [agent.id, updateAgentStatus]);
+
+  // 终端退出回调 — 进程退出后更新 agent 状态
+  const handleTerminalExit = useCallback((code: number) => {
+    updateAgentStatus(agent.id, code === 0 ? "stopped" : "error");
+  }, [agent.id, updateAgentStatus]);
 
   /* 入场动画：组件挂载后播放 */
   useEffect(() => {
@@ -562,6 +580,30 @@ export function AgentCard({ agent }: AgentCardProps) {
           </div>
         </div>
 
+        {/* Resize 边框 - 透明覆盖层，z-index 高于 terminal 以确保接收鼠标事件 */}
+        {displayMode === "normal" && (
+          <>
+            {/* 四边 */}
+            <div className="absolute top-0 left-0 right-0 cursor-ns-resize" style={{ height: RESIZE_EDGE, zIndex: 10 }}
+              onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, "n"); }} />
+            <div className="absolute bottom-0 left-0 right-0 cursor-ns-resize" style={{ height: RESIZE_EDGE, zIndex: 10 }}
+              onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, "s"); }} />
+            <div className="absolute top-0 left-0 bottom-0 cursor-ew-resize" style={{ width: RESIZE_EDGE, zIndex: 10 }}
+              onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, "w"); }} />
+            <div className="absolute top-0 right-0 bottom-0 cursor-ew-resize" style={{ width: RESIZE_EDGE, zIndex: 10 }}
+              onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, "e"); }} />
+            {/* 四角 */}
+            <div className="absolute top-0 left-0 cursor-nwse-resize" style={{ width: RESIZE_EDGE * 2, height: RESIZE_EDGE * 2, zIndex: 11 }}
+              onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, "nw"); }} />
+            <div className="absolute top-0 right-0 cursor-nesw-resize" style={{ width: RESIZE_EDGE * 2, height: RESIZE_EDGE * 2, zIndex: 11 }}
+              onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, "ne"); }} />
+            <div className="absolute bottom-0 left-0 cursor-nesw-resize" style={{ width: RESIZE_EDGE * 2, height: RESIZE_EDGE * 2, zIndex: 11 }}
+              onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, "sw"); }} />
+            <div className="absolute bottom-0 right-0 cursor-nwse-resize" style={{ width: RESIZE_EDGE * 2, height: RESIZE_EDGE * 2, zIndex: 11 }}
+              onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, "se"); }} />
+          </>
+        )}
+
         {/* 终端区域 - 非最小化时显示 */}
         {displayMode !== "minimized" && (
           <div
@@ -575,7 +617,14 @@ export function AgentCard({ agent }: AgentCardProps) {
             }}
           >
             <div className="flex-1 min-h-0">
-              <TerminalView terminalId={agent.terminalId} cwd={agent.cwd} agentId={agent.id} />
+              <TerminalView
+                terminalId={agent.terminalId}
+                cwd={agent.cwd}
+                agentId={agent.id}
+                command={terminalCommand}
+                onReady={handleTerminalReady}
+                onExit={handleTerminalExit}
+              />
             </div>
             {/* Approval box - waiting 状态时显示 */}
             {agent.status === "waiting" && agent.approvalMessage && (

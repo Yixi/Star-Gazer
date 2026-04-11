@@ -7,7 +7,7 @@ import { X, Terminal, Code, Cpu, Settings } from "lucide-react";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { useProjectStore } from "@/stores/projectStore";
 import { getNextColor } from "@/lib/colors";
-import type { Agent } from "@/types/agent";
+import type { Agent, AgentType } from "@/types/agent";
 
 interface AgentPickerProps {
   onClose: () => void;
@@ -80,6 +80,7 @@ export function AgentPicker({ onClose }: AgentPickerProps) {
       id: crypto.randomUUID(),
       name,
       color,
+      agentType: selectedType as AgentType,
       terminalId: crypto.randomUUID(),
       status: "idle",
       position: {

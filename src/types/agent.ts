@@ -9,6 +9,17 @@ export type AgentColor =
   | "yellow"
   | "red";
 
+/** Agent 类型 */
+export type AgentType = "claude-code" | "opencode" | "codex" | "custom";
+
+/** Agent 类型到启动命令的映射 */
+export const AGENT_COMMANDS: Record<AgentType, string | null> = {
+  "claude-code": "claude",
+  opencode: "opencode",
+  codex: "codex",
+  custom: null, // 打开默认 shell
+};
+
 /** Agent 实例 */
 export interface Agent {
   /** Agent 唯一 ID */
@@ -17,6 +28,8 @@ export interface Agent {
   name: string;
   /** Agent 颜色 */
   color: AgentColor;
+  /** Agent 类型 */
+  agentType: AgentType;
   /** 关联的终端 ID */
   terminalId: string;
   /** Agent 状态 */
@@ -27,6 +40,8 @@ export interface Agent {
   size: { width: number; height: number };
   /** 当前工作目录 */
   cwd: string;
+  /** 自定义启动命令（agentType 为 custom 时使用） */
+  command?: string;
   /** 等待审批时的提示信息 */
   approvalMessage?: string;
 }
