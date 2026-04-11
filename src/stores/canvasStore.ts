@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import type { Agent } from "@/types/agent";
 
+/** 卡片显示模式 */
+export type CardDisplayMode = "normal" | "minimized" | "maximized";
+
 interface CanvasState {
   /** 画布上的所有 Agent 卡片 */
   agents: Agent[];
@@ -10,6 +13,13 @@ interface CanvasState {
   zoom: number;
   /** 当前选中的 Agent ID */
   selectedAgentId: string | null;
+  /** 卡片显示模式映射 */
+  cardDisplayModes: Record<string, CardDisplayMode>;
+  /** 是否正在拖拽画布 */
+  isPanning: boolean;
+  /** 缩放范围 */
+  zoomMin: number;
+  zoomMax: number;
 
   /** 添加 Agent */
   addAgent: (agent: Agent) => void;
@@ -27,21 +37,37 @@ interface CanvasState {
   setViewport: (viewport: { x: number; y: number }) => void;
   /** 设置缩放 */
   setZoom: (zoom: number) => void;
+  /** 以指定点为中心缩放 */
+  zoomAtPoint: (delta: number, point: { x: number; y: number }) => void;
+  /** 设置拖拽状态 */
+  setIsPanning: (isPanning: boolean) => void;
+  /** 设置卡片显示模式 */
+  setCardDisplayMode: (id: string, mode: CardDisplayMode) => void;
+  /** 获取卡片显示模式 */
+  getCardDisplayMode: (id: string) => CardDisplayMode;
 }
 
-export const useCanvasStore = create<CanvasState>((set) => ({
+export const useCanvasStore = create<CanvasState>((set, get) => ({
   agents: [],
   viewport: { x: 0, y: 0 },
   zoom: 1,
   selectedAgentId: null,
+  cardDisplayModes: {},
+  isPanning: false,
+  zoomMin: 0.5,
+  zoomMax: 2,
 
   addAgent: (agent) =>
     set((state) => ({ agents: [...state.agents, agent] })),
 
   removeAgent: (id) =>
-    set((state) => ({
-      agents: state.agents.filter((a) => a.id !== id),
-    })),
+    set((state) => {
+      const { [id]: _, ...restModes } = state.cardDisplayModes;
+      return {
+        agents: state.agents.filter((a) => a.id !== id),
+        cardDisplayModes: restModes,
+      };
+    }),
 
   updateAgentPosition: (id, position) =>
     set((state) => ({
@@ -62,5 +88,34 @@ export const useCanvasStore = create<CanvasState>((set) => ({
 
   setViewport: (viewport) => set({ viewport }),
 
-  setZoom: (zoom) => set({ zoom: Math.max(0.25, Math.min(2, zoom)) }),
+  setZoom: (zoom) => {
+    const { zoomMin, zoomMax } = get();
+    set({ zoom: Math.max(zoomMin, Math.min(zoomMax, zoom)) });
+  },
+
+  zoomAtPoint: (delta, point) => {
+    const { zoom, viewport, zoomMin, zoomMax } = get();
+    const newZoom = Math.max(zoomMin, Math.min(zoomMax, zoom + delta));
+    if (newZoom === zoom) return;
+
+    // 以光标位置为缩放中心
+    const ratio = newZoom / zoom;
+    const newViewport = {
+      x: point.x - (point.x - viewport.x) * ratio,
+      y: point.y - (point.y - viewport.y) * ratio,
+    };
+
+    set({ zoom: newZoom, viewport: newViewport });
+  },
+
+  setIsPanning: (isPanning) => set({ isPanning }),
+
+  setCardDisplayMode: (id, mode) =>
+    set((state) => ({
+      cardDisplayModes: { ...state.cardDisplayModes, [id]: mode },
+    })),
+
+  getCardDisplayMode: (id) => {
+    return get().cardDisplayModes[id] ?? "normal";
+  },
 }));
