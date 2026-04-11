@@ -26,6 +26,10 @@ pub struct DirEntry {
 pub struct GitFileChange {
     pub path: String,
     pub status: String,
+    /// 新增行数
+    pub additions: u32,
+    /// 删除行数
+    pub deletions: u32,
 }
 
 /// Git 状态摘要

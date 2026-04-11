@@ -2,6 +2,7 @@
 //! 参考 VSCode 的实现，通过 shell out 到系统 git 命令
 
 use crate::types::models::{GitBranch, GitFileChange, GitLogEntry, GitStatusSummary};
+use std::collections::HashMap;
 use std::process::Command;
 
 /// Git 服务 - 封装 git 命令调用
@@ -21,17 +22,44 @@ impl GitService {
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             if stderr.trim().is_empty() {
-                // 有些 git 命令失败时 stderr 为空
-                Err(format!("git 命令执行失败，退出码: {:?}", output.status.code()))
+                Err(format!(
+                    "git 命令执行失败，退出码: {:?}",
+                    output.status.code()
+                ))
             } else {
                 Err(stderr)
             }
         }
     }
 
+    /// 解析 git diff --numstat 输出，返回 (path -> (additions, deletions)) 映射
+    fn parse_numstat(output: &str) -> HashMap<String, (u32, u32)> {
+        let mut stats = HashMap::new();
+        for line in output.lines() {
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.len() >= 3 {
+                // 二进制文件会显示 "-" 而不是数字
+                let additions = parts[0].parse::<u32>().unwrap_or(0);
+                let deletions = parts[1].parse::<u32>().unwrap_or(0);
+                let path = parts[2].to_string();
+                stats.insert(path, (additions, deletions));
+            }
+        }
+        stats
+    }
+
     /// 解析 git status --porcelain=v2 --branch 输出
     pub fn status(repo_path: &str) -> Result<GitStatusSummary, String> {
         let output = Self::exec(repo_path, &["status", "--porcelain=v2", "--branch"])?;
+
+        // 获取 unstaged 和 staged 的 numstat
+        let unstaged_stats = Self::exec(repo_path, &["diff", "--numstat"])
+            .map(|s| Self::parse_numstat(&s))
+            .unwrap_or_default();
+
+        let staged_stats = Self::exec(repo_path, &["diff", "--cached", "--numstat"])
+            .map(|s| Self::parse_numstat(&s))
+            .unwrap_or_default();
 
         let mut branch = String::new();
         let mut ahead = 0i32;
@@ -65,7 +93,6 @@ impl GitService {
 
                     // 对于 type 2（重命名），path 可能包含 tab
                     let path = if line.starts_with("2 ") {
-                        // 重命名的格式中，最后一个字段是 path\torigPath
                         parts[8].split('\t').next().unwrap_or(parts[8]).to_string()
                     } else {
                         parts[8].to_string()
@@ -73,17 +100,25 @@ impl GitService {
 
                     // X 表示暂存区状态
                     if x != '.' {
+                        let (additions, deletions) =
+                            staged_stats.get(&path).copied().unwrap_or((0, 0));
                         staged.push(GitFileChange {
                             path: path.clone(),
                             status: Self::status_char_to_string(x),
+                            additions,
+                            deletions,
                         });
                     }
 
                     // Y 表示工作区状态
                     if y != '.' {
+                        let (additions, deletions) =
+                            unstaged_stats.get(&path).copied().unwrap_or((0, 0));
                         unstaged.push(GitFileChange {
                             path,
                             status: Self::status_char_to_string(y),
+                            additions,
+                            deletions,
                         });
                     }
                 }
