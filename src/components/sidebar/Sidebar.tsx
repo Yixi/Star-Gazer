@@ -1,7 +1,12 @@
 /**
- * 左侧边栏 - 项目管理和文件树
- * 宽度 240px 展开 / 48px 折叠图标条
- * Cmd+B 切换折叠
+ * 左侧边栏 — 项目管理和文件树
+ *
+ * 折叠动画：
+ * - 展开：240px，内容淡入
+ * - 折叠：48px 图标条，内容淡出
+ * - 宽度变化使用 200ms ease-out 平滑过渡
+ * - 内容使用 150ms 淡入/淡出
+ * - Cmd+B 快捷键切换
  */
 import { useEffect } from "react";
 import { FolderOpen } from "lucide-react";
@@ -28,103 +33,116 @@ export function Sidebar() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [toggleSidebar]);
 
-  // 折叠模式 - 48px 图标条
-  if (!sidebarOpen) {
-    return (
-      <aside
-        className="flex flex-col items-center border-r h-full py-2 gap-1 flex-shrink-0"
-        style={{
-          width: sidebarCollapsedWidth,
-          backgroundColor: "#0d0e13",
-          borderColor: "#1a1c23",
-        }}
-      >
-        {/* 展开按钮 */}
-        <button
-          className="p-2 rounded-md hover:bg-white/5 transition-colors"
-          style={{ color: "#8b92a3" }}
-          onClick={toggleSidebar}
-          title="展开侧边栏 (⌘B)"
-        >
-          <FolderOpen className="w-5 h-5" />
-        </button>
-
-        {/* 项目图标列表 */}
-        {projects.map((project) => (
-          <CollapsedProjectIcon
-            key={project.id}
-            name={project.name}
-            isActive={activeProject?.id === project.id}
-            onClick={() => useProjectStore.getState().setActiveProject(project)}
-          />
-        ))}
-
-        {/* 添加项目 */}
-        <AddProjectButton collapsed />
-      </aside>
-    );
-  }
-
   return (
     <aside
-      className="flex flex-col border-r h-full flex-shrink-0"
+      className="flex flex-col border-r h-full flex-shrink-0 overflow-hidden"
       style={{
-        width: sidebarWidth,
-        backgroundColor: "#0d0e13",
-        borderColor: "#1a1c23",
+        /* 宽度平滑过渡：240px ↔ 48px */
+        width: sidebarOpen ? sidebarWidth : sidebarCollapsedWidth,
+        minWidth: sidebarOpen ? sidebarWidth : sidebarCollapsedWidth,
+        backgroundColor: "var(--sg-bg-sidebar, #0d0e13)",
+        borderColor: "var(--sg-border-primary, #1a1c23)",
+        transition: "width 200ms var(--sg-ease-out, ease-out), min-width 200ms var(--sg-ease-out, ease-out)",
       }}
     >
-      {/* 标题栏 */}
-      <div
-        className="flex items-center justify-between px-3 py-2 flex-shrink-0 border-b"
-        style={{ borderColor: "#1a1c23" }}
-      >
-        <h2
-          className="text-xs font-semibold uppercase tracking-wider"
-          style={{ color: "#8b92a3" }}
+      {/* ====== 折叠模式：48px 图标条 ====== */}
+      {!sidebarOpen && (
+        <div
+          className="flex flex-col items-center py-2 gap-1 h-full"
+          style={{
+            animation: "sg-fade-in 150ms var(--sg-ease-out, ease-out) both",
+          }}
         >
-          Projects
-        </h2>
-        <AddProjectButton />
-      </div>
+          {/* 展开按钮 */}
+          <button
+            className="p-2 rounded-md hover:bg-white/5 transition-colors"
+            style={{ color: "var(--sg-text-tertiary, #8b92a3)" }}
+            onClick={toggleSidebar}
+            title="展开侧边栏 (Cmd+B)"
+          >
+            <FolderOpen className="w-5 h-5" />
+          </button>
 
-      {/* 项目列表区域 */}
-      <div
-        className="flex-shrink-0 border-b overflow-y-auto"
-        style={{ borderColor: "#1a1c23", maxHeight: "30%" }}
-      >
-        <div className="p-1">
+          {/* 项目图标列表 */}
           {projects.map((project) => (
-            <ProjectItem
+            <CollapsedProjectIcon
               key={project.id}
-              project={project}
+              name={project.name}
               isActive={activeProject?.id === project.id}
+              onClick={() => useProjectStore.getState().setActiveProject(project)}
             />
           ))}
-          {projects.length === 0 && (
-            <div
-              className="text-xs text-center py-4"
-              style={{ color: "#6b7280" }}
-            >
-              点击 + 添加项目
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* 文件树区域 */}
-      <div className="flex-1 overflow-hidden">
-        {activeProject ? (
-          <FileTree />
-        ) : (
+          {/* 添加项目 */}
+          <AddProjectButton collapsed />
+        </div>
+      )}
+
+      {/* ====== 展开模式：完整侧边栏 ====== */}
+      {sidebarOpen && (
+        <div
+          className="flex flex-col h-full min-w-0"
+          style={{
+            /* 内容淡入 */
+            animation: "sg-fade-in 150ms var(--sg-ease-out, ease-out) both",
+          }}
+        >
+          {/* 标题栏 */}
           <div
-            className="flex items-center justify-center h-full text-sm"
-            style={{ color: "#6b7280" }}
+            className="flex items-center justify-between px-3 py-2 flex-shrink-0 border-b"
+            style={{ borderColor: "var(--sg-border-primary, #1a1c23)" }}
           >
-            请选择或添加项目
+            <h2
+              className="text-xs font-semibold uppercase tracking-wider"
+              style={{ color: "var(--sg-text-tertiary, #8b92a3)" }}
+            >
+              Projects
+            </h2>
+            <AddProjectButton />
           </div>
-        )}
-      </div>
+
+          {/* 项目列表区域 */}
+          <div
+            className="flex-shrink-0 border-b overflow-y-auto"
+            style={{
+              borderColor: "var(--sg-border-primary, #1a1c23)",
+              maxHeight: "30%",
+            }}
+          >
+            <div className="p-1">
+              {projects.map((project) => (
+                <ProjectItem
+                  key={project.id}
+                  project={project}
+                  isActive={activeProject?.id === project.id}
+                />
+              ))}
+              {projects.length === 0 && (
+                <div
+                  className="text-xs text-center py-4"
+                  style={{ color: "var(--sg-text-hint, #6b7280)" }}
+                >
+                  点击 + 添加项目
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 文件树区域 */}
+          <div className="flex-1 overflow-hidden">
+            {activeProject ? (
+              <FileTree />
+            ) : (
+              <div
+                className="flex items-center justify-center h-full text-sm"
+                style={{ color: "var(--sg-text-hint, #6b7280)" }}
+              >
+                请选择或添加项目
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
@@ -146,7 +164,7 @@ function CollapsedProjectIcon({
       className="relative w-8 h-8 rounded-md flex items-center justify-center text-xs font-semibold transition-colors"
       style={{
         backgroundColor: isActive ? "rgba(74, 158, 255, 0.15)" : "transparent",
-        color: isActive ? "#4a9eff" : "#8b92a3",
+        color: isActive ? "var(--sg-accent, #4a9eff)" : "var(--sg-text-tertiary, #8b92a3)",
       }}
       onClick={onClick}
       title={name}
@@ -156,7 +174,7 @@ function CollapsedProjectIcon({
       <span
         className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
         style={{
-          backgroundColor: isActive ? "#22c55e" : "#6b7280",
+          backgroundColor: isActive ? "var(--sg-success, #22c55e)" : "var(--sg-text-hint, #6b7280)",
         }}
       />
     </button>
