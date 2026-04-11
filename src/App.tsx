@@ -18,6 +18,7 @@ import { Canvas } from "@/components/canvas/Canvas";
 import { SlidePanel } from "@/components/panel/SlidePanel";
 import { StatusBar } from "@/components/statusbar/StatusBar";
 import { CommandPalette } from "@/components/command-palette/CommandPalette";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 
 function App() {
   return (
@@ -28,13 +29,19 @@ function App() {
       {/* 主内容区域 - 横向 flex 布局 */}
       <div className="flex flex-1 overflow-hidden">
         {/* 左侧边栏 */}
-        <Sidebar />
+        <ErrorBoundary name="Sidebar">
+          <Sidebar />
+        </ErrorBoundary>
 
         {/* 画布主区域 - flex-1 自适应 */}
-        <Canvas />
+        <ErrorBoundary name="Canvas">
+          <Canvas />
+        </ErrorBoundary>
 
         {/* 右侧滑文件审查面板 - 推入式布局 */}
-        <SlidePanel />
+        <ErrorBoundary name="SlidePanel">
+          <SlidePanel />
+        </ErrorBoundary>
       </div>
 
       {/* 底部状态栏 */}
