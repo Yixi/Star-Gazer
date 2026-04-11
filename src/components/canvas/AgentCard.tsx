@@ -12,6 +12,7 @@
 import { useRef, useCallback, useState, useEffect } from "react";
 import { GripHorizontal, X, Minimize2, Maximize2 } from "lucide-react";
 import { useCanvasStore } from "@/stores/canvasStore";
+import { useHoverStore } from "@/stores/hoverStore";
 import { AGENT_COLORS } from "@/lib/colors";
 import { TerminalView } from "@/components/terminal/TerminalView";
 import { PulsingDot } from "@/components/ui/PulsingDot";
@@ -59,6 +60,7 @@ const STATUS_INDICATOR: Record<
 export function AgentCard({ agent }: AgentCardProps) {
   const { selectedAgentId, selectAgent, updateAgentPosition, removeAgent } =
     useCanvasStore();
+  const { setHoveredAgent, clearHover } = useHoverStore();
   const isDragging = useRef(false);
   const dragOffset = useRef({ x: 0, y: 0 });
 
@@ -165,8 +167,14 @@ export function AgentCard({ agent }: AgentCardProps) {
         background: "var(--sg-bg-card)",
       }}
       onClick={() => selectAgent(agent.id)}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseEnter={() => {
+        setIsHovered(true);
+        setHoveredAgent(agent.id, agent.color);
+      }}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        clearHover();
+      }}
       data-agent-id={agent.id}
       data-agent-color={agent.color}
     >
