@@ -38,6 +38,8 @@ pub fn run() {
             git::git_branches,
             git::git_log,
             git::git_check_ignored,
+            git::git_diff_range,
+            git::git_commit_files,
             // 文件系统命令
             fs::read_file,
             fs::write_file,

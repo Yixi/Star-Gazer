@@ -63,3 +63,21 @@ export async function gitLog(
 ): Promise<GitLogEntry[]> {
   return invoke("git_log", { repoPath, limit });
 }
+
+/** 获取 commit 范围 diff（from~..to） */
+export async function gitDiffRange(
+  repoPath: string,
+  from: string,
+  to: string,
+  filePath?: string,
+): Promise<string> {
+  return invoke("git_diff_range", { repoPath, from, to, filePath: filePath ?? null });
+}
+
+/** 获取多个 commit 涉及的文件列表（合并聚合） */
+export async function gitCommitFiles(
+  repoPath: string,
+  hashes: string[],
+): Promise<GitFileChange[]> {
+  return invoke("git_commit_files", { repoPath, hashes });
+}

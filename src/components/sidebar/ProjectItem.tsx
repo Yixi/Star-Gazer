@@ -23,6 +23,9 @@ import {
   Code,
   Cpu,
   Settings,
+  FolderGit2,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { useProjectStore } from "@/stores/projectStore";
 import { useCanvasStore } from "@/stores/canvasStore";
@@ -120,46 +123,89 @@ export function ProjectItem({ project, isActive, isExpanded }: ProjectItemProps)
   return (
     <>
       <button
-        className="w-full flex items-center cursor-pointer select-none"
+        className="w-full flex items-center cursor-pointer select-none group"
         style={{
-          padding: isActive ? "6px 14px" : "6px 14px",
-          gap: 6,
-          fontSize: 13,
-          color: isActive ? "#e4e6eb" : "#b8bcc4",
-          fontWeight: 500,
-          /* 折叠项目有顶部分隔线 — 参考 mockup .project-collapsed */
-          borderTop: !isExpanded ? "1px solid #1a1c23" : undefined,
+          padding: "9px 12px 9px 10px",
+          gap: 8,
+          fontSize: 12,
+          color: isActive ? "#ffffff" : "#c8ccd3",
+          fontWeight: 600,
+          letterSpacing: "0.2px",
+          textTransform: "uppercase",
+          /* 项目作为一级容器：顶部分隔线 + 浅色背景 */
+          background: isActive
+            ? "linear-gradient(90deg, rgba(74,158,255,0.08) 0%, rgba(74,158,255,0.02) 100%)"
+            : "#0b0c11",
+          borderTop: "1px solid #1a1c23",
+          borderBottom: isExpanded ? "1px solid #13151b" : "none",
+          position: "relative",
         }}
         onClick={() => {
           toggleProjectExpanded(project.id);
-          // 同时设为 active（用于 git/文件监听）
           setActiveProject(project);
         }}
         onContextMenu={handleContextMenu}
       >
-        {/* 文字 caret — ▼ 展开 / ▶ 折叠 */}
-        <span
-          className="flex-shrink-0 text-center leading-none"
-          style={{ color: "#6b7280", fontSize: 9, width: 10 }}
-        >
-          {isExpanded ? "▼" : "▶"}
-        </span>
-        {/* 文件夹图标 */}
-        <span className="flex-shrink-0" style={{ fontSize: 13 }}>📁</span>
+        {/* 左侧高亮竖条 — active 状态 */}
+        {isActive && (
+          <span
+            className="absolute left-0 top-0 bottom-0"
+            style={{
+              width: 2,
+              backgroundColor: "#4a9eff",
+              boxShadow: "0 0 8px rgba(74,158,255,0.6)",
+            }}
+          />
+        )}
+        {/* Caret — lucide 图标 */}
+        {isExpanded ? (
+          <ChevronDown className="w-3 h-3 flex-shrink-0" style={{ color: "#8b92a3" }} />
+        ) : (
+          <ChevronRight className="w-3 h-3 flex-shrink-0" style={{ color: "#8b92a3" }} />
+        )}
+        {/* 项目图标 — FolderGit2 强化区分 */}
+        <FolderGit2
+          className="w-4 h-4 flex-shrink-0"
+          style={{ color: isActive ? "#4a9eff" : "#8b92a3" }}
+        />
         {/* 项目名 */}
-        <span className="truncate flex-1 text-left">{project.name}</span>
+        <span
+          className="truncate flex-1 text-left"
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            textTransform: "none",
+            letterSpacing: 0,
+            color: isActive ? "#ffffff" : "#e4e6eb",
+          }}
+        >
+          {project.name}
+        </span>
         {/* 运行状态指示 */}
         {hasRunningAgent && (
           <span
             className="w-2 h-2 rounded-full flex-shrink-0"
-            style={{ backgroundColor: "#22c55e" }}
+            style={{
+              backgroundColor: "#22c55e",
+              boxShadow: "0 0 6px rgba(34,197,94,0.6)",
+            }}
           />
         )}
-        {/* Git 分支标签 — 仅活跃项目显示 */}
+        {/* Git 分支标签 — 小型 badge */}
         {isExpanded && gitBranch && (
           <span
-            className="flex-shrink-0"
-            style={{ marginLeft: "auto", fontSize: 10, color: "#6b7280", fontWeight: 400 }}
+            className="flex-shrink-0 tabular-nums"
+            style={{
+              fontSize: 9,
+              color: "#8b92a3",
+              fontWeight: 500,
+              fontFamily: "'SF Mono', Menlo, monospace",
+              padding: "2px 6px",
+              borderRadius: 3,
+              background: "rgba(139,146,163,0.08)",
+              textTransform: "none",
+              letterSpacing: 0,
+            }}
           >
             {gitBranch}
           </span>

@@ -193,6 +193,102 @@ impl GitService {
         Ok(result)
     }
 
+    /// 获取 commit 范围 diff
+    /// 等价于 `git diff <from>~..<to>`，即包含 from 本身到 to 的所有改动
+    /// 如果指定 file_path，只返回该文件的 diff
+    pub fn diff_range(
+        repo_path: &str,
+        from: &str,
+        to: &str,
+        file_path: Option<&str>,
+    ) -> Result<String, String> {
+        let range = format!("{}~..{}", from, to);
+        let mut args = vec!["diff", range.as_str()];
+        if let Some(fp) = file_path {
+            args.push("--");
+            args.push(fp);
+        }
+        Self::exec(repo_path, &args)
+    }
+
+    /// 获取多个 commit 涉及的文件列表（合并聚合）
+    /// 对每个 hash 跑 `git show --numstat --name-status --format= <hash>`
+    /// 相同 path 的 additions/deletions 累加，status 取最新一次
+    pub fn commit_files(
+        repo_path: &str,
+        hashes: &[String],
+    ) -> Result<Vec<GitFileChange>, String> {
+        use std::collections::HashMap;
+
+        // path -> (additions, deletions, status)
+        let mut aggregated: HashMap<String, (u32, u32, String)> = HashMap::new();
+
+        for hash in hashes {
+            // 用 name-status 获取状态，numstat 获取行数统计
+            // 两次调用各取一份，然后按 path 聚合
+            let name_status = Self::exec(
+                repo_path,
+                &["show", "--name-status", "--format=", hash],
+            )?;
+            let numstat = Self::exec(
+                repo_path,
+                &["show", "--numstat", "--format=", hash],
+            )?;
+
+            // 解析 numstat: "<add>\t<del>\t<path>"
+            let mut stat_map: HashMap<String, (u32, u32)> = HashMap::new();
+            for line in numstat.lines() {
+                let parts: Vec<&str> = line.splitn(3, '\t').collect();
+                if parts.len() != 3 {
+                    continue;
+                }
+                let additions = parts[0].parse::<u32>().unwrap_or(0);
+                let deletions = parts[1].parse::<u32>().unwrap_or(0);
+                stat_map.insert(parts[2].to_string(), (additions, deletions));
+            }
+
+            // 解析 name-status: "<status>\t<path>" 或 "R100\t<old>\t<new>"
+            for line in name_status.lines() {
+                let parts: Vec<&str> = line.split('\t').collect();
+                if parts.len() < 2 {
+                    continue;
+                }
+                let status_char = parts[0].chars().next().unwrap_or('.');
+                let path = if parts[0].starts_with('R') || parts[0].starts_with('C') {
+                    // R/C 后面跟 old path 和 new path，取 new
+                    parts.get(2).unwrap_or(&parts[1]).to_string()
+                } else {
+                    parts[1].to_string()
+                };
+
+                let (additions, deletions) = stat_map.get(&path).copied().unwrap_or((0, 0));
+                let status = Self::status_char_to_string(status_char);
+
+                aggregated
+                    .entry(path)
+                    .and_modify(|(a, d, s)| {
+                        *a += additions;
+                        *d += deletions;
+                        *s = status.clone();
+                    })
+                    .or_insert((additions, deletions, status));
+            }
+        }
+
+        let mut changes: Vec<GitFileChange> = aggregated
+            .into_iter()
+            .map(|(path, (additions, deletions, status))| GitFileChange {
+                path,
+                status,
+                additions,
+                deletions,
+            })
+            .collect();
+        // 按路径排序
+        changes.sort_by(|a, b| a.path.cmp(&b.path));
+        Ok(changes)
+    }
+
     /// 获取分支列表
     pub fn branches(repo_path: &str) -> Result<Vec<GitBranch>, String> {
         let output = Self::exec(

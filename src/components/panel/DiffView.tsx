@@ -13,6 +13,7 @@ import type { FileData } from "react-diff-view";
 import { usePanelStore } from "@/stores/panelStore";
 import { useProjectStore } from "@/stores/projectStore";
 import { useSettingsStore } from "@/stores/settingsStore";
+import type { DiffSource } from "@/types/panel";
 import "react-diff-view/style/index.css";
 import "@/styles/diff-overrides.css";
 
@@ -22,6 +23,9 @@ interface DiffViewProps {
 }
 
 export function DiffView({ filePath, tabId }: DiffViewProps) {
+  // 从 tab 读取 diffSource，缺省为 working
+  const tab = usePanelStore((s) => s.tabs.find((t) => t.id === tabId));
+  const diffSource: DiffSource = tab?.diffSource ?? { kind: "working" };
   const [diffFiles, setDiffFiles] = useState<FileData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,13 +40,32 @@ export function DiffView({ filePath, tabId }: DiffViewProps) {
 
     const loadDiff = async () => {
       try {
-        // 从后端获取 git diff
+        // 从后端获取 git diff，根据 diffSource 路由不同命令
         const { invoke } = await import("@tauri-apps/api/core");
         const repoPath = activeProject?.path ?? getRepoPath(filePath);
-        const rawDiff = await invoke<string>("git_diff", {
-          repoPath,
-          filePath,
-        });
+        const effectiveFilePath = filePath || null;
+        let rawDiff: string;
+        if (diffSource.kind === "working") {
+          rawDiff = await invoke<string>("git_diff", {
+            repoPath,
+            filePath,
+          });
+        } else if (diffSource.kind === "commit") {
+          rawDiff = await invoke<string>("git_diff_range", {
+            repoPath,
+            from: diffSource.hash,
+            to: diffSource.hash,
+            filePath: effectiveFilePath,
+          });
+        } else {
+          // range
+          rawDiff = await invoke<string>("git_diff_range", {
+            repoPath,
+            from: diffSource.from,
+            to: diffSource.to,
+            filePath: effectiveFilePath,
+          });
+        }
 
         if (cancelled) return;
 
@@ -81,7 +104,7 @@ export function DiffView({ filePath, tabId }: DiffViewProps) {
 
     loadDiff();
     return () => { cancelled = true; };
-  }, [filePath, tabId, setDiffStat, activeProject?.path]);
+  }, [filePath, tabId, setDiffStat, activeProject?.path, diffSource.kind, JSON.stringify(diffSource)]);
 
   if (isLoading) {
     return (

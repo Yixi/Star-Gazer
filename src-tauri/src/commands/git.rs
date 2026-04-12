@@ -2,7 +2,7 @@
 //! 通过 shell out 到系统 git 命令实现（参考 VSCode）
 
 use crate::services::git_service::GitService;
-use crate::types::models::{GitBranch, GitLogEntry, GitStatusSummary};
+use crate::types::models::{GitBranch, GitFileChange, GitLogEntry, GitStatusSummary};
 
 /// 获取 Git 仓库状态
 #[tauri::command]
@@ -40,4 +40,26 @@ pub async fn git_check_ignored(
     paths: Vec<String>,
 ) -> Result<Vec<String>, String> {
     GitService::check_ignored(&repo_path, paths)
+}
+
+/// 获取 commit 范围 diff
+#[tauri::command]
+pub async fn git_diff_range(
+    repo_path: String,
+    from: String,
+    to: String,
+    file_path: Option<String>,
+) -> Result<String, String> {
+    log::info!("获取范围 Diff: {} {}~..{}", repo_path, from, to);
+    GitService::diff_range(&repo_path, &from, &to, file_path.as_deref())
+}
+
+/// 获取多个 commit 涉及的文件列表（合并聚合）
+#[tauri::command]
+pub async fn git_commit_files(
+    repo_path: String,
+    hashes: Vec<String>,
+) -> Result<Vec<GitFileChange>, String> {
+    log::info!("获取 commit 文件列表: {} (count={})", repo_path, hashes.len());
+    GitService::commit_files(&repo_path, &hashes)
 }

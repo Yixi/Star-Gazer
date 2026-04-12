@@ -17,6 +17,9 @@ import { useGitStatus } from "@/hooks/useGitStatus";
 import { FileTree } from "./FileTree";
 import { ProjectItem } from "./ProjectItem";
 import { AddProjectButton } from "./AddProjectButton";
+import { ScopeSwitcher } from "./ScopeSwitcher";
+import { ChangesView } from "./ChangesView";
+import { HistoryView } from "./HistoryView";
 import type { FileChangeEvent } from "@/services/watcher";
 
 export function Sidebar() {
@@ -36,8 +39,13 @@ export function Sidebar() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [toggleSidebar]);
 
-  // Git 状态 — 加载分支名和文件 diff 统计
+  // Git 状态 — 加载分支名和文件 diff 统计（单例，写入 projectStore 供各视图共享）
   const { status: gitStatus, refresh: refreshGitStatus } = useGitStatus(activeProject?.path ?? null);
+  useEffect(() => {
+    if (gitStatus && activeProject) {
+      useProjectStore.getState().setGitStatus(activeProject.id, gitStatus);
+    }
+  }, [gitStatus, activeProject]);
 
   // 文件监听 — 变更时重新加载文件树 + 刷新 git 状态
   const handleFileChange = useCallback(
@@ -190,9 +198,7 @@ export function Sidebar() {
                         isActive={isActive}
                         isExpanded={isExpanded}
                       />
-                      {isExpanded && (
-                        <FileTree project={project} />
-                      )}
+                      {isExpanded && <ProjectBody project={project} />}
                     </div>
                   );
                 })}
@@ -202,6 +208,19 @@ export function Sidebar() {
         </div>
       )}
     </aside>
+  );
+}
+
+/** 展开后的项目内容 — ScopeSwitcher + 按 viewMode 切视图 */
+function ProjectBody({ project }: { project: import("@/types/project").Project }) {
+  const mode = useProjectStore((s) => s.viewModes[project.id] ?? "files");
+  return (
+    <>
+      <ScopeSwitcher project={project} />
+      {mode === "files" && <FileTree project={project} />}
+      {mode === "changes" && <ChangesView project={project} />}
+      {mode === "history" && <HistoryView project={project} />}
+    </>
   );
 }
 
