@@ -17,6 +17,16 @@ export interface PanelTab {
   type: PanelTabType;
   /** 文件路径（range 全量 diff 时可能为空字符串） */
   filePath: string;
+  /**
+   * Tab 所属项目的绝对路径 — 用作 git 命令的 repoPath
+   *
+   * 不要依赖全局 activeProject.path 来跑 git 命令：用户可能同时打开多个项目，
+   * 切换 active project 时旧 tab 仍然留在面板里，若这时用 activeProject 去
+   * 跑 git diff，会把文件绝对路径传给一个不属于它的仓库，git 返回空结果，
+   * 前端就会误显示"没有检测到差异"。每个 tab 在 openTab 时绑定自己的
+   * 项目路径，diff / commit-files / breadcrumb 等视图都应读这个字段。
+   */
+  projectPath?: string;
   /** 是否已修改（未保存） */
   isDirty: boolean;
   /** Diff 数据源（仅 diff 类型有意义，缺省为 working） */

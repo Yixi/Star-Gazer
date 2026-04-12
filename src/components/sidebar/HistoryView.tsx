@@ -111,6 +111,7 @@ export function HistoryView({ project }: HistoryViewProps) {
       title: `Commit ${rangeLabel}`,
       type: "commit-files",
       filePath: "",
+      projectPath: project.path,
       isDirty: false,
       diffSource:
         selectedCommits.length === 1
@@ -291,6 +292,7 @@ export function HistoryView({ project }: HistoryViewProps) {
             entry={entry}
             selected={selectedCommits.includes(entry.hash)}
             graphNode={graphLayout.nodes[idx]}
+            totalLanes={graphLayout.maxLanes}
             onClick={handleCommitClick}
           />
         ))}

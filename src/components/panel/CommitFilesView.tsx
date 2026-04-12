@@ -40,7 +40,8 @@ export function CommitFilesView({ tabId }: CommitFilesViewProps) {
   const diffLayout = useSettingsStore((s) => s.diffLayout);
 
   const diffSource: DiffSource | undefined = tab?.diffSource;
-  const repoPath = activeProject?.path ?? "";
+  // 优先用 tab 自己记的 projectPath — 避免切换 active project 后拿到错仓库
+  const repoPath = tab?.projectPath ?? activeProject?.path ?? "";
 
   // 左栏宽度（可拖拽）
   const [leftWidth, setLeftWidth] = useState(260);

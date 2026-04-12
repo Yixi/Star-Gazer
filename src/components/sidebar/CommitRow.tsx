@@ -21,10 +21,18 @@ interface CommitRowProps {
   entry: GitLogEntry;
   selected: boolean;
   graphNode?: GraphNode;
+  /** 整张图的最大 lane 数（固定 SVG 宽度，避免行间抖动） */
+  totalLanes: number;
   onClick: (e: React.MouseEvent, hash: string) => void;
 }
 
-export function CommitRow({ entry, selected, graphNode, onClick }: CommitRowProps) {
+export function CommitRow({
+  entry,
+  selected,
+  graphNode,
+  totalLanes,
+  onClick,
+}: CommitRowProps) {
   const relTime = formatRelativeTime(entry.timestamp);
   const parsedRefs = parseRefs(entry.refs);
 
@@ -43,7 +51,13 @@ export function CommitRow({ entry, selected, graphNode, onClick }: CommitRowProp
       onClick={(e) => onClick(e, entry.hash)}
     >
       {/* 分支图列 */}
-      {graphNode && <CommitGraphColumn node={graphNode} selected={selected} />}
+      {graphNode && (
+        <CommitGraphColumn
+          node={graphNode}
+          totalLanes={totalLanes}
+          selected={selected}
+        />
+      )}
 
       {/* Short hash */}
       <span

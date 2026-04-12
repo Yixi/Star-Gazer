@@ -21,13 +21,13 @@ import {
   Search,
   GitBranch,
   Terminal,
-  File,
   Eye,
   EyeOff,
   PanelRightOpen,
   PanelRightClose,
   Bot,
 } from "lucide-react";
+import { FileIcon } from "@/utils/fileIcon";
 import { useProjectStore } from "@/stores/projectStore";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { usePanelStore } from "@/stores/panelStore";
@@ -45,6 +45,7 @@ export function CommandPalette() {
   const [search, setSearch] = useState("");
 
   const projects = useProjectStore((s) => s.projects);
+  const activeProject = useProjectStore((s) => s.activeProject);
   const fileTree = useProjectStore((s) => {
     if (!s.activeProject) return EMPTY_FILE_TREE;
     return s.projectFileTrees[s.activeProject.id] ?? EMPTY_FILE_TREE;
@@ -352,16 +353,19 @@ export function CommandPalette() {
               {allFiles.map((file) => (
                 <CommandItem
                   key={file.path}
-                  icon={<File className="w-4 h-4" />}
+                  icon={<FileIcon name={file.name} isDir={false} size={16} />}
                   label={file.name}
                   description={file.relativePath}
                   keywords={[file.path, file.name]}
                   onSelect={() => {
+                    // 文件搜索只扫 activeProject 的文件树，
+                    // 所以这里 projectPath 直接取 activeProject.path 是正确的
                     openTab({
                       id: file.path,
                       title: file.name,
                       type: "file",
                       filePath: file.path,
+                      projectPath: activeProject?.path,
                       isDirty: false,
                     });
                     handleClose();

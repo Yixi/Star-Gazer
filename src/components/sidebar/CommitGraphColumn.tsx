@@ -1,10 +1,12 @@
 /**
- * 单行 commit 图形列 — 绘制分支线 + 节点圆点
+ * 单行 commit 图形列 — 绘制 pass-through 直线 + upper/lower 半段 + 节点圆点
  *
- * 渲染策略：
- * - 每个 lane 宽度 LANE_WIDTH（12px）
- * - 行高必须与 CommitRow 保持一致（32px）
- * - 用 SVG path 画垂直线段和弯折连接
+ * 数据源：commitGraph.ts 的 GraphNode
+ * - passThrough：从行顶到行底穿越的 lane（不碰节点）
+ * - upperToNode：从行顶 (fromLaneX, 0) 到节点中心 (myLaneX, centerY) 的半段
+ * - lowerFromNode：从节点中心 (myLaneX, centerY) 到行底 (toLaneX, h) 的半段
+ *
+ * 相同 lane 画直线，跨 lane 画平滑三次 Bezier 曲线（上下切线保持垂直）
  */
 import type { GraphNode } from "@/lib/commitGraph";
 
@@ -14,21 +16,20 @@ const NODE_RADIUS = 3.5;
 
 interface CommitGraphColumnProps {
   node: GraphNode;
+  /** 整张图的最大 lane 数 — 用于固定 SVG 宽度，避免行间抖动 */
+  totalLanes: number;
   /** 是否高亮（commit 被选中） */
   selected?: boolean;
 }
 
-export function CommitGraphColumn({ node, selected }: CommitGraphColumnProps) {
-  // 计算 SVG 宽度（至少容纳所有 active lanes）
-  const maxLaneInRow = Math.max(
-    node.lane,
-    ...node.activeLanes.map((l) => l.lane),
-    ...node.edges.map((e) => Math.max(e.fromLane, e.toLane)),
-    0,
-  );
-  const width = (maxLaneInRow + 1) * LANE_WIDTH + LANE_WIDTH / 2;
-
+export function CommitGraphColumn({
+  node,
+  totalLanes,
+  selected,
+}: CommitGraphColumnProps) {
+  const width = Math.max(1, totalLanes) * LANE_WIDTH + LANE_WIDTH / 2;
   const centerY = ROW_HEIGHT / 2;
+  const myX = laneX(node.lane);
 
   return (
     <svg
@@ -37,70 +38,78 @@ export function CommitGraphColumn({ node, selected }: CommitGraphColumnProps) {
       className="flex-shrink-0"
       style={{ display: "block" }}
     >
-      {/* 1. 绘制所有经过当前行的 activeLanes 垂直线（从顶到底） */}
-      {node.activeLanes.map(({ lane, color }) => {
-        // 当前 commit 所在 lane：上半段画到节点中心，下半段从节点中心开始（如果有第一父连接）
-        if (lane === node.lane) {
+      {/* 1. Pass-through 垂直线（穿越当前行、不碰节点的 lane） */}
+      {node.passThrough.map(({ lane, color }) => (
+        <line
+          key={`pt-${lane}`}
+          x1={laneX(lane)}
+          y1={0}
+          x2={laneX(lane)}
+          y2={ROW_HEIGHT}
+          stroke={color}
+          strokeWidth={1.5}
+        />
+      ))}
+
+      {/* 2. Upper half：从行顶到节点中心（入 node） */}
+      {node.upperToNode.map(({ fromLane, color }) => {
+        const fromX = laneX(fromLane);
+        if (fromX === myX) {
           return (
             <line
-              key={`active-${lane}`}
-              x1={laneX(lane)}
+              key={`up-${fromLane}`}
+              x1={myX}
               y1={0}
-              x2={laneX(lane)}
+              x2={myX}
               y2={centerY}
               stroke={color}
               strokeWidth={1.5}
             />
           );
         }
-        // 其他 active lane：全程直线穿过
         return (
-          <line
-            key={`active-${lane}`}
-            x1={laneX(lane)}
-            y1={0}
-            x2={laneX(lane)}
-            y2={ROW_HEIGHT}
+          <path
+            key={`up-${fromLane}`}
+            d={bendPath(fromX, 0, myX, centerY)}
             stroke={color}
             strokeWidth={1.5}
+            fill="none"
+            strokeLinecap="round"
           />
         );
       })}
 
-      {/* 2. 绘制 edges（从当前 commit 到父 commit） */}
-      {node.edges.map((edge, i) => {
-        const x1 = laneX(edge.fromLane);
-        const x2 = laneX(edge.toLane);
-        if (x1 === x2) {
-          // 直线向下
+      {/* 3. Lower half：从节点中心到行底（出 node） */}
+      {node.lowerFromNode.map(({ toLane, color }, i) => {
+        const toX = laneX(toLane);
+        if (toX === myX) {
           return (
             <line
-              key={`edge-${i}`}
-              x1={x1}
+              key={`dn-${i}-${toLane}`}
+              x1={myX}
               y1={centerY}
-              x2={x1}
+              x2={myX}
               y2={ROW_HEIGHT}
-              stroke={edge.color}
+              stroke={color}
               strokeWidth={1.5}
             />
           );
         }
-        // 弯折：从 (x1, center) 直下 4px，斜向 (x2, ROW_HEIGHT - 4)，再直下
-        const d = `M ${x1} ${centerY} L ${x1} ${centerY + 6} L ${x2} ${ROW_HEIGHT - 2} L ${x2} ${ROW_HEIGHT}`;
         return (
           <path
-            key={`edge-${i}`}
-            d={d}
-            stroke={edge.color}
+            key={`dn-${i}-${toLane}`}
+            d={bendPath(myX, centerY, toX, ROW_HEIGHT)}
+            stroke={color}
             strokeWidth={1.5}
             fill="none"
+            strokeLinecap="round"
           />
         );
       })}
 
-      {/* 3. 绘制节点圆点 */}
+      {/* 4. 节点圆点 */}
       <circle
-        cx={laneX(node.lane)}
+        cx={myX}
         cy={centerY}
         r={selected ? NODE_RADIUS + 1.5 : NODE_RADIUS}
         fill={selected ? node.color : "#0b0d12"}
@@ -113,6 +122,19 @@ export function CommitGraphColumn({ node, selected }: CommitGraphColumnProps) {
 
 function laneX(lane: number): number {
   return lane * LANE_WIDTH + LANE_WIDTH / 2;
+}
+
+/**
+ * 平滑三次 Bezier 曲线：端点处切线保持垂直
+ *
+ * 原理：把两个控制点都放在 midY 上，与各自端点共享 x 坐标 →
+ * - (x1, y1) 的切线是 (x1, y1) → (x1, midY)，垂直
+ * - (x2, y2) 的切线是 (x2, midY) → (x2, y2)，垂直
+ * 两端无尖角，与相邻的垂直 lane 平滑衔接
+ */
+function bendPath(x1: number, y1: number, x2: number, y2: number): string {
+  const midY = (y1 + y2) / 2;
+  return `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
 }
 
 export { LANE_WIDTH, ROW_HEIGHT };

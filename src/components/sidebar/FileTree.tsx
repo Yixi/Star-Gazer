@@ -17,6 +17,7 @@ import { Tree, NodeRendererProps } from "react-arborist";
 import { useProjectStore } from "@/stores/projectStore";
 import { usePanelStore } from "@/stores/panelStore";
 import type { FileNode } from "@/types/project";
+import { FileIcon } from "@/utils/fileIcon";
 
 /** 始终隐藏的条目（git 内部目录和 macOS 系统文件） */
 const ALWAYS_HIDDEN = new Set([".git", ".DS_Store"]);
@@ -324,6 +325,7 @@ function FileTreeNode({ node, style, ignoredPaths, projectPath }: NodeRendererPr
         title: data.name,
         type: isPreviewable ? "markdown" : hasChanges ? "diff" : "file",
         filePath: data.path,
+        projectPath,
         isDirty: false,
       });
       usePanelStore.getState().openPanel();
@@ -390,11 +392,17 @@ function FileTreeNode({ node, style, ignoredPaths, projectPath }: NodeRendererPr
           <span className="flex-shrink-0" style={{ width: 10 }} />
         )}
 
-        {/* 图标 — 设计稿使用 emoji 风格，11px */}
-        <span className="flex-shrink-0 select-none" style={{ fontSize: 11, lineHeight: 1 }}>
-          {node.isInternal
-            ? (node.isOpen ? "📂" : "📁")
-            : "📄"}
+        {/* 图标 — vscode-icons 彩色 SVG，14px */}
+        <span
+          className="flex-shrink-0 inline-flex items-center justify-center"
+          style={{ width: 14, height: 14 }}
+        >
+          <FileIcon
+            name={data.name}
+            isDir={!!node.isInternal}
+            isOpen={node.isOpen}
+            size={14}
+          />
         </span>
 
         {/* 文件名 — 13px, agent hover 白色600 / active-in-panel 白色500 */}

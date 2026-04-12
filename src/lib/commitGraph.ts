@@ -1,39 +1,56 @@
 /**
  * Commit 分支图布局算法
  *
- * 参考 VS Code Git Graph 的 lane 分配策略：
- * - 每个 commit 占据一个 lane（垂直列）
- * - 从上到下顺序处理（entries 已按时间倒序）
- * - 每个 commit 继承其第一个子 commit 的 lane（当前 active lane）
- * - merge commits 有多个父，每个父占用不同 lane
- * - 分支创建/终止时分配新 lane
+ * 参考 VS Code Git Graph (mhutchie/vscode-git-graph) 的 lane 分配策略：
+ * - 维护 pendingLanes[]：每一槽位记录当前这一列正在等待哪个 commit hash
+ * - 遍历 commits（按时间倒序）：
+ *   · 被期待的 commit → 取最左 matched lane 作为 myLane，其余 matched lane 合并过来
+ *   · 未被期待（分支 tip）→ 分配最左空位
+ *   · 第一父继承 myLane（若第一父已被其他 lane 期待则反向并入那条 lane）
+ *   · 附加父各自占新 lane 或合并到已有 lane
  *
- * 输出：每个 commit 的 lane 索引 + 它的所有连接线段
+ * 输出：每行的 pass-through 直线 + upper-to-node 入点段 + lower-from-node 出点段
+ * 渲染器拿到这三组原子图元就能把 merge / branch / pass-through 全部画对。
  */
 import type { GitLogEntry } from "@/services/git";
+
+export interface PassThrough {
+  /** 这条 lane 的列索引 */
+  lane: number;
+  /** 线段颜色 */
+  color: string;
+}
+
+export interface UpperSegment {
+  /** 行顶点所在的 lane（下半段终点固定是 commit 所在的 myLane） */
+  fromLane: number;
+  color: string;
+}
+
+export interface LowerSegment {
+  /** 行底点所在的 lane（上半段起点固定是 commit 所在的 myLane） */
+  toLane: number;
+  color: string;
+}
 
 export interface GraphNode {
   /** commit hash */
   hash: string;
-  /** 节点所在的 lane（列索引，从 0 开始） */
+  /** 该 commit 圆点所在的 lane */
   lane: number;
-  /** 当前行激活的 lanes 快照（用于渲染经过当前行的所有垂直线） */
-  activeLanes: Array<{ lane: number; color: string }>;
-  /** 从该节点出发连向父节点的边 */
-  edges: Array<{
-    fromLane: number;
-    toLane: number;
-    color: string;
-    /** 父 commit 在后续行中的索引偏移；>1 表示跨越多行 */
-    parentOffset: number;
-  }>;
-  /** 此节点的颜色 */
+  /** commit 圆点颜色（= 所在 lane 的颜色） */
   color: string;
+  /** 穿过当前行、但不碰到圆点的垂直线 */
+  passThrough: PassThrough[];
+  /** 从行顶到圆点中心的半段（可能是直线或曲线） */
+  upperToNode: UpperSegment[];
+  /** 从圆点中心到行底的半段（可能是直线或曲线） */
+  lowerFromNode: LowerSegment[];
 }
 
 export interface GraphLayout {
   nodes: GraphNode[];
-  /** 所有同时出现过的最大 lane 数（决定图形宽度） */
+  /** 整张图同时出现过的最大 lane 数 — 决定渲染时 SVG 的固定宽度 */
   maxLanes: number;
 }
 
@@ -53,144 +70,128 @@ function colorForLane(lane: number): string {
   return LANE_COLORS[lane % LANE_COLORS.length];
 }
 
-/**
- * 计算 commit 图布局
- *
- * 算法概要（单次自顶向下扫描）：
- * - `pendingLanes` 数组：每个位置表示一个 lane 当前期待哪个 commit hash
- * - 处理每个 commit：
- *   1. 查找它是否已经被某个 pending lane 期待（即作为之前某个 commit 的父）
- *      - 如果是，取最左侧的匹配 lane 作为当前 commit 的 lane，其他匹配 lane 合并过来
- *      - 如果不是（如分支 tip），分配新 lane（最左侧空闲位置）
- *   2. 将当前 commit 的父 commits 放入 pendingLanes
- *      - 第一个父：占用当前 lane
- *      - 其他父（merge）：分配新 lane
- */
 export function computeGraphLayout(entries: GitLogEntry[]): GraphLayout {
-  // pendingLanes[i] = 正在等待被 "当前 commit" 继承的 lane 所对应的 commit hash
-  // undefined 表示该 lane 空闲
-  const pendingLanes: (string | undefined)[] = [];
+  /** 每个 lane 正在等待的 commit hash；undefined 表示空闲 */
+  const pending: (string | undefined)[] = [];
   const nodes: GraphNode[] = [];
   let maxLanes = 0;
 
-  for (let i = 0; i < entries.length; i++) {
-    const commit = entries[i];
+  for (const commit of entries) {
+    // ─── 步骤 1：快照上行状态 ──────────────────────────
+    const prevPending = pending.slice();
 
-    // 步骤 1：找到这个 commit 所在的 lane（它被哪些 pending lane 期待）
-    let myLane = -1;
-    const matchedLanes: number[] = [];
-    for (let j = 0; j < pendingLanes.length; j++) {
-      if (pendingLanes[j] === commit.hash) {
-        matchedLanes.push(j);
-        if (myLane === -1) myLane = j;
-      }
+    // 找到所有期待该 commit 的 lane（matched 中的第 0 个 = myLane）
+    const matched: number[] = [];
+    for (let i = 0; i < prevPending.length; i++) {
+      if (prevPending[i] === commit.hash) matched.push(i);
     }
 
-    if (myLane === -1) {
-      // 没有被期待 → 分配新 lane（最左侧空闲位置）
-      let emptyIdx = pendingLanes.findIndex((x) => x === undefined);
-      if (emptyIdx === -1) emptyIdx = pendingLanes.length;
-      pendingLanes[emptyIdx] = commit.hash;
-      myLane = emptyIdx;
-      matchedLanes.push(emptyIdx);
-    }
-
-    const myColor = colorForLane(myLane);
-
-    // 步骤 2：收集当前行 activeLanes 快照
-    // 包括所有非空的 pending lanes 以及 merge lanes
-    const activeLanes: GraphNode["activeLanes"] = [];
-    for (let j = 0; j < pendingLanes.length; j++) {
-      if (pendingLanes[j] !== undefined) {
-        activeLanes.push({ lane: j, color: colorForLane(j) });
-      }
-    }
-
-    // 步骤 3：处理父 commits（当前 commit 出发的边）
-    const edges: GraphNode["edges"] = [];
-
-    // 释放此 commit 占用的所有 matched lanes（除了要重用给第一个父的那个）
-    for (const lane of matchedLanes) {
-      pendingLanes[lane] = undefined;
-    }
-
-    if (commit.parents.length === 0) {
-      // 根 commit，无出边
+    let myLane: number;
+    if (matched.length > 0) {
+      myLane = matched[0];
+      // 所有被 matched 的 lane 都被当前 commit "消费"
+      for (const i of matched) pending[i] = undefined;
     } else {
-      // 第一个父继承当前 lane（颜色 / 主分支线）
-      const firstParent = commit.parents[0];
-      const firstParentIdx = findParentIndexAfter(entries, firstParent, i);
+      // 分支尖端 —— 分配最左空位
+      let i = pending.findIndex((x) => x === undefined);
+      if (i === -1) i = pending.length;
+      myLane = i;
+      // pending[myLane] 保持 undefined，由第一父写入
+    }
 
-      // 尝试复用当前 lane 给第一个父
-      // 但如果该 lane 已被其他 commit 期待（不太可能因为刚刚清除）
-      pendingLanes[myLane] = firstParent;
-      edges.push({
-        fromLane: myLane,
-        toLane: myLane,
-        color: myColor,
-        parentOffset: firstParentIdx === -1 ? 1 : firstParentIdx - i,
-      });
+    // ─── 步骤 2：处理父 commits，构造 lowerFromNode ──────
+    const lowerFromNode: LowerSegment[] = [];
 
-      // 额外父（merge commit）：为每个分配新 lane
+    if (commit.parents.length > 0) {
+      // 第一父：优先继承 myLane；但若已被另一 lane 期待，则反向并入那条 lane
+      const fp = commit.parents[0];
+      const existingFp = pending.findIndex((h) => h === fp);
+      if (existingFp !== -1 && existingFp !== myLane) {
+        // 第一父已被其他 lane 持有 → 当前 lane 在这里终止，弯回到那条 lane
+        lowerFromNode.push({
+          toLane: existingFp,
+          color: colorForLane(existingFp),
+        });
+        // pending[myLane] 保持 undefined — 让出槽位供后续复用
+      } else {
+        pending[myLane] = fp;
+        lowerFromNode.push({ toLane: myLane, color: colorForLane(myLane) });
+      }
+
+      // 附加父（merge commit 的第 2、3… 个父）
       for (let p = 1; p < commit.parents.length; p++) {
-        const parent = commit.parents[p];
-        // 检查这个 parent 是否已经被其他 lane 期待 → 直接连到那里
-        const existing = pendingLanes.findIndex((x) => x === parent);
+        const par = commit.parents[p];
+        const existing = pending.findIndex((h) => h === par);
         if (existing !== -1) {
-          const parentIdx = findParentIndexAfter(entries, parent, i);
-          edges.push({
-            fromLane: myLane,
+          // 已有 lane 等这个父 → 直接连过去
+          lowerFromNode.push({
             toLane: existing,
             color: colorForLane(existing),
-            parentOffset: parentIdx === -1 ? 1 : parentIdx - i,
           });
         } else {
-          // 分配新 lane
-          let newLane = pendingLanes.findIndex((x) => x === undefined);
-          if (newLane === -1) newLane = pendingLanes.length;
-          pendingLanes[newLane] = parent;
-          const parentIdx = findParentIndexAfter(entries, parent, i);
-          edges.push({
-            fromLane: myLane,
+          // 分配新 lane 给这个父（创建侧支）
+          let newLane = pending.findIndex((x) => x === undefined);
+          if (newLane === -1) newLane = pending.length;
+          pending[newLane] = par;
+          lowerFromNode.push({
             toLane: newLane,
             color: colorForLane(newLane),
-            parentOffset: parentIdx === -1 ? 1 : parentIdx - i,
           });
         }
       }
     }
 
-    // 紧缩尾部空 lanes
-    while (pendingLanes.length > 0 && pendingLanes[pendingLanes.length - 1] === undefined) {
-      pendingLanes.pop();
+    // 紧缩尾部空 lanes（防止图形宽度无限增长）
+    while (pending.length > 0 && pending[pending.length - 1] === undefined) {
+      pending.pop();
     }
 
-    const currentLaneCount = Math.max(
-      pendingLanes.length,
-      activeLanes.length,
+    const nextPending = pending.slice();
+
+    // ─── 步骤 3：构造 upperToNode + passThrough ─────────
+    const upperToNode: UpperSegment[] = [];
+    const passThrough: PassThrough[] = [];
+    const scanLen = Math.max(prevPending.length, nextPending.length);
+
+    for (let i = 0; i < scanLen; i++) {
+      const topActive = prevPending[i] !== undefined;
+      const isMatched = matched.includes(i);
+
+      if (i === myLane) {
+        // 当前 commit 所在 lane：若之前已在等待此 commit，画一根从行顶到圆心的直线
+        if (topActive) {
+          upperToNode.push({ fromLane: myLane, color: colorForLane(myLane) });
+        }
+        continue;
+      }
+
+      if (topActive && isMatched) {
+        // 侧 lane 被当前 commit 吸收 —— 画入点弯线 (i → myLane)
+        upperToNode.push({ fromLane: i, color: colorForLane(i) });
+      } else if (topActive) {
+        // 穿越行的 pass-through 直线
+        passThrough.push({ lane: i, color: colorForLane(i) });
+      }
+      // !topActive 意味着这个 lane 是被当前 commit 的 parent 新占的，
+      // 它的视觉 "出生" 由 lowerFromNode 处理，这里不管。
+    }
+
+    const rowWidth = Math.max(
+      prevPending.length,
+      nextPending.length,
       myLane + 1,
     );
-    if (currentLaneCount > maxLanes) maxLanes = currentLaneCount;
+    if (rowWidth > maxLanes) maxLanes = rowWidth;
 
     nodes.push({
       hash: commit.hash,
       lane: myLane,
-      activeLanes,
-      edges,
-      color: myColor,
+      color: colorForLane(myLane),
+      passThrough,
+      upperToNode,
+      lowerFromNode,
     });
   }
 
   return { nodes, maxLanes };
-}
-
-function findParentIndexAfter(
-  entries: GitLogEntry[],
-  parentHash: string,
-  fromIdx: number,
-): number {
-  for (let i = fromIdx + 1; i < entries.length; i++) {
-    if (entries[i].hash === parentHash) return i;
-  }
-  return -1;
 }

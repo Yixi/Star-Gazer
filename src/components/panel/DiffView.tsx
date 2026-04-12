@@ -48,7 +48,10 @@ export function DiffView({ filePath, tabId }: DiffViewProps) {
       try {
         // 从后端获取 git diff，根据 diffSource 路由不同命令
         const { invoke } = await import("@tauri-apps/api/core");
-        const repoPath = activeProject?.path ?? getRepoPath(filePath);
+        // 优先用 tab 自己记的 projectPath — 避免用户切换 active project 后
+        // 把 Y-Vibe-IDE 的文件路径传给 Y-ROM-Manager 仓库之类的错仓库问题
+        const repoPath =
+          tab?.projectPath ?? activeProject?.path ?? getRepoPath(filePath);
         const effectiveFilePath = filePath || null;
         let rawDiff: string;
         if (diffSource.kind === "working") {
@@ -112,7 +115,7 @@ export function DiffView({ filePath, tabId }: DiffViewProps) {
     return () => { cancelled = true; };
     // statKey 依赖：当 git status 刷新后，若该文件的 +A -D 统计变了，重新 fetch diff
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filePath, tabId, setDiffStat, activeProject?.path, diffSource.kind, JSON.stringify(diffSource), statKey]);
+  }, [filePath, tabId, setDiffStat, tab?.projectPath, activeProject?.path, diffSource.kind, JSON.stringify(diffSource), statKey]);
 
   if (isLoading) {
     return (

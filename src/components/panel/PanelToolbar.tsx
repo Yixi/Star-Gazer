@@ -20,8 +20,12 @@ export function PanelToolbar({ tab }: PanelToolbarProps) {
   const activeProject = useProjectStore((s) => s.activeProject);
   const { diffLayout, setDiffLayout } = useSettingsStore();
 
-  // 生成面包屑路径
-  const breadcrumbs = generateBreadcrumbs(tab.filePath, activeProject?.path);
+  // 生成面包屑路径 — 优先用 tab 自己记的 projectPath，保证切换 active project
+  // 后，旧 tab 的面包屑仍显示它所属项目的相对路径
+  const breadcrumbs = generateBreadcrumbs(
+    tab.filePath,
+    tab.projectPath ?? activeProject?.path,
+  );
   const stat = diffStats[tab.id];
 
   // 是否有 Git 改动（可以切换到 diff 模式）

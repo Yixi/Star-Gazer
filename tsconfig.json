@@ -24,7 +24,10 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+
+    /* unplugin-icons virtual module types */
+    "types": ["unplugin-icons/types/react"]
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]

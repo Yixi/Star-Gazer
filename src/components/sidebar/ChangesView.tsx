@@ -82,6 +82,7 @@ export function ChangesView({ project }: ChangesViewProps) {
       title: relPath.split("/").pop() || relPath,
       type: "diff",
       filePath: fullPath,
+      projectPath: project.path,
       isDirty: false,
       diffSource: { kind: "working" },
     });

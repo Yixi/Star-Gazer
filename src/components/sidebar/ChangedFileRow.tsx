@@ -14,6 +14,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { usePanelStore } from "@/stores/panelStore";
 import { useProjectStore } from "@/stores/projectStore";
+import { FileIcon } from "@/utils/fileIcon";
 
 /** Agent 颜色到 HEX 值映射 */
 export const AGENT_COLOR_HEX: Record<string, string> = {
@@ -143,9 +144,12 @@ export function ChangedFileRow({
           <span className="flex-shrink-0" style={{ width: 10 }} />
         )}
 
-        {/* 图标 */}
-        <span className="flex-shrink-0 select-none" style={{ fontSize: 11, lineHeight: 1 }}>
-          {isDir ? (isOpen ? "📂" : "📁") : "📄"}
+        {/* 图标 — vscode-icons 彩色 SVG，14px */}
+        <span
+          className="flex-shrink-0 inline-flex items-center justify-center"
+          style={{ width: 14, height: 14 }}
+        >
+          <FileIcon name={name} isDir={!!isDir} isOpen={isOpen} size={14} />
         </span>
 
         {/* 相对路径前缀（flat 模式用） */}
