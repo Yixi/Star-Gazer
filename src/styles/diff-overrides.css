@@ -7,7 +7,16 @@
   font-size: 11px;
   line-height: 1.65;
   border-collapse: collapse;
+  /* 显式 fixed 布局 —— col 的宽度是权威，代码列吃掉剩余空间。
+     默认 react-diff-view 也是 fixed，这里作为防御性重申，避免被上层 reset 覆盖。 */
+  table-layout: fixed;
   width: 100%;
+}
+
+/* 单 commit 时代码列（unified 最后一个 col，split monotonous 第二个 col）没有设宽度，
+   显式写 width: auto 让 fixed 布局把剩余宽度分给它 */
+.diff-container .diff > colgroup > col:not(.diff-gutter-col) {
+  width: auto;
 }
 
 /* 行号 */
@@ -77,13 +86,16 @@
 .diff-container .diff-decoration {
   background: rgba(74, 158, 255, 0.06);
   color: #4a9eff;
-  font-size: 10px;
+  font-size: 11px;
 }
 .diff-container .diff-decoration-content {
   font-family: 'SF Mono', Menlo, monospace;
-  padding: 6px 14px;
-  border-top: 1px solid rgba(74, 158, 255, 0.15);
-  border-bottom: 1px solid rgba(74, 158, 255, 0.15);
+  padding: 4px 14px;
+  border-top: 1px solid #1a1c23;
+  border-bottom: 1px solid #1a1c23;
+  background: rgba(74, 158, 255, 0.06);
+  color: #4a9eff;
+  user-select: none;
 }
 
 /* Omit gutter 标记 */

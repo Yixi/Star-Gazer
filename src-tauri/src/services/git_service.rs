@@ -193,16 +193,39 @@ impl GitService {
         Ok(result)
     }
 
+    /// git 的空树哈希 —— 可作为任何 commit 的"之前"引用
+    /// 用来处理 root commit 没有父节点的场景（`root~` 会 bad revision）
+    const EMPTY_TREE: &'static str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
+    /// 解析 range 的起点：优先 `{from}^`，若 from 是 root commit 则用空树哈希
+    /// 只调用一次 `git rev-parse --verify`，结果缓存在返回的 String 中，避免后续
+    /// diff 里重复做父 commit 校验。
+    fn range_base(repo_path: &str, from: &str) -> String {
+        let parent_ref = format!("{}^", from);
+        let is_valid = Self::exec(
+            repo_path,
+            &["rev-parse", "--verify", "--quiet", &parent_ref],
+        )
+        .is_ok();
+        if is_valid {
+            parent_ref
+        } else {
+            Self::EMPTY_TREE.to_string()
+        }
+    }
+
     /// 获取 commit 范围 diff
-    /// 等价于 `git diff <from>~..<to>`，即包含 from 本身到 to 的所有改动
+    /// 等价于 `git diff <from>^..<to>`，即包含 from 本身到 to 的所有改动
     /// 如果指定 file_path，只返回该文件的 diff
+    /// 若 from 是 root commit，自动回退到空树哈希，避免 bad revision
     pub fn diff_range(
         repo_path: &str,
         from: &str,
         to: &str,
         file_path: Option<&str>,
     ) -> Result<String, String> {
-        let range = format!("{}~..{}", from, to);
+        let base = Self::range_base(repo_path, from);
+        let range = format!("{}..{}", base, to);
         let mut args = vec!["diff", range.as_str()];
         if let Some(fp) = file_path {
             args.push("--");
@@ -211,80 +234,74 @@ impl GitService {
         Self::exec(repo_path, &args)
     }
 
-    /// 获取多个 commit 涉及的文件列表（合并聚合）
-    /// 对每个 hash 跑 `git show --numstat --name-status --format= <hash>`
-    /// 相同 path 的 additions/deletions 累加，status 取最新一次
-    pub fn commit_files(
+    /// 获取 commit range 涉及的文件列表（单次 diff 聚合）
+    ///
+    /// 使用 `git diff --name-status --numstat {base}..{to}`，base 默认是 `{from}^`,
+    /// 若 from 是 root commit 则回退到空树哈希 —— 这让选中的范围包含 root commit
+    /// 时不再触发 `fatal: bad revision`。与 `diff_range` 使用完全一致的 range 计算
+    /// 逻辑，保证文件树和右栏 diff 始终同源。
+    ///
+    /// - 单 commit 选择：`from == to`，等价于该 commit 的 diff
+    /// - 多 commit 选择：`from = 最旧, to = 最新`，range 覆盖整个区间的净变更
+    pub fn commit_files_range(
         repo_path: &str,
-        hashes: &[String],
+        from: &str,
+        to: &str,
     ) -> Result<Vec<GitFileChange>, String> {
         use std::collections::HashMap;
 
-        // path -> (additions, deletions, status)
-        let mut aggregated: HashMap<String, (u32, u32, String)> = HashMap::new();
+        let base = Self::range_base(repo_path, from);
+        let range = format!("{}..{}", base, to);
 
-        for hash in hashes {
-            // 用 name-status 获取状态，numstat 获取行数统计
-            // 两次调用各取一份，然后按 path 聚合
-            let name_status = Self::exec(
-                repo_path,
-                &["show", "--name-status", "--format=", hash],
-            )?;
-            let numstat = Self::exec(
-                repo_path,
-                &["show", "--numstat", "--format=", hash],
-            )?;
+        // name-status 取状态，numstat 取行数。两次调用，按 path 合并。
+        let name_status = Self::exec(
+            repo_path,
+            &["diff", "--name-status", range.as_str()],
+        )?;
+        let numstat = Self::exec(
+            repo_path,
+            &["diff", "--numstat", range.as_str()],
+        )?;
 
-            // 解析 numstat: "<add>\t<del>\t<path>"
-            let mut stat_map: HashMap<String, (u32, u32)> = HashMap::new();
-            for line in numstat.lines() {
-                let parts: Vec<&str> = line.splitn(3, '\t').collect();
-                if parts.len() != 3 {
-                    continue;
-                }
-                let additions = parts[0].parse::<u32>().unwrap_or(0);
-                let deletions = parts[1].parse::<u32>().unwrap_or(0);
-                stat_map.insert(parts[2].to_string(), (additions, deletions));
+        // 解析 numstat: "<add>\t<del>\t<path>"（二进制文件行是 "-\t-\t<path>"）
+        let mut stat_map: HashMap<String, (u32, u32)> = HashMap::new();
+        for line in numstat.lines() {
+            let parts: Vec<&str> = line.splitn(3, '\t').collect();
+            if parts.len() != 3 {
+                continue;
             }
-
-            // 解析 name-status: "<status>\t<path>" 或 "R100\t<old>\t<new>"
-            for line in name_status.lines() {
-                let parts: Vec<&str> = line.split('\t').collect();
-                if parts.len() < 2 {
-                    continue;
-                }
-                let status_char = parts[0].chars().next().unwrap_or('.');
-                let path = if parts[0].starts_with('R') || parts[0].starts_with('C') {
-                    // R/C 后面跟 old path 和 new path，取 new
-                    parts.get(2).unwrap_or(&parts[1]).to_string()
-                } else {
-                    parts[1].to_string()
-                };
-
-                let (additions, deletions) = stat_map.get(&path).copied().unwrap_or((0, 0));
-                let status = Self::status_char_to_string(status_char);
-
-                aggregated
-                    .entry(path)
-                    .and_modify(|(a, d, s)| {
-                        *a += additions;
-                        *d += deletions;
-                        *s = status.clone();
-                    })
-                    .or_insert((additions, deletions, status));
-            }
+            let additions = parts[0].parse::<u32>().unwrap_or(0);
+            let deletions = parts[1].parse::<u32>().unwrap_or(0);
+            stat_map.insert(parts[2].to_string(), (additions, deletions));
         }
 
-        let mut changes: Vec<GitFileChange> = aggregated
-            .into_iter()
-            .map(|(path, (additions, deletions, status))| GitFileChange {
+        // 解析 name-status: "<status>\t<path>" 或 "R100\t<old>\t<new>"
+        let mut changes: Vec<GitFileChange> = Vec::new();
+        for line in name_status.lines() {
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.len() < 2 {
+                continue;
+            }
+            let status_char = parts[0].chars().next().unwrap_or('.');
+            let path = if parts[0].starts_with('R') || parts[0].starts_with('C') {
+                // R/C 后面跟 old path 和 new path，取 new path 作为展示路径
+                parts.get(2).unwrap_or(&parts[1]).to_string()
+            } else {
+                parts[1].to_string()
+            };
+
+            let (additions, deletions) = stat_map.get(&path).copied().unwrap_or((0, 0));
+            let status = Self::status_char_to_string(status_char);
+
+            changes.push(GitFileChange {
                 path,
                 status,
                 additions,
                 deletions,
-            })
-            .collect();
-        // 按路径排序
+            });
+        }
+
+        // 按路径排序，文件树展示更稳定
         changes.sort_by(|a, b| a.path.cmp(&b.path));
         Ok(changes)
     }
@@ -331,16 +348,19 @@ impl GitService {
     /// - `--all`: 包含所有分支的 commits（方便画分支图）
     /// - `%P`: 父 commits
     /// - `%D`: 引用装饰（branch/tag）
-    pub fn log(repo_path: &str, limit: u32) -> Result<Vec<GitLogEntry>, String> {
-        let output = Self::exec(
-            repo_path,
-            &[
-                "log",
-                "--all",
-                &format!("-n{}", limit),
-                "--format=%H\t%h\t%an\t%ae\t%at\t%P\t%D\t%s",
-            ],
-        )?;
+    /// - `limit = None` 或 `Some(0)` 表示不限制，返回全部 commits
+    pub fn log(repo_path: &str, limit: Option<u32>) -> Result<Vec<GitLogEntry>, String> {
+        let limit_arg = match limit {
+            Some(n) if n > 0 => Some(format!("-n{}", n)),
+            _ => None,
+        };
+        let mut args: Vec<&str> = vec!["log", "--all"];
+        if let Some(ref s) = limit_arg {
+            args.push(s);
+        }
+        args.push("--format=%H\t%h\t%an\t%ae\t%at\t%P\t%D\t%s");
+
+        let output = Self::exec(repo_path, &args)?;
 
         let mut entries = Vec::new();
 

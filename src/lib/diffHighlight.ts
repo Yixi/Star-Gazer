@@ -8,7 +8,7 @@
  *
  * 根据文件扩展名选择语言，降级到 plaintext 时不报错
  */
-import { tokenize, type HunkData, type TokenizeOptions } from "react-diff-view";
+import { tokenize, type FileData, type HunkData, type TokenizeOptions } from "react-diff-view";
 import { refractor } from "refractor";
 // refractor 的 common 入口不含 tsx/jsx，手动注册
 // refractor 5.x 的 exports: "./*" → "./lang/*.js"
@@ -101,6 +101,36 @@ export function languageFromPath(filePath: string): string {
     default:
       return "plaintext";
   }
+}
+
+/**
+ * 根据 file.type + hunk 内容推断"有效 diff 类型"
+ *
+ * parseDiff 依赖 git header 的 `new file mode` / `deleted file mode` 识别 add/delete，
+ * range diff / merge diff / 某些 parseDiff 未覆盖的场景可能把纯新增文件标成 "modify"。
+ * 这里补一层内容检测：所有 change 全是 insert → 视为 add；全是 delete → 视为 delete。
+ * 上层请用 useMemo 缓存结果，单个文件切换才会重算。
+ */
+export function detectEffectiveDiffType(
+  file: FileData,
+): "add" | "delete" | "modify" {
+  if (file.type === "add") return "add";
+  if (file.type === "delete") return "delete";
+  if (file.hunks.length === 0) return "modify";
+
+  let hasInsert = false;
+  let hasDelete = false;
+  for (const hunk of file.hunks) {
+    for (const change of hunk.changes) {
+      if (change.type === "normal") return "modify";
+      if (change.type === "insert") hasInsert = true;
+      else if (change.type === "delete") hasDelete = true;
+      if (hasInsert && hasDelete) return "modify";
+    }
+  }
+  if (hasInsert && !hasDelete) return "add";
+  if (hasDelete && !hasInsert) return "delete";
+  return "modify";
 }
 
 /** 为 hunks 生成 refractor tokens；失败时返回 null，由 Hunk 自行 fallback */

@@ -6,7 +6,7 @@
  * - 多选：单击/Cmd+toggle/Shift+range
  * - 选中变化 → 自动在右侧 Panel 打开/更新 commit-files 视图（复用同一 tab）
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { X, Filter } from "lucide-react";
 import { useProjectStore } from "@/stores/projectStore";
 import { usePanelStore } from "@/stores/panelStore";
@@ -25,6 +25,13 @@ const EMPTY_HASHES: string[] = [];
 
 /** commit-files tab 的稳定 id — 确保选中变化时更新同一 tab 而非新开 */
 const COMMIT_FILES_TAB_ID = "commit-files";
+
+/** commit 行高（与 CommitRow 内部保持一致） */
+const ROW_HEIGHT = 32;
+/** 虚拟滚动上下各多渲染的行数，避免快速滚动露白 */
+const OVERSCAN = 8;
+/** 列表容器最大高度 */
+const LIST_MAX_HEIGHT = 480;
 
 export function HistoryView({ project }: HistoryViewProps) {
   const { entries, isLoading } = useGitLog(project.id, project.path);
@@ -284,18 +291,94 @@ export function HistoryView({ project }: HistoryViewProps) {
         </div>
       )}
 
-      {/* commit 列表 — 固定最大高度内部滚动 */}
-      <div className="overflow-y-auto" style={{ maxHeight: 480 }}>
-        {filteredEntries.map((entry, idx) => (
-          <CommitRow
-            key={entry.hash}
-            entry={entry}
-            selected={selectedCommits.includes(entry.hash)}
-            graphNode={graphLayout.nodes[idx]}
-            totalLanes={graphLayout.maxLanes}
-            onClick={handleCommitClick}
-          />
-        ))}
+      {/* commit 列表 — 固定最大高度 + 虚拟滚动，支撑数千条 commit 流畅滚动 */}
+      <VirtualCommitList
+        entries={filteredEntries}
+        graphLayout={graphLayout}
+        selectedCommits={selectedCommits}
+        onCommitClick={handleCommitClick}
+      />
+    </div>
+  );
+}
+
+/**
+ * 固定行高的虚拟滚动列表
+ * - 仅渲染可视区域 + overscan 内的行
+ * - 总高度用 spacer div 撑出真实滚动条
+ * - translateY 偏移渲染切片到正确位置
+ */
+function VirtualCommitList({
+  entries,
+  graphLayout,
+  selectedCommits,
+  onCommitClick,
+}: {
+  entries: GitLogEntry[];
+  graphLayout: ReturnType<typeof computeGraphLayout>;
+  selectedCommits: string[];
+  onCommitClick: (e: React.MouseEvent, hash: string) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(LIST_MAX_HEIGHT);
+
+  // 监听容器尺寸变化（sidebar 宽度或窗口高度变化都会触发）
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const update = () => setViewportHeight(el.clientHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // 选中集合用 Set 加速行内查找，避免 O(N×M)
+  const selectedSet = useMemo(() => new Set(selectedCommits), [selectedCommits]);
+
+  const totalCount = entries.length;
+  const startIdx = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
+  const visibleCount = Math.ceil(viewportHeight / ROW_HEIGHT) + OVERSCAN * 2;
+  const endIdx = Math.min(totalCount, startIdx + visibleCount);
+  const totalHeight = totalCount * ROW_HEIGHT;
+  const offsetY = startIdx * ROW_HEIGHT;
+
+  const visibleRows = [];
+  for (let i = startIdx; i < endIdx; i++) {
+    const entry = entries[i];
+    visibleRows.push(
+      <CommitRow
+        key={entry.hash}
+        entry={entry}
+        selected={selectedSet.has(entry.hash)}
+        graphNode={graphLayout.nodes[i]}
+        totalLanes={graphLayout.maxLanes}
+        onClick={onCommitClick}
+      />,
+    );
+  }
+
+  return (
+    <div
+      ref={scrollRef}
+      className="overflow-y-auto"
+      style={{ maxHeight: LIST_MAX_HEIGHT }}
+      onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+    >
+      <div style={{ height: totalHeight, position: "relative" }}>
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            transform: `translateY(${offsetY}px)`,
+            willChange: "transform",
+          }}
+        >
+          {visibleRows}
+        </div>
       </div>
     </div>
   );

@@ -60,12 +60,12 @@ export async function gitBranches(repoPath: string): Promise<GitBranch[]> {
   return invoke("git_branches", { repoPath });
 }
 
-/** 获取 Git 日志 */
+/** 获取 Git 日志 —— limit 省略或为 0 表示全部 commits */
 export async function gitLog(
   repoPath: string,
-  limit: number = 50
+  limit?: number
 ): Promise<GitLogEntry[]> {
-  return invoke("git_log", { repoPath, limit });
+  return invoke("git_log", { repoPath, limit: limit ?? null });
 }
 
 /** 获取 commit 范围 diff（from~..to） */
@@ -78,10 +78,17 @@ export async function gitDiffRange(
   return invoke("git_diff_range", { repoPath, from, to, filePath: filePath ?? null });
 }
 
-/** 获取多个 commit 涉及的文件列表（合并聚合） */
+/**
+ * 获取 commit range 涉及的文件列表
+ * - 单 commit：`from === to === hash`
+ * - 多 commit range：`from` 为最旧 commit，`to` 为最新 commit
+ * 后端走 `git diff --name-status --numstat {from}~..{to}`，无论 range 有多少
+ * commit 都是一次性的净变更聚合。
+ */
 export async function gitCommitFiles(
   repoPath: string,
-  hashes: string[],
+  from: string,
+  to: string,
 ): Promise<GitFileChange[]> {
-  return invoke("git_commit_files", { repoPath, hashes });
+  return invoke("git_commit_files", { repoPath, from, to });
 }

@@ -59,21 +59,21 @@ async function getLanguageExtension(filePath: string): Promise<Extension | null>
   }
 }
 
-/** CodeMirror 自定义暗色主题 (Star Gazer 配色) */
+/** CodeMirror 自定义暗色主题 (与 diff 视图保持一致) */
 const starGazerTheme = EditorView.theme({
   "&": {
-    backgroundColor: "#0f1116",
-    color: "#e4e6eb",
+    backgroundColor: "#0d0f14",
+    color: "#b8bcc4",
     fontSize: "13px",
-    fontFamily: "'Geist Mono', 'SF Mono', 'Fira Code', monospace",
+    fontFamily: "'SF Mono', Menlo, 'Geist Mono', 'Fira Code', monospace",
     height: "100%",
   },
   ".cm-scroller": {
     overflow: "auto",
   },
   ".cm-gutters": {
-    backgroundColor: "#0d0e13",
-    color: "#6b7280",
+    backgroundColor: "#0d0f14",
+    color: "#4a5263",
     border: "none",
     borderRight: "1px solid #1a1c23",
   },

@@ -26,10 +26,10 @@ pub async fn git_branches(repo_path: String) -> Result<Vec<GitBranch>, String> {
 }
 
 /// 获取 Git 日志
+/// - `limit` 为 None 或 0 时返回全部 commits
 #[tauri::command]
 pub async fn git_log(repo_path: String, limit: Option<u32>) -> Result<Vec<GitLogEntry>, String> {
-    let limit = limit.unwrap_or(50);
-    log::info!("获取 Git 日志: {} (limit={})", repo_path, limit);
+    log::info!("获取 Git 日志: {} (limit={:?})", repo_path, limit);
     GitService::log(&repo_path, limit)
 }
 
@@ -54,12 +54,13 @@ pub async fn git_diff_range(
     GitService::diff_range(&repo_path, &from, &to, file_path.as_deref())
 }
 
-/// 获取多个 commit 涉及的文件列表（合并聚合）
+/// 获取 commit range 涉及的文件列表（单 commit 时 from=to=hash）
 #[tauri::command]
 pub async fn git_commit_files(
     repo_path: String,
-    hashes: Vec<String>,
+    from: String,
+    to: String,
 ) -> Result<Vec<GitFileChange>, String> {
-    log::info!("获取 commit 文件列表: {} (count={})", repo_path, hashes.len());
-    GitService::commit_files(&repo_path, &hashes)
+    log::info!("获取 commit 文件列表: {} ({}..{})", repo_path, from, to);
+    GitService::commit_files_range(&repo_path, &from, &to)
 }

@@ -8,13 +8,13 @@
  * - 从后端 git_diff 获取 unified diff 文本
  */
 import { useEffect, useMemo, useState } from "react";
-import { parseDiff, Diff, Hunk } from "react-diff-view";
+import { parseDiff, Diff, Hunk, Decoration } from "react-diff-view";
 import type { FileData } from "react-diff-view";
 import { usePanelStore } from "@/stores/panelStore";
 import { useProjectStore } from "@/stores/projectStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import type { DiffSource } from "@/types/panel";
-import { highlightHunks } from "@/lib/diffHighlight";
+import { highlightHunks, detectEffectiveDiffType } from "@/lib/diffHighlight";
 import "react-diff-view/style/index.css";
 import "@/styles/diff-overrides.css";
 
@@ -177,45 +177,28 @@ function FileDiffBlock({
   // 推断用于高亮的文件路径：优先使用当前 tab 的 filePath，否则用 diff 的新文件名
   const pathForLang = filePath || file.newPath || file.oldPath || "";
   const tokens = useMemo(() => highlightHunks(file.hunks, pathForLang), [file.hunks, pathForLang]);
-  // 新增/删除文件只有单侧内容，split 视图空一半，强制 unified
-  const effectiveViewType =
-    file.type === "add" || file.type === "delete" ? "unified" : viewType;
+  // 按 hunk 内容检测有效 diff 类型。react-diff-view 内部只要 diffType 是 "add"/"delete"
+  // 就会进入 monotonous 单列渲染（无论 split/unified）—— 列结构只有 gutter + code 两列，
+  // 代码列会自然占满剩余宽度，不会再出现右半边空白。
+  const effectiveType = useMemo(() => detectEffectiveDiffType(file), [file]);
 
   return (
     <Diff
-      viewType={effectiveViewType}
-      diffType={file.type}
+      viewType={viewType}
+      diffType={effectiveType}
       hunks={file.hunks}
       tokens={tokens}
       className="diff-view-table"
     >
       {(hunks) =>
         hunks.flatMap((hunk) => [
-          <HunkSeparator key={`sep-${hunk.content}`} content={hunk.content} />,
+          <Decoration key={`sep-${hunk.content}`} className="diff-hunk-header">
+            {hunk.content}
+          </Decoration>,
           <Hunk key={hunk.content} hunk={hunk} />,
         ])
       }
     </Diff>
-  );
-}
-
-/** Hunk 分隔符 */
-function HunkSeparator({ content }: { content: string }) {
-  return (
-    <tr>
-      <td
-        colSpan={4}
-        className="text-[11px] py-1 px-3 select-none"
-        style={{
-          backgroundColor: "rgba(74, 158, 255, 0.06)",
-          color: "#4a9eff",
-          borderTop: "1px solid #1a1c23",
-          borderBottom: "1px solid #1a1c23",
-        }}
-      >
-        {content}
-      </td>
-    </tr>
   );
 }
 

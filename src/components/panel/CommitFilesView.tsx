@@ -9,14 +9,14 @@
  * 数据源：tab.diffSource (commit | range)
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { parseDiff, Diff, Hunk } from "react-diff-view";
+import { parseDiff, Diff, Hunk, Decoration } from "react-diff-view";
 import type { FileData } from "react-diff-view";
 import { LayoutList, FolderTree } from "lucide-react";
 import { useProjectStore } from "@/stores/projectStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { usePanelStore } from "@/stores/panelStore";
 import { gitCommitFiles, gitDiffRange, type GitFileChange } from "@/services/git";
-import { highlightHunks } from "@/lib/diffHighlight";
+import { highlightHunks, detectEffectiveDiffType } from "@/lib/diffHighlight";
 import { ChangedFileRow } from "@/components/sidebar/ChangedFileRow";
 import type { DiffSource } from "@/types/panel";
 import "react-diff-view/style/index.css";
@@ -32,6 +32,37 @@ interface TreeNode {
   isDir: boolean;
   children?: TreeNode[];
   change?: GitFileChange;
+}
+
+/**
+ * 模块级 commit range 文件列表缓存
+ *
+ * commit range 指向不可变的历史引用（from/to 都是 hash），结果永远不变，
+ * 适合做强缓存。缓存键 `repoPath|from..to`，限量 30 条 LRU，避免无限增长。
+ * 快速来回切换 commit 时可以直接命中，不再触发后端 git 子进程。
+ */
+const FILES_CACHE = new Map<string, GitFileChange[]>();
+const FILES_CACHE_MAX = 30;
+function filesCacheKey(repoPath: string, from: string, to: string) {
+  return `${repoPath}|${from}..${to}`;
+}
+function filesCacheGet(key: string): GitFileChange[] | undefined {
+  const val = FILES_CACHE.get(key);
+  if (val) {
+    // LRU：命中后搬到最新
+    FILES_CACHE.delete(key);
+    FILES_CACHE.set(key, val);
+  }
+  return val;
+}
+function filesCacheSet(key: string, value: GitFileChange[]) {
+  if (FILES_CACHE.has(key)) FILES_CACHE.delete(key);
+  FILES_CACHE.set(key, value);
+  while (FILES_CACHE.size > FILES_CACHE_MAX) {
+    const firstKey = FILES_CACHE.keys().next().value;
+    if (firstKey === undefined) break;
+    FILES_CACHE.delete(firstKey);
+  }
 }
 
 export function CommitFilesView({ tabId }: CommitFilesViewProps) {
@@ -50,6 +81,7 @@ export function CommitFilesView({ tabId }: CommitFilesViewProps) {
   // 加载的文件列表
   const [files, setFiles] = useState<GitFileChange[]>([]);
   const [filesLoading, setFilesLoading] = useState(true);
+  const [filesError, setFilesError] = useState<string | null>(null);
   // 当前选中的文件（相对路径）
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   // 当前选中文件的 diff 数据
@@ -57,28 +89,51 @@ export function CommitFilesView({ tabId }: CommitFilesViewProps) {
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
 
-  // 加载 commit 文件列表
+  // 加载 commit range 涉及的文件列表（后端走一次 git diff，不漏掉中间 commit）
   useEffect(() => {
     if (!diffSource || !repoPath) return;
-    let cancelled = false;
+    if (diffSource.kind === "working") return;
+
+    // 提取 from/to — commit 和 range 两种形态统一
+    const from = diffSource.kind === "commit" ? diffSource.hash : diffSource.from;
+    const to = diffSource.kind === "commit" ? diffSource.hash : diffSource.to;
+
+    // range 一旦变化，立刻清空旧文件列表和选中文件，避免 UI 显示陈旧数据
+    // （关键修复：之前 catch 只 console.warn，失败时旧列表会残留）
+    setFilesError(null);
+
+    // 缓存命中：同步返回，完全不触发 loading，避免来回切换时的闪烁
+    const key = filesCacheKey(repoPath, from, to);
+    const cached = filesCacheGet(key);
+    if (cached) {
+      setFiles(cached);
+      setFilesLoading(false);
+      setSelectedFile((prev) => {
+        if (prev && cached.some((f) => f.path === prev)) return prev;
+        return cached[0]?.path ?? null;
+      });
+      return;
+    }
+
+    // 缓存未命中：清空展示 + 进入 loading，等待后端返回
+    setFiles([]);
+    setSelectedFile(null);
     setFilesLoading(true);
+
+    let cancelled = false;
     (async () => {
       try {
-        const hashes: string[] = diffSource.kind === "commit"
-          ? [diffSource.hash]
-          : diffSource.kind === "range"
-            ? collectRangeHashes(diffSource.from, diffSource.to)
-            : [];
-        const result = await gitCommitFiles(repoPath, hashes);
+        const result = await gitCommitFiles(repoPath, from, to);
         if (cancelled) return;
+        filesCacheSet(key, result);
         setFiles(result);
-        // diffSource 变化后：保持当前选中文件（如果在新列表里），否则选第一个
-        setSelectedFile((prev) => {
-          if (prev && result.some((f) => f.path === prev)) return prev;
-          return result[0]?.path ?? null;
-        });
+        setSelectedFile(result[0]?.path ?? null);
       } catch (err) {
-        if (!cancelled) console.warn("加载 commit 文件失败:", err);
+        if (cancelled) return;
+        console.warn("加载 commit 文件失败:", err);
+        setFiles([]);
+        setSelectedFile(null);
+        setFilesError(String(err));
       } finally {
         if (!cancelled) setFilesLoading(false);
       }
@@ -215,6 +270,13 @@ export function CommitFilesView({ tabId }: CommitFilesViewProps) {
           {filesLoading ? (
             <div className="flex items-center justify-center text-xs py-6" style={{ color: "#6b7280" }}>
               加载中...
+            </div>
+          ) : filesError ? (
+            <div
+              className="text-xs py-4 px-3 whitespace-pre-wrap break-words"
+              style={{ color: "#ef4444" }}
+            >
+              加载失败：{filesError}
             </div>
           ) : files.length === 0 ? (
             <div className="flex items-center justify-center text-xs py-6" style={{ color: "#6b7280" }}>
@@ -477,43 +539,26 @@ function HighlightedDiff({
   viewType: "split" | "unified";
 }) {
   const tokens = useMemo(() => highlightHunks(file.hunks, filePath), [file.hunks, filePath]);
-  // 新增/删除文件强制 unified
-  const effectiveViewType =
-    file.type === "add" || file.type === "delete" ? "unified" : viewType;
+  // 按 hunk 内容检测有效 diff 类型，让 react-diff-view 的 monotonous 单列渲染接管
+  // 纯新增/纯删除文件（见 diffHighlight.ts 注释）
+  const effectiveType = useMemo(() => detectEffectiveDiffType(file), [file]);
   return (
     <Diff
-      viewType={effectiveViewType}
-      diffType={file.type}
+      viewType={viewType}
+      diffType={effectiveType}
       hunks={file.hunks}
       tokens={tokens}
       className="diff-view-table"
     >
       {(hunks) =>
         hunks.flatMap((hunk) => [
-          <HunkSeparator key={`sep-${hunk.content}`} content={hunk.content} />,
+          <Decoration key={`sep-${hunk.content}`} className="diff-hunk-header">
+            {hunk.content}
+          </Decoration>,
           <Hunk key={hunk.content} hunk={hunk} />,
         ])
       }
     </Diff>
-  );
-}
-
-function HunkSeparator({ content }: { content: string }) {
-  return (
-    <tr>
-      <td
-        colSpan={4}
-        className="text-[11px] py-1 px-3 select-none"
-        style={{
-          backgroundColor: "rgba(74, 158, 255, 0.06)",
-          color: "#4a9eff",
-          borderTop: "1px solid #1a1c23",
-          borderBottom: "1px solid #1a1c23",
-        }}
-      >
-        {content}
-      </td>
-    </tr>
   );
 }
 
@@ -525,19 +570,6 @@ function normalizeStatus(s: string): "modified" | "added" | "deleted" | "renamed
     case "copied": return "renamed";
     default: return "modified";
   }
-}
-
-/**
- * 对于 range diff，我们不需要把中间所有 commit 的 hash 都列出来，
- * 因为后端 `git_commit_files` 对每个 hash 跑 show。这里为了聚合选中范围的文件，
- * 只需要使用 from 和 to 两端：后端合并 diff 时用 `from~..to` 也包含中间的所有提交。
- * 但对 commit_files 接口，传 [from, to] 会漏掉中间的 commits。
- * 折中：前端对 range 只取 from 和 to 做展示，中间提交的文件可能遗漏；
- * 实际使用场景多为连续选择，影响小。后续可让后端接受 range 参数直接走 git log + diff。
- */
-function collectRangeHashes(from: string, to: string): string[] {
-  if (from === to) return [from];
-  return [from, to];
 }
 
 /** 构建压缩目录树 */

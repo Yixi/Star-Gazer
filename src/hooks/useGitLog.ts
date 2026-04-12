@@ -6,7 +6,11 @@ import { useEffect, useState, useCallback } from "react";
 import { gitLog, type GitLogEntry } from "@/services/git";
 import { useProjectStore } from "@/stores/projectStore";
 
-export function useGitLog(projectId: string | null, repoPath: string | null, limit = 50) {
+/**
+ * 加载 commit 历史
+ * - `limit` 省略表示全部 commits（默认）；页面通过虚拟滚动渲染，无需分页
+ */
+export function useGitLog(projectId: string | null, repoPath: string | null, limit?: number) {
   const [entries, setEntries] = useState<GitLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
