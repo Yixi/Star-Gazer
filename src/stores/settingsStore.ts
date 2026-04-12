@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 
 interface SettingsState {
   /** 侧边栏宽度 */
@@ -28,18 +29,35 @@ interface SettingsState {
   setDiffLayout: (layout: "split" | "unified") => void;
 }
 
-export const useSettingsStore = create<SettingsState>((set) => ({
-  sidebarWidth: 240,
-  sidebarOpen: true,
-  sidebarCollapsedWidth: 48,
-  editorFontSize: 13,
-  terminalFontSize: 13,
-  theme: "dark",
-  diffLayout: "split",
+export const useSettingsStore = create<SettingsState>()(
+  persist(
+    (set) => ({
+      sidebarWidth: 240,
+      sidebarOpen: true,
+      sidebarCollapsedWidth: 48,
+      editorFontSize: 13,
+      terminalFontSize: 13,
+      theme: "dark",
+      diffLayout: "split",
 
-  setSidebarWidth: (width) => set({ sidebarWidth: width }),
-  toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
-  setEditorFontSize: (size) => set({ editorFontSize: size }),
-  setTerminalFontSize: (size) => set({ terminalFontSize: size }),
-  setDiffLayout: (layout) => set({ diffLayout: layout }),
-}));
+      setSidebarWidth: (width) => set({ sidebarWidth: width }),
+      toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+      setEditorFontSize: (size) => set({ editorFontSize: size }),
+      setTerminalFontSize: (size) => set({ terminalFontSize: size }),
+      setDiffLayout: (layout) => set({ diffLayout: layout }),
+    }),
+    {
+      name: "stargazer-settings",
+      storage: createJSONStorage(() => localStorage),
+      // 只持久化用户偏好字段，避免持久化方法引用
+      partialize: (state) => ({
+        sidebarWidth: state.sidebarWidth,
+        sidebarOpen: state.sidebarOpen,
+        editorFontSize: state.editorFontSize,
+        terminalFontSize: state.terminalFontSize,
+        diffLayout: state.diffLayout,
+      }),
+      version: 1,
+    },
+  ),
+);

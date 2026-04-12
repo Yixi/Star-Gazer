@@ -15,18 +15,10 @@ import type { CSSProperties, ReactNode } from "react";
 import { usePanelStore } from "@/stores/panelStore";
 import { useProjectStore } from "@/stores/projectStore";
 import { FileIcon } from "@/utils/fileIcon";
+import { AGENT_COLOR_HEX } from "@/constants/agentColors";
 
-/** Agent 颜色到 HEX 值映射 */
-export const AGENT_COLOR_HEX: Record<string, string> = {
-  blue: "#4a9eff",
-  orange: "#ff8c42",
-  purple: "#a78bfa",
-  green: "#22c55e",
-  pink: "#ec4899",
-  yellow: "#eab308",
-  cyan: "#06b6d4",
-  red: "#ef4444",
-};
+// 为了避免外部 import 断链，继续 re-export 共享常量
+export { AGENT_COLOR_HEX };
 
 export interface ChangedFileRowProps {
   /** 完整路径（用于判断 active-in-panel / agent hover 命中） */

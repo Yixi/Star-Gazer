@@ -112,3 +112,43 @@
 .sg-hover-glow:hover {
   box-shadow: 0 0 12px rgba(74, 158, 255, 0.3);
 }
+
+/* ========================================
+   无障碍：尊重 macOS "减少动态效果" 系统偏好
+   ========================================
+   对所有 sg-animate-* / sg-transition-* 工具类以及全局元素强制关闭动画。
+   这样可以保留语义（元素仍然出现/消失），但不会有运动/缩放/淡入淡出。
+*/
+@media (prefers-reduced-motion: reduce) {
+  /* 所有工具类动画：瞬间完成，不运动 */
+  .sg-animate-fade-in,
+  .sg-animate-fade-in-up,
+  .sg-animate-card-enter,
+  .sg-animate-card-exit,
+  .sg-animate-pulse,
+  .sg-animate-breathe,
+  .sg-animate-spin,
+  .sg-animate-cursor-blink {
+    animation: none !important;
+  }
+
+  .sg-transition-colors,
+  .sg-transition-all,
+  .sg-transition-transform,
+  .sg-transition-shadow,
+  .sg-transition-opacity,
+  .sg-transition-width,
+  .sg-transition-slow {
+    transition: none !important;
+  }
+
+  /* 兜底：尽可能弱化其他 transition/animation */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

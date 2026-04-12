@@ -23,24 +23,13 @@ import { useCanvasStore } from "@/stores/canvasStore";
 import { useProjectStore } from "@/stores/projectStore";
 import { TerminalView } from "@/components/terminal/TerminalView";
 import { PulsingDot } from "@/components/ui/PulsingDot";
-import type { Agent, AgentColor } from "@/types/agent";
+import type { Agent } from "@/types/agent";
 import { AGENT_COMMANDS } from "@/types/agent";
+import { AGENT_COLOR_HEX } from "@/constants/agentColors";
 
 interface AgentCardProps {
   agent: Agent;
 }
-
-/** Agent 颜色到具体 HEX 的映射 */
-const COLOR_HEX: Record<AgentColor, string> = {
-  blue: "#4a9eff",
-  orange: "#ff8c42",
-  purple: "#a78bfa",
-  green: "#22c55e",
-  pink: "#ec4899",
-  yellow: "#eab308",
-  cyan: "#06b6d4",
-  red: "#ef4444",
-};
 
 /** 状态对应的指示颜色 */
 const STATUS_INDICATOR: Record<
@@ -111,7 +100,7 @@ export function AgentCard({ agent }: AgentCardProps) {
   const isSelected = selectedAgentId === agent.id;
   const displayMode = getCardDisplayMode(agent.id);
   const statusInfo = STATUS_INDICATOR[agent.status];
-  const colorHex = COLOR_HEX[agent.color];
+  const colorHex = AGENT_COLOR_HEX[agent.color];
 
   // 根据 agentType 解析实际启动命令
   const terminalCommand = useMemo(() => {
@@ -373,23 +362,33 @@ export function AgentCard({ agent }: AgentCardProps) {
       if (agent.status === "running") {
         setShowCloseConfirm(true);
       } else {
+        // 触发退场动画，实际 removeAgent 在 animationend 时调用
         setIsExiting(true);
-        setTimeout(() => {
-          removeAgent(agent.id);
-        }, 200);
       }
     },
-    [agent.id, agent.status, removeAgent]
+    [agent.status]
   );
 
   /** 确认关闭 */
   const confirmClose = useCallback(() => {
     setShowCloseConfirm(false);
     setIsExiting(true);
-    setTimeout(() => {
-      removeAgent(agent.id);
-    }, 200);
-  }, [agent.id, removeAgent]);
+  }, []);
+
+  /** 退场动画结束 → 真正从 store 移除
+   *
+   * 用 animationend 事件替代 setTimeout(200)，理由：
+   * 1. 与 CSS duration 严格同步，减慢/禁用动画时不会出现"卡片消失但动画没播完"
+   * 2. 尊重 prefers-reduced-motion（duration 变成 0.001ms 时立即触发）
+   */
+  const handleAnimationEnd = useCallback(
+    (e: React.AnimationEvent<HTMLDivElement>) => {
+      if (isExiting && e.animationName === "sg-card-exit") {
+        removeAgent(agent.id);
+      }
+    },
+    [isExiting, agent.id, removeAgent],
+  );
 
   /** 计算卡片定位样式 */
   const getCardStyle = (): React.CSSProperties => {
@@ -449,6 +448,7 @@ export function AgentCard({ agent }: AgentCardProps) {
           cursor: hoverEdge ? getResizeCursor(hoverEdge) : undefined,
         }}
         onClick={() => selectAgent(agent.id)}
+        onAnimationEnd={handleAnimationEnd}
         onMouseMove={handleCardMouseMove}
         onMouseDown={handleCardMouseDown}
         onMouseLeave={() => {

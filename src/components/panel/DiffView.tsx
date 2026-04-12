@@ -38,6 +38,12 @@ export function DiffView({ filePath, tabId }: DiffViewProps) {
   const statKey = fileStat
     ? `${fileStat.additions}/${fileStat.deletions}`
     : "none";
+  // 把 diffSource 稳定成一个字符串 key，避免每次 render 都触发 effect
+  const diffSourceKey = useMemo(() => {
+    if (diffSource.kind === "working") return "working";
+    if (diffSource.kind === "commit") return `commit:${diffSource.hash}`;
+    return `range:${diffSource.from}..${diffSource.to}`;
+  }, [diffSource]);
 
   useEffect(() => {
     let cancelled = false;
@@ -115,7 +121,7 @@ export function DiffView({ filePath, tabId }: DiffViewProps) {
     return () => { cancelled = true; };
     // statKey 依赖：当 git status 刷新后，若该文件的 +A -D 统计变了，重新 fetch diff
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filePath, tabId, setDiffStat, tab?.projectPath, activeProject?.path, diffSource.kind, JSON.stringify(diffSource), statKey]);
+  }, [filePath, tabId, setDiffStat, tab?.projectPath, activeProject?.path, diffSourceKey, statKey]);
 
   if (isLoading) {
     return (

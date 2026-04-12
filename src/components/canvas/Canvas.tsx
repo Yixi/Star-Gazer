@@ -218,7 +218,7 @@ export function Canvas() {
     <div
       ref={canvasRef}
       className={`relative flex-1 overflow-hidden no-select ${getCursorClass()}`}
-      style={{ backgroundColor: "#0f1116" }}
+      style={{ backgroundColor: "var(--sg-bg-canvas)" }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}

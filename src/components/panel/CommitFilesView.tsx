@@ -73,6 +73,13 @@ export function CommitFilesView({ tabId }: CommitFilesViewProps) {
   const diffSource: DiffSource | undefined = tab?.diffSource;
   // 优先用 tab 自己记的 projectPath — 避免切换 active project 后拿到错仓库
   const repoPath = tab?.projectPath ?? activeProject?.path ?? "";
+  // 稳定 diffSource 的标识，避免 JSON.stringify 作为依赖每次都产生新引用
+  const diffSourceKey = useMemo(() => {
+    if (!diffSource) return "none";
+    if (diffSource.kind === "working") return "working";
+    if (diffSource.kind === "commit") return `commit:${diffSource.hash}`;
+    return `range:${diffSource.from}..${diffSource.to}`;
+  }, [diffSource]);
 
   // 左栏宽度（可拖拽）
   const [leftWidth, setLeftWidth] = useState(260);
@@ -140,7 +147,7 @@ export function CommitFilesView({ tabId }: CommitFilesViewProps) {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repoPath, diffSource && JSON.stringify(diffSource)]);
+  }, [repoPath, diffSourceKey]);
 
   // 加载选中文件的 diff
   useEffect(() => {
@@ -176,7 +183,7 @@ export function CommitFilesView({ tabId }: CommitFilesViewProps) {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repoPath, selectedFile, diffSource && JSON.stringify(diffSource)]);
+  }, [repoPath, selectedFile, diffSourceKey]);
 
   // 构建树
   const tree = useMemo(() => buildCompressedTree(files), [files]);

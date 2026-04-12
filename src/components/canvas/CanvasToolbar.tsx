@@ -22,10 +22,10 @@ export function CanvasToolbar() {
 
   const pillStyle: React.CSSProperties = {
     padding: "5px 10px",
-    background: "rgba(22, 24, 32, 0.8)",
+    background: "color-mix(in srgb, var(--sg-bg-card) 80%, transparent)",
     backdropFilter: "blur(8px)",
     borderRadius: 5,
-    border: "1px solid #1f2128",
+    border: "1px solid var(--sg-border-secondary)",
   };
 
   return (

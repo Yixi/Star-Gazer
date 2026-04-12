@@ -44,17 +44,27 @@ export function SlidePanel() {
   }, [isOpen, closePanel, togglePanel]);
 
   // 左缘拖拽调整宽度 — 面板右缘固定，向左拖动 → 变宽
+  //
+  // 双击握把时浏览器会先触发两次 mousedown，两次都会跑到这里。
+  // 我们只在第一次 move 超过 3px 阈值后才真正开始改宽度，
+  // 这样双击场景里 resize 不会"抖"一下再被 doubleClick 覆盖。
   const handleResizeStart = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
-      isResizing.current = true;
       const startX = e.clientX;
       const startWidth = width;
+      let activated = false;
 
       const handleMove = (me: MouseEvent) => {
-        if (!isResizing.current) return;
         const delta = me.clientX - startX;
-        // 注意：向左拖（delta 为负） → 宽度增加
+        if (!activated) {
+          if (Math.abs(delta) < 3) return;
+          activated = true;
+          isResizing.current = true;
+          document.body.style.cursor = "col-resize";
+          document.body.style.userSelect = "none";
+        }
+        // 向左拖（delta 为负） → 宽度增加
         setWidth(startWidth - delta);
       };
 
@@ -62,12 +72,12 @@ export function SlidePanel() {
         isResizing.current = false;
         document.removeEventListener("mousemove", handleMove);
         document.removeEventListener("mouseup", handleUp);
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
+        if (activated) {
+          document.body.style.cursor = "";
+          document.body.style.userSelect = "";
+        }
       };
 
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
       document.addEventListener("mousemove", handleMove);
       document.addEventListener("mouseup", handleUp);
     },
@@ -87,6 +97,10 @@ export function SlidePanel() {
         // 用 transform 做 GPU 加速 slide-in/out；关闭时整块面板滑出屏幕外
         transform: isOpen ? "translateX(0)" : "translateX(100%)",
         transition: "transform 240ms cubic-bezier(0.4, 0, 0.2, 1)",
+        // 把面板提升到独立的合成层，确保 240ms translateX 吃满 GPU，
+        // 避免 Canvas 内部的 agent 卡片重绘波及面板。
+        willChange: "transform",
+        backfaceVisibility: "hidden",
         zIndex: 20,
         // 关闭时不阻挡 Canvas 的点击（off-screen 时再次保险）
         pointerEvents: isOpen ? "auto" : "none",
@@ -102,17 +116,17 @@ export function SlidePanel() {
         {/* 静态 1px 分隔线 */}
         <div
           className="absolute top-0 bottom-0 left-0"
-          style={{ width: 1, backgroundColor: "#1a1c23" }}
+          style={{ width: 1, backgroundColor: "var(--sg-border-primary)" }}
         />
         {/* 悬停高亮 */}
         <div
           className="absolute top-0 bottom-0 left-0 opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ width: 2, backgroundColor: "#4a9eff" }}
+          style={{ width: 2, backgroundColor: "var(--sg-accent)" }}
         />
         {/* 中间握把 */}
         <div
           className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ backgroundColor: "#4a9eff" }}
+          style={{ backgroundColor: "var(--sg-accent)" }}
         />
       </div>
 
@@ -120,9 +134,9 @@ export function SlidePanel() {
       <div
         className="flex flex-col h-full flex-1 min-w-0"
         style={{
-          backgroundColor: "#0f1116",
+          backgroundColor: "var(--sg-bg-canvas)",
           // 左缘 1px 边线 + 向左投射的柔和阴影，让浮层从 Canvas 上"浮起"
-          borderLeft: "1px solid #1a1c23",
+          borderLeft: "1px solid var(--sg-border-primary)",
           boxShadow: "-12px 0 32px rgba(0, 0, 0, 0.45)",
         }}
       >

@@ -18,6 +18,8 @@ import { useProjectStore } from "@/stores/projectStore";
 import { usePanelStore } from "@/stores/panelStore";
 import type { FileNode } from "@/types/project";
 import { FileIcon } from "@/utils/fileIcon";
+import { AGENT_COLOR_HEX } from "@/constants/agentColors";
+import { useShallow } from "zustand/react/shallow";
 
 /** 始终隐藏的条目（git 内部目录和 macOS 系统文件） */
 const ALWAYS_HIDDEN = new Set([".git", ".DS_Store"]);
@@ -408,18 +410,6 @@ async function loadFileTree(projectId: string, projectPath: string) {
   }
 }
 
-/** Agent 颜色到 HEX 值映射（用于精确的高亮颜色） */
-const AGENT_COLOR_HEX: Record<string, string> = {
-  blue: "#4a9eff",
-  orange: "#ff8c42",
-  purple: "#a78bfa",
-  green: "#22c55e",
-  pink: "#ec4899",
-  yellow: "#eab308",
-  cyan: "#06b6d4",
-  red: "#ef4444",
-};
-
 /**
  * 单个文件树节点 — 像素级匹配设计稿
  *
@@ -447,11 +437,25 @@ function FileTreeNode({
   const data = node.data;
   const openTab = usePanelStore((s) => s.openTab);
   const activeTabId = usePanelStore((s) => s.activeTabId);
-  const writingFiles = useProjectStore((s) => s.writingFiles);
-  const hoveredAgentId = useProjectStore((s) => s.hoveredAgentId);
-  const agentFileMap = useProjectStore((s) => s.agentFileMap);
 
-  const isWriting = writingFiles.has(data.path);
+  // 关键性能优化：把 writingFiles / hoveredAgentId / agentFileMap 三个独立
+  // selector 合并为一个 useShallow，派生出本节点真正关心的 3 个布尔值。
+  // 这样只有当**本节点的**写入 / 高亮 / dim 状态发生变化时才会 re-render，
+  // 而不是任意其他节点状态变化都连带整个树 re-render。
+  const { isWriting, isHighlightedByAgent, isDimmed } = useProjectStore(
+    useShallow((s) => {
+      const writing = s.writingFiles.has(data.path);
+      const hoveredId = s.hoveredAgentId;
+      const isHL =
+        hoveredId !== null && (s.agentFileMap[hoveredId]?.includes(data.path) ?? false);
+      const dimmed = hoveredId !== null && !isHL;
+      return {
+        isWriting: writing,
+        isHighlightedByAgent: isHL,
+        isDimmed: dimmed,
+      };
+    }),
+  );
 
   // 检查是否在 gitignore 中（用相对路径匹配）
   const relativePath = data.path.startsWith(projectPath)
@@ -464,10 +468,7 @@ function FileTreeNode({
   const localStatus = statusByPath[data.path];
   const effectiveGitStatus = data.gitStatus || localStatus;
 
-  /* ====== Hover 关联高亮 ====== */
-  const isHighlightedByAgent =
-    hoveredAgentId !== null && agentFileMap[hoveredAgentId]?.includes(data.path);
-  const isDimmed = hoveredAgentId !== null && !isHighlightedByAgent;
+  /* ====== Hover 关联高亮颜色 ====== */
   const highlightColor = isHighlightedByAgent
     ? AGENT_COLOR_HEX[data.agentColor ?? "blue"] ?? "#4a9eff"
     : undefined;

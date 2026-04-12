@@ -267,23 +267,44 @@ impl PtyManager {
     }
 
     /// 关闭所有 PTY 进程（应用退出时调用）
+    ///
+    /// 先发 SIGTERM 让 shell 优雅退出，之后同步 sleep 500ms 再 SIGKILL 保底 —
+    /// 应用正在退出，没必要 spawn 独立线程（那些线程会随进程结束被回收）。
     pub fn close_all(&self) {
-        if let Ok(mut instances) = self.instances.lock() {
-            let ids: Vec<String> = instances.keys().cloned().collect();
-            for id in &ids {
-                if let Some(instance) = instances.remove(id) {
-                    let pid = instance.pid;
-                    drop(instance.writer);
-                    drop(instance.master);
-                    if pid > 0 {
-                        unsafe {
-                            libc::kill(pid as i32, libc::SIGTERM);
-                        }
+        // 收集要关闭的 pid + 释放 writer/master 让 IO 线程收到 EOF
+        let mut pids: Vec<u32> = Vec::new();
+        // 即使 lock 被 poison 也要尽力关闭
+        let mut instances = match self.instances.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        let ids: Vec<String> = instances.keys().cloned().collect();
+        for id in &ids {
+            if let Some(instance) = instances.remove(id) {
+                let pid = instance.pid;
+                drop(instance.writer);
+                drop(instance.master);
+                if pid > 0 {
+                    unsafe {
+                        libc::kill(pid as i32, libc::SIGTERM);
                     }
+                    pids.push(pid);
                 }
             }
-            log::info!("已关闭所有 PTY 进程 ({}个)", ids.len());
         }
+        drop(instances);
+
+        if !pids.is_empty() {
+            // 给 shell 一点时间响应 SIGTERM，然后 SIGKILL 保底
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            for pid in &pids {
+                unsafe {
+                    libc::kill(*pid as i32, libc::SIGKILL);
+                }
+            }
+        }
+
+        log::info!("已关闭所有 PTY 进程 ({}个)", ids.len());
     }
 }
 

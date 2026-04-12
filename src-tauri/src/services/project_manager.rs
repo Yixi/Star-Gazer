@@ -64,12 +64,12 @@ impl ProjectManager {
         serde_json::from_str(&content).map_err(|e| format!("解析项目文件失败: {}", e))
     }
 
-    /// 保存项目列表到文件
-    fn save_to_file(&self, projects: &[Project]) -> Result<(), String> {
+    /// 保存项目列表到文件（纯 I/O，不持有 lock）
+    fn write_to_disk(storage_path: &PathBuf, projects: &[Project]) -> Result<(), String> {
         let content = serde_json::to_string_pretty(projects)
             .map_err(|e| format!("序列化项目列表失败: {}", e))?;
 
-        fs::write(&self.storage_path, content).map_err(|e| format!("写入项目文件失败: {}", e))
+        fs::write(storage_path, content).map_err(|e| format!("写入项目文件失败: {}", e))
     }
 
     /// 获取项目列表
@@ -80,47 +80,58 @@ impl ProjectManager {
 
     /// 添加项目
     pub fn add(&self, project: Project) -> Result<(), String> {
-        let mut projects = self.projects.lock().map_err(|e| e.to_string())?;
+        // 先在 lock 内完成状态更新，clone 出要写盘的数据后立即释放锁，
+        // 避免 fs::write 的同步 I/O 阻塞其他竞争者。
+        let snapshot = {
+            let mut projects = self.projects.lock().map_err(|e| e.to_string())?;
 
-        // 检查是否已存在同路径的项目
-        if projects.iter().any(|p| p.path == project.path) {
-            // 更新 last_opened 时间
-            for p in projects.iter_mut() {
-                if p.path == project.path {
-                    p.last_opened = project.last_opened;
-                    break;
+            if projects.iter().any(|p| p.path == project.path) {
+                for p in projects.iter_mut() {
+                    if p.path == project.path {
+                        p.last_opened = project.last_opened;
+                        break;
+                    }
                 }
+            } else {
+                projects.push(project);
             }
-        } else {
-            projects.push(project);
-        }
 
-        self.save_to_file(&projects)
+            projects.clone()
+        };
+
+        Self::write_to_disk(&self.storage_path, &snapshot)
     }
 
     /// 移除项目（不删除文件）
     pub fn remove(&self, id: &str) -> Result<(), String> {
-        let mut projects = self.projects.lock().map_err(|e| e.to_string())?;
-        projects.retain(|p| p.id != id);
-        self.save_to_file(&projects)
+        let snapshot = {
+            let mut projects = self.projects.lock().map_err(|e| e.to_string())?;
+            projects.retain(|p| p.id != id);
+            projects.clone()
+        };
+        Self::write_to_disk(&self.storage_path, &snapshot)
     }
 
     /// 更新项目的最后打开时间
     pub fn touch(&self, id: &str) -> Result<(), String> {
-        let mut projects = self.projects.lock().map_err(|e| e.to_string())?;
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
+        let snapshot = {
+            let mut projects = self.projects.lock().map_err(|e| e.to_string())?;
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
 
-        for project in projects.iter_mut() {
-            if project.id == id {
-                project.last_opened = now;
-                break;
+            for project in projects.iter_mut() {
+                if project.id == id {
+                    project.last_opened = now;
+                    break;
+                }
             }
-        }
 
-        self.save_to_file(&projects)
+            projects.clone()
+        };
+
+        Self::write_to_disk(&self.storage_path, &snapshot)
     }
 }
 

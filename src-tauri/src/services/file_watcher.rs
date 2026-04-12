@@ -108,6 +108,9 @@ impl FileWatcherManager {
         let pending: Arc<Mutex<HashMap<String, String>>> =
             Arc::new(Mutex::new(HashMap::new()));
         let debounce_duration = Duration::from_millis(100);
+        /// pending map 上限，防止 npm install 这种风暴场景内存无限增长
+        /// 超过后立刻 flush，清空 map 保底。
+        const MAX_PENDING: usize = 2048;
         let mut last_flush = Instant::now();
 
         loop {
@@ -130,6 +133,12 @@ impl FileWatcherManager {
 
                         if let Ok(mut map) = pending.lock() {
                             map.insert(path_str, kind);
+                            // 超上限立即强制 flush 一次，保底内存安全
+                            if map.len() >= MAX_PENDING {
+                                last_flush = Instant::now()
+                                    .checked_sub(debounce_duration)
+                                    .unwrap_or_else(Instant::now);
+                            }
                         }
                     }
                 }

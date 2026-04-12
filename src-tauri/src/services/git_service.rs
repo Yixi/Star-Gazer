@@ -8,6 +8,30 @@ use std::process::Command;
 /// Git 服务 - 封装 git 命令调用
 pub struct GitService;
 
+/// 校验 git ref（commit hash / 分支名 / tag）字符串是否安全
+///
+/// 拒绝：空字符串、前导 `-`（防止被 git 当 flag 解析）、换行/空格/特殊字符
+/// 允许：SHA、分支名、`HEAD`、`HEAD~1`、`main^` 等常见形态
+///
+/// 注意：这是 defense-in-depth，真正的仓库内合法性由 git 自己拒绝
+fn validate_git_ref(r: &str) -> Result<(), String> {
+    if r.is_empty() {
+        return Err("git ref 不能为空".to_string());
+    }
+    if r.starts_with('-') {
+        return Err("git ref 不能以 '-' 开头".to_string());
+    }
+    // 只允许：字母数字、/ . _ - ~ ^ @ { }
+    // 禁止空白、换行、引号、通配符、shell 元字符
+    const ALLOWED: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/._-~^@{}";
+    for ch in r.chars() {
+        if !ALLOWED.contains(ch) {
+            return Err(format!("git ref 包含非法字符: {:?}", ch));
+        }
+    }
+    Ok(())
+}
+
 impl GitService {
     /// 执行 git 命令
     fn exec(repo_path: &str, args: &[&str]) -> Result<String, String> {
@@ -224,6 +248,8 @@ impl GitService {
         to: &str,
         file_path: Option<&str>,
     ) -> Result<String, String> {
+        validate_git_ref(from)?;
+        validate_git_ref(to)?;
         let base = Self::range_base(repo_path, from);
         let range = format!("{}..{}", base, to);
         let mut args = vec!["diff", range.as_str()];
@@ -250,6 +276,8 @@ impl GitService {
     ) -> Result<Vec<GitFileChange>, String> {
         use std::collections::HashMap;
 
+        validate_git_ref(from)?;
+        validate_git_ref(to)?;
         let base = Self::range_base(repo_path, from);
         let range = format!("{}..{}", base, to);
 

@@ -76,6 +76,7 @@ pub struct GitLogEntry {
 
 /// 文件变更事件
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FileChangeEvent {
     pub path: String,
     pub kind: String,

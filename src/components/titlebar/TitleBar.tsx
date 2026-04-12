@@ -49,8 +49,8 @@ export function TitleBar() {
       onMouseDown={handleDragStart}
       style={{
         padding: '12px 16px',
-        background: '#0d0e13',
-        borderBottom: '1px solid #1a1c23',
+        background: 'var(--sg-bg-sidebar)',
+        borderBottom: '1px solid var(--sg-border-primary)',
         gap: 8,
       }}
     >
@@ -63,7 +63,7 @@ export function TitleBar() {
         data-tauri-drag-region
         style={{
           fontSize: 12,
-          color: '#6b7280',
+          color: 'var(--sg-text-hint)',
           fontWeight: 500,
         }}
       >
@@ -79,9 +79,9 @@ export function TitleBar() {
           className="transition-colors"
           style={{
             padding: '4px 8px',
-            background: '#1a1c23',
+            background: 'var(--sg-border-primary)',
             borderRadius: 4,
-            color: '#8b92a3',
+            color: 'var(--sg-text-tertiary)',
             fontSize: 11,
             cursor: 'pointer',
             border: 'none',
@@ -101,9 +101,9 @@ export function TitleBar() {
           className="transition-colors"
           style={{
             padding: '4px 8px',
-            background: '#1a1c23',
+            background: 'var(--sg-border-primary)',
             borderRadius: 4,
-            color: '#8b92a3',
+            color: 'var(--sg-text-tertiary)',
             fontSize: 11,
             cursor: 'pointer',
             border: 'none',
@@ -114,12 +114,12 @@ export function TitleBar() {
         {runningCount > 0 && (
           <span
             className="flex items-center gap-1 ml-2"
-            style={{ color: '#22c55e' }}
+            style={{ color: 'var(--sg-success)' }}
           >
             <span
               className="w-1.5 h-1.5 rounded-full"
               style={{
-                backgroundColor: '#22c55e',
+                backgroundColor: 'var(--sg-success)',
                 animation: 'sg-pulse-dot 1.4s ease-in-out infinite',
               }}
             />

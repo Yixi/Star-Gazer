@@ -13,7 +13,7 @@
 import { useCanvasStore } from "@/stores/canvasStore";
 import { useProjectStore } from "@/stores/projectStore";
 
-const Dot = () => <span style={{ color: '#3a4150' }}>·</span>;
+const Dot = () => <span style={{ color: 'var(--sg-text-disabled)' }}>·</span>;
 
 export function StatusBar() {
   const agents = useCanvasStore((s) => s.agents);
@@ -43,10 +43,10 @@ export function StatusBar() {
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '6px 16px',
-        backgroundColor: '#0d0e13',
-        borderTop: '1px solid #1a1c23',
+        backgroundColor: 'var(--sg-bg-sidebar)',
+        borderTop: '1px solid var(--sg-border-primary)',
         fontSize: 10,
-        color: '#8b92a3',
+        color: 'var(--sg-text-tertiary)',
         userSelect: 'none',
         flexShrink: 0,
       }}
@@ -67,11 +67,11 @@ export function StatusBar() {
             <Dot />
             <span>
               {totalChanges.additions > 0 && (
-                <span style={{ color: '#22c55e' }}>+{totalChanges.additions}</span>
+                <span style={{ color: 'var(--sg-success)' }}>+{totalChanges.additions}</span>
               )}
               {totalChanges.additions > 0 && totalChanges.deletions > 0 && ' '}
               {totalChanges.deletions > 0 && (
-                <span style={{ color: '#ef4444' }}>-{totalChanges.deletions}</span>
+                <span style={{ color: 'var(--sg-error)' }}>-{totalChanges.deletions}</span>
               )}
               {fileCount > 0 && (
                 <span> across {fileCount} files</span>
@@ -87,13 +87,13 @@ export function StatusBar() {
         {activeAgents > 0 && (
           <>
             <Dot />
-            <span style={{ color: '#22c55e' }}>{activeAgents} running</span>
+            <span style={{ color: 'var(--sg-success)' }}>{activeAgents} running</span>
           </>
         )}
         {waitingAgents > 0 && (
           <>
             <Dot />
-            <span style={{ color: '#febc2e' }}>{waitingAgents} waiting</span>
+            <span style={{ color: 'var(--sg-warning)' }}>{waitingAgents} waiting</span>
           </>
         )}
       </div>
