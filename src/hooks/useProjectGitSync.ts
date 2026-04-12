@@ -4,16 +4,21 @@
  * 每个展开的项目独立挂一个这个 hook，职责：
  * 1. `useGitStatus(project.path)` — 拉取该项目的 git 状态
  * 2. `useFileWatcher(project.path)` — 监听项目内文件变化，触发 refresh
- * 3. 把最新 status 写到 `projectStore.gitStatusByProject[project.id]`
- * 4. 结构性变化（create/remove/rename）时顺带刷新该项目的 FileTree 顶层
+ * 3. **轮询兜底**：每 2 秒主动 refresh 一次，不依赖 file watcher 能否
+ *    正确抓到 .git 内部变化（FSEvents 对 .git/HEAD 的报告并不总是可靠；
+ *    refcount + async unwatch/watch 时序也可能短暂错过事件）
+ * 4. 把最新 status 写到 `projectStore.gitStatusByProject[project.id]`
+ * 5. 结构性变化（create/remove/rename）时顺带刷新该项目的 FileTree 顶层
  *
- * 设计动机：
- * - 以前只有 active project 有 watcher/useGitStatus，切到别的项目或在
- *   非 active 项目里改动文件都不会更新状态
- * - 下沉到 project 粒度后，所有**展开的**项目都能实时更新，折叠后自动清理
- * - `FileWatcherManager` 按 path 去重，多个相同 project 重复 mount hook
- *   只会产生一个真实的 notify watcher；`useGitStatus` 的对象等价比较
- *   也避免无变化时触发下游 re-render
+ * 成本分析：
+ * - `git status` 对典型项目 < 100ms
+ * - `useGitStatus` 里做了结构等价比较，无变化时**零 setState 零 re-render**，
+ *   轮询只是一次后端 IPC + 一次本地比较，CPU 成本可以忽略
+ * - 活跃 project 数量通常是个位数，2 秒 * 几个 project = 可接受
+ *
+ * 设计取舍：
+ * - 首选依赖 file watcher 做"瞬时响应"（改动后几十毫秒内看到更新）
+ * - 轮询作为"最终一致性"兜底，无论 watcher 是否工作，2 秒内一定同步
  */
 import { useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -22,6 +27,9 @@ import { useFileWatcher } from "./useFileWatcher";
 import { useProjectStore } from "@/stores/projectStore";
 import type { Project, FileNode } from "@/types/project";
 import type { FileChangeEvent } from "@/services/watcher";
+
+/** Git 状态轮询间隔（毫秒） */
+const POLL_INTERVAL_MS = 2000;
 
 /** 后端 DirEntry 类型 */
 interface DirEntry {
@@ -78,4 +86,13 @@ export function useProjectGitSync(project: Project) {
   );
 
   useFileWatcher(project.path, handleFileChange);
+
+  // 轮询兜底：无论 file watcher 是否正常工作，每 POLL_INTERVAL_MS 主动 refresh 一次
+  // 配合 useGitStatus 的结构等价比较，无变化时零下游 re-render
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      refresh();
+    }, POLL_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
 }
