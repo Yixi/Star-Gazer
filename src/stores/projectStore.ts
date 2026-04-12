@@ -32,10 +32,10 @@ interface ProjectState {
   hoveredAgentId: string | null;
   /** agent 修改的文件映射 (agentId -> filePaths[]) */
   agentFileMap: Record<string, string[]>;
-  /** 每个项目的侧边栏视图模式 */
-  viewModes: Record<string, SidebarViewMode>;
-  /** 每个项目的 Changes/History 文件列表排版（tree/flat） */
-  flatModes: Record<string, boolean>;
+  /** 侧边栏视图模式（全局，所有项目共用） */
+  viewMode: SidebarViewMode;
+  /** Changes/History 文件列表排版（全局，tree/flat） */
+  flatMode: boolean;
   /** 每个项目的 History 选中 commit 列表（按时间倒序存储） */
   selectedCommits: Record<string, string[]>;
   /** 每个项目的 History 上下分隔比例 0..1（默认 0.55） */
@@ -70,10 +70,10 @@ interface ProjectState {
   /** 更新指定项目中目录节点的子节点（按需加载） */
   updateNodeChildren: (projectId: string, nodeId: string, children: FileNode[]) => void;
 
-  /** 设置侧边栏视图模式 */
-  setViewMode: (projectId: string, mode: SidebarViewMode) => void;
-  /** 设置 tree/flat 排版 */
-  setFlatMode: (projectId: string, flat: boolean) => void;
+  /** 设置侧边栏视图模式（全局） */
+  setViewMode: (mode: SidebarViewMode) => void;
+  /** 设置 tree/flat 排版（全局） */
+  setFlatMode: (flat: boolean) => void;
   /** 切换 commit 选中：single 单选、toggle Cmd+click、range Shift+click */
   toggleCommitSelection: (
     projectId: string,
@@ -102,8 +102,8 @@ export const useProjectStore = create<ProjectState>((set) => ({
   writingFiles: new Set(),
   hoveredAgentId: null,
   agentFileMap: {},
-  viewModes: {},
-  flatModes: {},
+  viewMode: "files",
+  flatMode: false,
   selectedCommits: {},
   historySplit: {},
   gitStatusByProject: {},
@@ -178,15 +178,9 @@ export const useProjectStore = create<ProjectState>((set) => ({
       };
     }),
 
-  setViewMode: (projectId, mode) =>
-    set((state) => ({
-      viewModes: { ...state.viewModes, [projectId]: mode },
-    })),
+  setViewMode: (mode) => set({ viewMode: mode }),
 
-  setFlatMode: (projectId, flat) =>
-    set((state) => ({
-      flatModes: { ...state.flatModes, [projectId]: flat },
-    })),
+  setFlatMode: (flat) => set({ flatMode: flat }),
 
   toggleCommitSelection: (projectId, hash, modifier, allHashes) =>
     set((state) => {

@@ -38,7 +38,7 @@ interface TreeNode {
 
 export function ChangesView({ project }: ChangesViewProps) {
   const gitStatus = useProjectStore((s) => s.gitStatusByProject[project.id]);
-  const flat = useProjectStore((s) => s.flatModes[project.id] ?? false);
+  const flat = useProjectStore((s) => s.flatMode);
   const openTab = usePanelStore((s) => s.openTab);
   const openPanel = usePanelStore((s) => s.openPanel);
 
@@ -83,6 +83,7 @@ export function ChangesView({ project }: ChangesViewProps) {
       type: "diff",
       filePath: fullPath,
       projectPath: project.path,
+      isPreview: true,
       isDirty: false,
       diffSource: { kind: "working" },
     });
@@ -140,7 +141,7 @@ export function ChangesView({ project }: ChangesViewProps) {
   );
 }
 
-/** 拍平列表 */
+/** 拍平列表 — 只显示文件名，完整相对路径走 hover tooltip */
 function FlatList({
   changes,
   onClick,
@@ -153,19 +154,17 @@ function FlatList({
   return (
     <>
       {changes.map((c) => {
-        const parts = c.path.split("/");
-        const name = parts.pop() || c.path;
-        const prefix = parts.length > 0 ? parts.join("/") + "/" : undefined;
+        const name = c.path.split("/").pop() || c.path;
         return (
-          <ChangedFileRow
-            key={c.path}
-            fullPath={projectPath + "/" + c.path}
-            name={name}
-            pathPrefix={prefix}
-            status={c.status}
-            diffStat={{ additions: c.additions, deletions: c.deletions }}
-            onClick={() => onClick(c.path)}
-          />
+          <div key={c.path} title={c.path}>
+            <ChangedFileRow
+              fullPath={projectPath + "/" + c.path}
+              name={name}
+              status={c.status}
+              diffStat={{ additions: c.additions, deletions: c.deletions }}
+              onClick={() => onClick(c.path)}
+            />
+          </div>
         );
       })}
     </>

@@ -1,22 +1,18 @@
 /**
- * 项目内视图切换条 — 24px 高度
+ * 全局视图切换条 — 24px 高度
  *
  * 左侧：Files / Changes / History 三个图标按钮（互斥）
  * 右侧：tree/flat 排版切换（仅 Changes/History 模式显示）
  *
- * 交互约束：在 240px 侧边栏里，整个切换条一行显示完
+ * 状态全局共享 — 所有项目同时切换到相同模式，避免逐项目点击。
+ * 渲染位置：Sidebar 顶部（PROJECTS 标题栏下方），每次只有一份
  */
 import { Files, GitCompare, History, LayoutList, FolderTree } from "lucide-react";
-import { useProjectStore, type SidebarViewMode } from "@/stores/projectStore";
-import type { Project } from "@/types/project";
+import { useProjectStore } from "@/stores/projectStore";
 
-interface ScopeSwitcherProps {
-  project: Project;
-}
-
-export function ScopeSwitcher({ project }: ScopeSwitcherProps) {
-  const mode = useProjectStore((s) => s.viewModes[project.id] ?? "files");
-  const flat = useProjectStore((s) => s.flatModes[project.id] ?? false);
+export function ScopeSwitcher() {
+  const mode = useProjectStore((s) => s.viewMode);
+  const flat = useProjectStore((s) => s.flatMode);
   const setViewMode = useProjectStore((s) => s.setViewMode);
   const setFlatMode = useProjectStore((s) => s.setFlatMode);
 
@@ -26,9 +22,10 @@ export function ScopeSwitcher({ project }: ScopeSwitcherProps) {
     <div
       className="flex items-center justify-between flex-shrink-0 select-none"
       style={{
-        height: 24,
+        height: 28,
         padding: "0 10px 0 14px",
         borderBottom: "1px solid #161820",
+        background: "#0b0c11",
         gap: 4,
       }}
     >
@@ -37,19 +34,19 @@ export function ScopeSwitcher({ project }: ScopeSwitcherProps) {
         <ScopeButton
           icon={<Files className="w-3 h-3" />}
           active={mode === "files"}
-          onClick={() => setViewMode(project.id, "files")}
+          onClick={() => setViewMode("files")}
           title="Files — 完整文件树"
         />
         <ScopeButton
           icon={<GitCompare className="w-3 h-3" />}
           active={mode === "changes"}
-          onClick={() => setViewMode(project.id, "changes")}
+          onClick={() => setViewMode("changes")}
           title="Changes — 仅显示未提交的变更"
         />
         <ScopeButton
           icon={<History className="w-3 h-3" />}
           active={mode === "history"}
-          onClick={() => setViewMode(project.id, "history")}
+          onClick={() => setViewMode("history")}
           title="History — 浏览 commit 历史"
         />
       </div>
@@ -60,14 +57,14 @@ export function ScopeSwitcher({ project }: ScopeSwitcherProps) {
           <ScopeButton
             icon={<FolderTree className="w-3 h-3" />}
             active={!flat}
-            onClick={() => setFlatMode(project.id, false)}
+            onClick={() => setFlatMode(false)}
             title="Tree — 按目录树展示"
             small
           />
           <ScopeButton
             icon={<LayoutList className="w-3 h-3" />}
             active={flat}
-            onClick={() => setFlatMode(project.id, true)}
+            onClick={() => setFlatMode(true)}
             title="Flat — 拍平列表"
             small
           />
@@ -90,8 +87,6 @@ function ScopeButton({
   title: string;
   small?: boolean;
 }) {
-  const dispatchMode = (mode: SidebarViewMode) => () => mode;
-  void dispatchMode; // keep types happy
   return (
     <button
       onClick={onClick}

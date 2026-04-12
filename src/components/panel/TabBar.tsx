@@ -14,7 +14,7 @@ import { usePanelStore } from "@/stores/panelStore";
 import type { PanelTab } from "@/types/panel";
 
 export function TabBar() {
-  const { tabs, activeTabId, setActiveTab, closeTab, closeOtherTabs, closeAllTabs, closePanel, reorderTabs } =
+  const { tabs, activeTabId, setActiveTab, closeTab, closeOtherTabs, closeAllTabs, closePanel, reorderTabs, pinTab } =
     usePanelStore();
 
   const [contextMenu, setContextMenu] = useState<{
@@ -106,6 +106,7 @@ export function TabBar() {
             isActive={activeTabId === tab.id}
             isDragging={dragIndex === index}
             onClick={() => setActiveTab(tab.id)}
+            onDoubleClick={() => pinTab(tab.id)}
             onClose={() => closeTab(tab.id)}
             onContextMenu={(e) => handleContextMenu(e, tab.id)}
             onMouseDown={(e) => handleMouseDown(e, tab.id)}
@@ -203,6 +204,7 @@ function TabItem({
   isActive,
   isDragging,
   onClick,
+  onDoubleClick,
   onClose,
   onContextMenu,
   onMouseDown,
@@ -214,6 +216,7 @@ function TabItem({
   isActive: boolean;
   isDragging: boolean;
   onClick: () => void;
+  onDoubleClick: () => void;
   onClose: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onMouseDown: (e: React.MouseEvent) => void;
@@ -221,6 +224,7 @@ function TabItem({
   onDragOver: (e: React.DragEvent) => void;
   onDragEnd: () => void;
 }) {
+  const isPreview = tab.isPreview === true;
   return (
     <div
       className={`group flex items-center gap-1.5 px-3 text-xs cursor-pointer select-none transition-colors relative flex-shrink-0 ${
@@ -233,12 +237,14 @@ function TabItem({
         opacity: isDragging ? 0.5 : 1,
       }}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
       onMouseDown={onMouseDown}
       draggable
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDragEnd={onDragEnd}
+      title={isPreview ? "双击固定此 tab" : undefined}
     >
       {/* 激活时顶部 2px 蓝色边条 */}
       {isActive && (
@@ -260,8 +266,13 @@ function TabItem({
         <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: "#ff8c42" }} />
       )}
 
-      {/* 文件名 */}
-      <span className="truncate max-w-[120px]">{tab.title}</span>
+      {/* 文件名 — preview 状态用斜体提示"临时打开" */}
+      <span
+        className="truncate max-w-[120px]"
+        style={{ fontStyle: isPreview ? "italic" : "normal" }}
+      >
+        {tab.title}
+      </span>
 
       {/* 模式徽章 */}
       <span

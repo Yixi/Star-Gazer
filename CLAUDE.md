@@ -21,12 +21,22 @@ Mac 原生轻量开发工作台，专为多 AI agent 并行工作流设计。详
 
 ## 架构约束
 
-### 布局：三栏横向
+### 布局：Sidebar + Canvas + 右侧浮动面板
 ```
-Sidebar(240px) | SlidePanel(540px,按需) | Canvas(flex)
+Sidebar(240px) | Canvas(flex)  ┊ SlidePanel(800px,浮层)
 底部 StatusBar(24px)
 ```
-面板是**推动式布局**（推画布到右侧），不是覆盖式。画布只放 Agent 终端卡片，文件/diff 在侧滑面板里。
+**SlidePanel 是浮动覆盖层**，绝对定位悬浮在 Canvas 之上，不占用 flex 空间。从右侧
+`translateX` 滑入（240ms GPU 加速），默认 800px 宽、可拖拽调整到 320-1200px。左缘 1px
+边线 + 向左投射的阴影体现浮层感；左缘有 4px 拖拽握把（向左拖变宽）。画布只放 Agent
+终端卡片，文件/diff/commit 视图在浮动面板里。
+
+### Panel Tab 语义（VSCode 风格 preview）
+- **Preview tab**：单击文件打开的临时 tab，文件名用**斜体**显示。全局同时只有一个
+  preview tab；再开新 preview 会替换同一 slot，避免快速浏览时 tab 无限增长。
+- **Pin 触发**：① 双击 tab 标题 ② 双击文件树条目 ③ 开始编辑（markDirty 自动 pin）
+- 调用 `openTab` 时显式传 `isPreview: true/false` 指定模式；已 pinned 的 tab 不会
+  退回 preview。
 
 ### 前端分层
 ```

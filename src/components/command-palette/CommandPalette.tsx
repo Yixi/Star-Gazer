@@ -359,13 +359,15 @@ export function CommandPalette() {
                   keywords={[file.path, file.name]}
                   onSelect={() => {
                     // 文件搜索只扫 activeProject 的文件树，
-                    // 所以这里 projectPath 直接取 activeProject.path 是正确的
+                    // 所以这里 projectPath 直接取 activeProject.path 是正确的。
+                    // 命令面板的选择匹配 VSCode 行为：打开为 preview tab
                     openTab({
                       id: file.path,
                       title: file.name,
                       type: "file",
                       filePath: file.path,
                       projectPath: activeProject?.path,
+                      isPreview: true,
                       isDirty: false,
                     });
                     handleClose();

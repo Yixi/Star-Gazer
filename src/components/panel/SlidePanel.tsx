@@ -1,9 +1,10 @@
 /**
- * 侧滑文件审查面板 - 从 Sidebar 右侧推入（非覆盖）
+ * 侧滑文件审查面板 — 右侧浮动覆盖层
  *
  * 规格：
- * - 默认 540px 宽，可拖拽调整（320-900px）
- * - 打开时推画布到右侧，150ms 平滑动画
+ * - 默认 800px 宽，可拖拽调整（320-1200px）
+ * - 绝对定位浮层，从右侧 slide-in，GPU 加速的 translateX 动画（240ms）
+ * - 左缘拖拽握把：向左拖变宽、向右拖变窄
  * - 关闭方式：× 按钮、Esc、Cmd+\、toggle 点击
  */
 import { useEffect, useRef, useCallback } from "react";
@@ -15,17 +16,18 @@ import { DiffView } from "./DiffView";
 import { MarkdownPreview } from "./MarkdownPreview";
 import { CommitFilesView } from "./CommitFilesView";
 
+const DEFAULT_WIDTH = 800;
+
 export function SlidePanel() {
   const { isOpen, width, activeTabId, tabs, setWidth, closePanel } =
     usePanelStore();
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
-  const resizeRef = useRef<HTMLDivElement>(null);
   const isResizing = useRef(false);
 
   const togglePanel = usePanelStore((s) => s.togglePanel);
 
-  // 快捷键：Esc 关闭面板, Cmd+\ 切换面板开关
+  // 快捷键：Esc 关闭面板、Cmd+\ 切换面板开关
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isOpen) {
@@ -41,7 +43,7 @@ export function SlidePanel() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, closePanel, togglePanel]);
 
-  // 分隔线拖拽调整宽度
+  // 左缘拖拽调整宽度 — 面板右缘固定，向左拖动 → 变宽
   const handleResizeStart = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
@@ -52,7 +54,8 @@ export function SlidePanel() {
       const handleMove = (me: MouseEvent) => {
         if (!isResizing.current) return;
         const delta = me.clientX - startX;
-        setWidth(startWidth + delta);
+        // 注意：向左拖（delta 为负） → 宽度增加
+        setWidth(startWidth - delta);
       };
 
       const handleUp = () => {
@@ -68,28 +71,59 @@ export function SlidePanel() {
       document.addEventListener("mousemove", handleMove);
       document.addEventListener("mouseup", handleUp);
     },
-    [width, setWidth]
+    [width, setWidth],
   );
 
   // 双击恢复默认宽度
   const handleDoubleClick = useCallback(() => {
-    setWidth(540);
+    setWidth(DEFAULT_WIDTH);
   }, [setWidth]);
 
   return (
     <div
-      className="flex-shrink-0 h-full flex overflow-hidden"
+      className="absolute top-0 right-0 bottom-0 flex"
       style={{
-        width: isOpen ? width : 0,
-        transition: "width 200ms ease-out",
+        width,
+        // 用 transform 做 GPU 加速 slide-in/out；关闭时整块面板滑出屏幕外
+        transform: isOpen ? "translateX(0)" : "translateX(100%)",
+        transition: "transform 240ms cubic-bezier(0.4, 0, 0.2, 1)",
+        zIndex: 20,
+        // 关闭时不阻挡 Canvas 的点击（off-screen 时再次保险）
+        pointerEvents: isOpen ? "auto" : "none",
       }}
     >
+      {/* 左缘拖拽握把 — 4px 命中区，视觉 1px 分隔 + hover 高亮 */}
+      <div
+        className="h-full cursor-col-resize group flex-shrink-0 relative"
+        style={{ width: 4 }}
+        onMouseDown={handleResizeStart}
+        onDoubleClick={handleDoubleClick}
+      >
+        {/* 静态 1px 分隔线 */}
+        <div
+          className="absolute top-0 bottom-0 left-0"
+          style={{ width: 1, backgroundColor: "#1a1c23" }}
+        />
+        {/* 悬停高亮 */}
+        <div
+          className="absolute top-0 bottom-0 left-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ width: 2, backgroundColor: "#4a9eff" }}
+        />
+        {/* 中间握把 */}
+        <div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ backgroundColor: "#4a9eff" }}
+        />
+      </div>
+
       {/* 面板内容 */}
       <div
         className="flex flex-col h-full flex-1 min-w-0"
         style={{
           backgroundColor: "#0f1116",
-          borderRight: "1px solid #1a1c23",
+          // 左缘 1px 边线 + 向左投射的柔和阴影，让浮层从 Canvas 上"浮起"
+          borderLeft: "1px solid #1a1c23",
+          boxShadow: "-12px 0 32px rgba(0, 0, 0, 0.45)",
         }}
       >
         {/* Tab 栏 */}
@@ -119,26 +153,6 @@ export function SlidePanel() {
             </div>
           )}
         </div>
-      </div>
-
-      {/* 分隔线 - 可拖拽（面板右侧，与 Canvas 之间） */}
-      <div
-        ref={resizeRef}
-        className="w-1 h-full cursor-col-resize group flex-shrink-0 relative"
-        style={{ backgroundColor: "#1a1c23" }}
-        onMouseDown={handleResizeStart}
-        onDoubleClick={handleDoubleClick}
-      >
-        {/* 悬停高亮 */}
-        <div
-          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ backgroundColor: "#4a9eff" }}
-        />
-        {/* 中间握把 */}
-        <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ backgroundColor: "#4a9eff" }}
-        />
       </div>
     </div>
   );

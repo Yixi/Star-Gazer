@@ -12,7 +12,7 @@
  * - 实时写入指示（脉动蓝点）
  * - Hover 关联高亮
  */
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback, useMemo, useState } from "react";
 import { Tree, NodeRendererProps } from "react-arborist";
 import { useProjectStore } from "@/stores/projectStore";
 import { usePanelStore } from "@/stores/panelStore";
@@ -36,10 +36,61 @@ const ROW_HEIGHT = 28;
 export function FileTree({ project }: FileTreeProps) {
   const fileTree = useProjectStore((s) => s.projectFileTrees[project.id] ?? EMPTY_TREE);
   const isLoading = useProjectStore((s) => s.isLoading);
+  /**
+   * 订阅该项目自己的 git 状态 — 关键：不能用全局 fileDiffStats
+   * （那个在多项目切换时会被 active project 覆盖导致非 active 项目的 FileTree
+   * 完全丢失 +X -Y 徽章）
+   */
+  const projectGitStatus = useProjectStore((s) => s.gitStatusByProject[project.id]);
+  /** 当前激活的 tab — 用于自动展开并高亮对应文件 */
+  const activeTabId = usePanelStore((s) => s.activeTabId);
+
+  /**
+   * 从 projectGitStatus 派生 "绝对路径 → diff 统计 / 状态" 的两个本地 map。
+   * 这样 FileTreeNode 就不依赖全局 fileDiffStats，每个项目都有自己的数据。
+   */
+  const { diffByPath, statusByPath } = useMemo(() => {
+    const diff: Record<string, { additions: number; deletions: number }> = {};
+    const status: Record<string, string> = {};
+    if (!projectGitStatus) return { diffByPath: diff, statusByPath: status };
+
+    const addEntry = (
+      relPath: string,
+      additions: number,
+      deletions: number,
+      statusStr: string,
+    ) => {
+      const absPath = `${project.path}/${relPath}`;
+      if (diff[absPath]) {
+        diff[absPath] = {
+          additions: diff[absPath].additions + additions,
+          deletions: diff[absPath].deletions + deletions,
+        };
+      } else if (additions > 0 || deletions > 0) {
+        diff[absPath] = { additions, deletions };
+      }
+      // status 优先保留 unstaged（更接近用户正在编辑的状态）
+      if (!status[absPath]) status[absPath] = statusStr;
+    };
+
+    for (const c of projectGitStatus.unstaged) {
+      addEntry(c.path, c.additions, c.deletions, c.status);
+    }
+    for (const c of projectGitStatus.staged) {
+      addEntry(c.path, c.additions, c.deletions, c.status);
+    }
+    for (const relPath of projectGitStatus.untracked) {
+      const absPath = `${project.path}/${relPath}`;
+      if (!status[absPath]) status[absPath] = "untracked";
+    }
+    return { diffByPath: diff, statusByPath: status };
+  }, [projectGitStatus, project.path]);
   /** 已加载过子节点的目录 ID 集合，避免重复请求 */
   const loadedDirsRef = useRef<Set<string>>(new Set());
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const treeRef = useRef<any>(null);
+  /** 记录上一次 auto-reveal 的 key，防止 fileTree 变化时重复 reveal 打扰用户滚动 */
+  const lastRevealedRef = useRef<string | null>(null);
   const [treeHeight, setTreeHeight] = useState(0);
   /** gitignore 忽略的相对路径集合 */
   const [ignoredPaths, setIgnoredPaths] = useState<Set<string>>(new Set());
@@ -93,6 +144,57 @@ export function FileTree({ project }: FileTreeProps) {
       }
     })();
   }, [fileTree, project.path, recalcHeight]);
+
+  /**
+   * Auto-reveal：当前激活 tab 变化时，自动展开祖先目录并滚动到对应文件
+   *
+   * - 仅对属于当前项目的文件生效（prefix 匹配 project.path）
+   * - 懒加载整条祖先链：逐级 list_dir，确保目标文件在 react-arborist 数据里存在
+   * - 加载完成后用 tree API 的 openParents / scrollTo / select 同步视图
+   * - lastRevealedRef 防止 fileTree 更新（比如 watcher 刷新）触发重复 reveal
+   */
+  useEffect(() => {
+    if (!activeTabId) return;
+    if (!activeTabId.startsWith(project.path)) return;
+    const relativePath = activeTabId
+      .slice(project.path.length)
+      .replace(/^\//, "");
+    if (!relativePath) return;
+
+    const revealKey = `${project.id}:${activeTabId}`;
+    if (lastRevealedRef.current === revealKey) return;
+
+    let cancelled = false;
+
+    (async () => {
+      const ok = await ensureAncestorsLoaded(
+        project.id,
+        project.path,
+        relativePath,
+      );
+      if (cancelled || !ok) return;
+
+      // 等一帧让 fileTree 的新数据流入 react-arborist
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
+      if (cancelled) return;
+
+      const tree = treeRef.current;
+      if (!tree) return;
+      try {
+        tree.openParents?.(relativePath);
+        tree.scrollTo?.(relativePath, "center");
+        tree.select?.(relativePath, { focus: false });
+        recalcHeight();
+        lastRevealedRef.current = revealKey;
+      } catch (err) {
+        console.warn("auto-reveal failed:", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTabId, project.id, project.path, fileTree, recalcHeight]);
 
   /** 展开/折叠回调 — 展开时按需加载子目录内容 */
   const handleToggle = useCallback(
@@ -169,7 +271,15 @@ export function FileTree({ project }: FileTreeProps) {
         disableDrop
         disableEdit
       >
-        {(props) => <FileTreeNode {...props} ignoredPaths={ignoredPaths} projectPath={project.path} />}
+        {(props) => (
+          <FileTreeNode
+            {...props}
+            ignoredPaths={ignoredPaths}
+            projectPath={project.path}
+            diffByPath={diffByPath}
+            statusByPath={statusByPath}
+          />
+        )}
       </Tree>
     </div>
   );
@@ -222,6 +332,47 @@ function dirEntriesToFileNodes(entries: DirEntry[], basePath: string): FileNode[
       children: entry.isDir ? [] : undefined,
     };
   });
+}
+
+/**
+ * 确保目标文件的整条祖先链在 projectStore 的 fileTree 中已展开加载。
+ *
+ * 按路径段逐级下钻：
+ * - 对每一段父目录，检查下一段是否已在 children 里
+ * - 如果不在，调用后端 list_dir 并 updateNodeChildren 写回 store
+ * - 任一环节找不到或不是目录 → 返回 false（无法 reveal）
+ */
+async function ensureAncestorsLoaded(
+  projectId: string,
+  projectPath: string,
+  relativePath: string,
+): Promise<boolean> {
+  const segments = relativePath.split("/");
+  if (segments.length <= 1) return true; // 文件在项目根目录，无需展开
+
+  for (let i = 0; i < segments.length - 1; i++) {
+    const currentRelPath = segments.slice(0, i + 1).join("/");
+    const nextRelPath = segments.slice(0, i + 2).join("/");
+
+    const state = useProjectStore.getState();
+    const tree = state.projectFileTrees[projectId] ?? [];
+    const node = findNodeById(tree, currentRelPath);
+    if (!node || !node.isDir) return false;
+
+    const hasNext = node.children?.some((c) => c.id === nextRelPath);
+    if (hasNext) continue;
+
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const entries = await invoke<DirEntry[]>("list_dir", { path: node.path });
+      const childNodes = dirEntriesToFileNodes(entries, projectPath);
+      state.updateNodeChildren(projectId, node.id, childNodes);
+    } catch (err) {
+      console.warn("auto-reveal: failed to list_dir", node.path, err);
+      return false;
+    }
+  }
+  return true;
 }
 
 /** 检查文件路径是否在 gitignore 中（精确匹配 + 祖先目录匹配） */
@@ -280,14 +431,25 @@ const AGENT_COLOR_HEX: Record<string, string> = {
  * - active-in-panel: 蓝色左边条 + 淡蓝背景
  * - Agent hover: 背景渐变 + 颜色竖条 + 文件名加粗
  */
-function FileTreeNode({ node, style, ignoredPaths, projectPath }: NodeRendererProps<FileNode> & { ignoredPaths: Set<string>; projectPath: string }) {
+function FileTreeNode({
+  node,
+  style,
+  ignoredPaths,
+  projectPath,
+  diffByPath,
+  statusByPath,
+}: NodeRendererProps<FileNode> & {
+  ignoredPaths: Set<string>;
+  projectPath: string;
+  diffByPath: Record<string, { additions: number; deletions: number }>;
+  statusByPath: Record<string, string>;
+}) {
   const data = node.data;
   const openTab = usePanelStore((s) => s.openTab);
   const activeTabId = usePanelStore((s) => s.activeTabId);
   const writingFiles = useProjectStore((s) => s.writingFiles);
   const hoveredAgentId = useProjectStore((s) => s.hoveredAgentId);
   const agentFileMap = useProjectStore((s) => s.agentFileMap);
-  const fileDiffStats = useProjectStore((s) => s.fileDiffStats);
 
   const isWriting = writingFiles.has(data.path);
 
@@ -297,9 +459,10 @@ function FileTreeNode({ node, style, ignoredPaths, projectPath }: NodeRendererPr
     : data.name;
   const isGitIgnored = checkIgnored(relativePath, ignoredPaths);
 
-  // 从 fileDiffStats 推导 gitStatus（如果文件有 diff 则认为是 modified）
-  const hasRealDiff = !!fileDiffStats[data.path];
-  const effectiveGitStatus = data.gitStatus || (hasRealDiff ? "modified" : undefined);
+  // 从本项目的 git 状态派生 diff / status — 不再依赖全局 fileDiffStats
+  const localDiffStat = diffByPath[data.path];
+  const localStatus = statusByPath[data.path];
+  const effectiveGitStatus = data.gitStatus || localStatus;
 
   /* ====== Hover 关联高亮 ====== */
   const isHighlightedByAgent =
@@ -312,27 +475,43 @@ function FileTreeNode({ node, style, ignoredPaths, projectPath }: NodeRendererPr
   /* ====== Active-in-panel ====== */
   const isActiveInPanel = !data.isDir && activeTabId === data.path;
 
+  /** 打开文件为 tab — preview=true 时是"临时 tab"（VSCode 风格） */
+  const openFileTab = (preview: boolean) => {
+    const hasChanges =
+      effectiveGitStatus && effectiveGitStatus !== "unchanged" && effectiveGitStatus !== "ignored";
+    const ext = data.name.split(".").pop()?.toLowerCase();
+    const isPreviewable =
+      ext === "md" ||
+      ext === "mdx" ||
+      ["png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "bmp"].includes(ext ?? "");
+    openTab({
+      id: data.path,
+      title: data.name,
+      type: isPreviewable ? "markdown" : hasChanges ? "diff" : "file",
+      filePath: data.path,
+      projectPath,
+      isPreview: preview,
+      isDirty: false,
+    });
+    usePanelStore.getState().openPanel();
+  };
+
   const handleClick = () => {
     if (node.isInternal) {
       node.toggle();
     } else {
-      const hasChanges =
-        effectiveGitStatus && effectiveGitStatus !== "unchanged" && effectiveGitStatus !== "ignored";
-      const ext = data.name.split(".").pop()?.toLowerCase();
-      const isPreviewable = ext === "md" || ext === "mdx" || ["png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "bmp"].includes(ext ?? "");
-      openTab({
-        id: data.path,
-        title: data.name,
-        type: isPreviewable ? "markdown" : hasChanges ? "diff" : "file",
-        filePath: data.path,
-        projectPath,
-        isDirty: false,
-      });
-      usePanelStore.getState().openPanel();
+      openFileTab(true);
     }
   };
 
-  const diffStat = data.diffStat || fileDiffStats[data.path];
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    if (node.isInternal) return;
+    // 阻止单击事件的默认效果重复触发；双击打开为固定 tab
+    e.stopPropagation();
+    openFileTab(false);
+  };
+
+  const diffStat = data.diffStat || localDiffStat;
   const isDeleted = effectiveGitStatus === "deleted";
   const isAdded = effectiveGitStatus === "added";
   const isUntracked = effectiveGitStatus === "untracked";
@@ -362,6 +541,7 @@ function FileTreeNode({ node, style, ignoredPaths, projectPath }: NodeRendererPr
       }}
       className="flex items-center cursor-pointer hover:bg-white/[0.04]"
       onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
     >
       {/* 左侧 2px 颜色竖条 */}
       <div

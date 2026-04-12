@@ -189,8 +189,11 @@ export function Sidebar() {
                 点击 + 添加项目
               </div>
             ) : (
-              <div className="flex-1 overflow-y-auto">
-                {projects.map((project) => {
+              <>
+                {/* 全局视图切换条 — 所有项目共享的 Files/Changes/History 切换 */}
+                <ScopeSwitcher />
+                <div className="flex-1 overflow-y-auto">
+                  {projects.map((project) => {
                   const isActive = activeProject?.id === project.id;
                   const isExpanded = !!expandedProjectIds[project.id];
                   return (
@@ -203,8 +206,9 @@ export function Sidebar() {
                       {isExpanded && <ProjectBody project={project} />}
                     </div>
                   );
-                })}
-              </div>
+                  })}
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -213,12 +217,11 @@ export function Sidebar() {
   );
 }
 
-/** 展开后的项目内容 — ScopeSwitcher + 按 viewMode 切视图 */
+/** 展开后的项目内容 — 按全局 viewMode 切视图 */
 function ProjectBody({ project }: { project: import("@/types/project").Project }) {
-  const mode = useProjectStore((s) => s.viewModes[project.id] ?? "files");
+  const mode = useProjectStore((s) => s.viewMode);
   return (
     <>
-      <ScopeSwitcher project={project} />
       {mode === "files" && <FileTree project={project} />}
       {mode === "changes" && <ChangesView project={project} />}
       {mode === "history" && <HistoryView project={project} />}

@@ -23,6 +23,8 @@ interface PanelState {
   setWidth: (width: number) => void;
   /** 打开文件 Tab */
   openTab: (tab: PanelTab) => void;
+  /** 把 preview tab 升级为 permanent */
+  pinTab: (id: string) => void;
   /** 关闭 Tab */
   closeTab: (id: string) => void;
   /** 关闭其他 Tab */
@@ -31,7 +33,7 @@ interface PanelState {
   closeAllTabs: () => void;
   /** 设置活动 Tab */
   setActiveTab: (id: string) => void;
-  /** 标记 Tab 为已修改 */
+  /** 标记 Tab 为已修改（dirty 时自动 pin，脱离 preview 状态） */
   markDirty: (id: string, dirty: boolean) => void;
   /** 设置 Tab 类型 */
   setTabType: (id: string, type: PanelTab["type"]) => void;
@@ -43,7 +45,7 @@ interface PanelState {
 
 export const usePanelStore = create<PanelState>((set) => ({
   isOpen: false,
-  width: 540,
+  width: 800,
   activeTabId: null,
   tabs: [],
   diffStats: {},
@@ -54,24 +56,51 @@ export const usePanelStore = create<PanelState>((set) => ({
 
   closePanel: () => set({ isOpen: false }),
 
-  setWidth: (width) => set({ width: Math.max(320, Math.min(900, width)) }),
+  setWidth: (width) => set({ width: Math.max(320, Math.min(1200, width)) }),
 
   openTab: (tab) =>
     set((state) => {
       const existingIdx = state.tabs.findIndex((t) => t.id === tab.id);
+
+      // Case A: Tab 已存在 → 合并更新
+      // - 保留 isDirty 状态
+      // - 已 pin 的不会退回 preview；都是 preview 时保持 preview
       if (existingIdx >= 0) {
-        // 已存在则合并更新（保留 isDirty 状态，其他字段用新值）
         const newTabs = [...state.tabs];
         const prev = newTabs[existingIdx];
-        newTabs[existingIdx] = { ...tab, isDirty: prev.isDirty };
+        newTabs[existingIdx] = {
+          ...tab,
+          isDirty: prev.isDirty,
+          isPreview: prev.isPreview === false ? false : tab.isPreview ?? false,
+        };
         return { tabs: newTabs, activeTabId: tab.id, isOpen: true };
       }
+
+      // Case B: 新 tab 是 preview 且已有一个 preview → 替换同一 slot
+      // 这是 VSCode 风格的关键：快速浏览多个文件时 preview tab 不会无限增长
+      if (tab.isPreview) {
+        const previewIdx = state.tabs.findIndex((t) => t.isPreview);
+        if (previewIdx >= 0) {
+          const newTabs = [...state.tabs];
+          newTabs[previewIdx] = { ...tab, isPreview: true };
+          return { tabs: newTabs, activeTabId: tab.id, isOpen: true };
+        }
+      }
+
+      // Case C: 新 tab，追加到末尾
       return {
         tabs: [...state.tabs, tab],
         activeTabId: tab.id,
         isOpen: true,
       };
     }),
+
+  pinTab: (id) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === id ? { ...t, isPreview: false } : t,
+      ),
+    })),
 
   closeTab: (id) =>
     set((state) => {
@@ -102,7 +131,12 @@ export const usePanelStore = create<PanelState>((set) => ({
 
   markDirty: (id, dirty) =>
     set((state) => ({
-      tabs: state.tabs.map((t) => (t.id === id ? { ...t, isDirty: dirty } : t)),
+      tabs: state.tabs.map((t) =>
+        t.id === id
+          ? // 编辑时自动 pin：脱离 preview 状态
+            { ...t, isDirty: dirty, isPreview: dirty ? false : t.isPreview }
+          : t,
+      ),
     })),
 
   setTabType: (id, type) =>

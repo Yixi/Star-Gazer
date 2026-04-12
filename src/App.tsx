@@ -1,16 +1,17 @@
 /**
  * Star Gazer - 主布局
  *
- * 布局结构（flex 横向）：
+ * 布局结构（flex 横向 + 右侧浮动面板）：
  * ┌──────────────────────────────────────────┐
- * │ Sidebar │ Panel  │     Canvas (画布)     │
- * │ (240px) │(540px) │     (flex-1)          │
- * │         │ 推入式 │                       │
- * ├─────────┴────────┴─────────────────  ──────┤
- * │             StatusBar (24px)              │
+ * │ Sidebar │     Canvas (画布)      ╎ Panel │
+ * │ (240px) │     (flex-1)           ╎(800px)│
+ * │         │                        ╎浮层   │
+ * ├─────────┴────────────────────────┴───────┤
+ * │             StatusBar (24px)             │
  * └──────────────────────────────────────────┘
  *
- * 面板打开时推画布到右侧（非覆盖），150ms 动画
+ * 面板为"浮动覆盖层" — 从右侧滑入，悬浮在 Canvas 之上，不抢 flex 空间。
+ * 动画用 transform: translateX GPU 加速，240ms cubic-bezier。
  */
 import { useEffect } from "react";
 import { TitleBar } from "@/components/titlebar/TitleBar";
@@ -58,21 +59,21 @@ function App() {
       {/* 应用标题栏 */}
       <TitleBar />
 
-      {/* 主内容区域 - 横向 flex 布局 */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* 主内容区域 - 横向 flex + 右侧浮动面板容器（relative 作为绝对定位的锚） */}
+      <div className="flex flex-1 overflow-hidden relative">
         {/* 左侧边栏 */}
         <ErrorBoundary name="Sidebar">
           <Sidebar />
         </ErrorBoundary>
 
-        {/* 侧滑文件审查面板 - Sidebar 右侧推入式布局 */}
-        <ErrorBoundary name="SlidePanel">
-          <SlidePanel />
-        </ErrorBoundary>
-
-        {/* 画布主区域 - flex-1 自适应 */}
+        {/* 画布主区域 - flex-1 自适应（浮动面板不占用 flex 空间） */}
         <ErrorBoundary name="Canvas">
           <Canvas />
+        </ErrorBoundary>
+
+        {/* 侧滑文件审查面板 - 绝对定位浮层，从右侧滑入覆盖在 Canvas 上 */}
+        <ErrorBoundary name="SlidePanel">
+          <SlidePanel />
         </ErrorBoundary>
       </div>
 

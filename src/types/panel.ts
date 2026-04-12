@@ -18,6 +18,15 @@ export interface PanelTab {
   /** 文件路径（range 全量 diff 时可能为空字符串） */
   filePath: string;
   /**
+   * 是否为 preview tab — VSCode 风格的"临时 tab"
+   *
+   * - 单击文件 → 打开为 preview tab（文件名斜体显示）
+   * - 同一时刻全局只有一个 preview tab；再打开新 preview 会"替换" 旧的 slot
+   * - 双击 tab 标题、双击文件树条目、开始编辑 → 升级为 permanent
+   * - undefined 或 false = 已固定，不会被替换
+   */
+  isPreview?: boolean;
+  /**
    * Tab 所属项目的绝对路径 — 用作 git 命令的 repoPath
    *
    * 不要依赖全局 activeProject.path 来跑 git 命令：用户可能同时打开多个项目，
