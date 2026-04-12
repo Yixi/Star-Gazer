@@ -12,15 +12,14 @@ import { useEffect, useCallback, useRef, useState } from "react";
 import { FolderOpen } from "lucide-react";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useProjectStore } from "@/stores/projectStore";
-import { useFileWatcher } from "@/hooks/useFileWatcher";
-import { useGitStatus } from "@/hooks/useGitStatus";
+import { useProjectGitSync } from "@/hooks/useProjectGitSync";
 import { FileTree } from "./FileTree";
 import { ProjectItem } from "./ProjectItem";
 import { AddProjectButton } from "./AddProjectButton";
 import { ScopeSwitcher } from "./ScopeSwitcher";
 import { ChangesView } from "./ChangesView";
 import { HistoryView } from "./HistoryView";
-import type { FileChangeEvent } from "@/services/watcher";
+import type { Project } from "@/types/project";
 
 /** Sidebar 宽度可拖拽范围 */
 const MIN_SIDEBAR_WIDTH = 180;
@@ -31,6 +30,33 @@ export function Sidebar() {
     useSettingsStore();
   const setSidebarWidth = useSettingsStore((s) => s.setSidebarWidth);
   const { projects, activeProject, expandedProjectIds } = useProjectStore();
+
+  // 把 active project 的 git 状态派生出全局 UI 用的 gitBranch / fileDiffStats
+  // （StatusBar 顶栏、PanelToolbar 等消费这两个派生值；
+  //  真正的每项目 sync 由 ProjectBody 里的 useProjectGitSync 承担）
+  const activeProjectGitStatus = useProjectStore((s) =>
+    activeProject ? s.gitStatusByProject[activeProject.id] : undefined,
+  );
+  useEffect(() => {
+    if (!activeProject || !activeProjectGitStatus) {
+      useProjectStore.getState().setGitBranch("");
+      useProjectStore.getState().setFileDiffStats({});
+      return;
+    }
+    useProjectStore.getState().setGitBranch(activeProjectGitStatus.branch);
+    const diffStats: Record<string, { additions: number; deletions: number }> = {};
+    for (const change of [
+      ...activeProjectGitStatus.staged,
+      ...activeProjectGitStatus.unstaged,
+    ]) {
+      const fullPath = activeProject.path + "/" + change.path;
+      diffStats[fullPath] = {
+        additions: change.additions,
+        deletions: change.deletions,
+      };
+    }
+    useProjectStore.getState().setFileDiffStats(diffStats);
+  }, [activeProject, activeProjectGitStatus]);
 
   // 右缘宽度拖拽 —
   // 拖拽期间关掉 200ms 的 width 过渡，避免光标和面板边缘有延迟感
@@ -79,74 +105,17 @@ export function Sidebar() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [toggleSidebar]);
 
-  // Git 状态 — 加载分支名和文件 diff 统计（单例，写入 projectStore 供各视图共享）
-  const { status: gitStatus, refresh: refreshGitStatus } = useGitStatus(activeProject?.path ?? null);
-  useEffect(() => {
-    if (gitStatus && activeProject) {
-      useProjectStore.getState().setGitStatus(activeProject.id, gitStatus);
-    }
-  }, [gitStatus, activeProject]);
-
-  // 文件监听：
-  // - modify（仅内容变化）：只刷新 git 状态，不动文件树（避免丢失展开状态和已加载子节点）
-  // - create/remove/rename（结构变化）：刷新文件树 + git 状态
-  const handleFileChange = useCallback(
-    (event: FileChangeEvent) => {
-      if (!activeProject) return;
-      refreshGitStatus();
-      const isStructural = event.kind !== "modify";
-      if (!isStructural) return;
-
-      (async () => {
-        try {
-          const { invoke } = await import("@tauri-apps/api/core");
-          const entries = await invoke<Array<{
-            name: string;
-            path: string;
-            isDir: boolean;
-            size: number;
-            modified: number;
-          }>>("list_dir", { path: activeProject.path });
-          const fileNodes = entries.map((entry) => {
-            const relativePath = entry.path.startsWith(activeProject.path)
-              ? entry.path.slice(activeProject.path.length).replace(/^\//, "")
-              : entry.name;
-            return {
-              id: relativePath || entry.name,
-              name: entry.name,
-              path: entry.path,
-              isDir: entry.isDir,
-              children: entry.isDir ? [] : undefined,
-            };
-          });
-          useProjectStore.getState().setProjectFileTree(activeProject.id, fileNodes);
-        } catch (err) {
-          console.warn("文件监听触发的文件树刷新失败:", err);
-        }
-      })();
-    },
-    [activeProject, refreshGitStatus]
-  );
-  useFileWatcher(activeProject?.path ?? null, handleFileChange);
-  useEffect(() => {
-    if (!gitStatus || !activeProject) return;
-    // 更新 Git 分支名
-    useProjectStore.getState().setGitBranch(gitStatus.branch);
-    // 更新文件 diff 统计（拼接完整路径，使 FileTree 能匹配）
-    const diffStats: Record<string, { additions: number; deletions: number }> = {};
-    for (const change of [...gitStatus.staged, ...gitStatus.unstaged]) {
-      const fullPath = activeProject.path + '/' + change.path;
-      diffStats[fullPath] = {
-        additions: change.additions,
-        deletions: change.deletions,
-      };
-    }
-    useProjectStore.getState().setFileDiffStats(diffStats);
-  }, [gitStatus, activeProject]);
+  // 兜底：active project 未展开时也保持一份 git 同步（否则 StatusBar 上的
+  // 分支名和全局 fileDiffStats 无源数据）。展开的项目由 ProjectBody 自己
+  // 挂 sync；FileWatcherManager 按 path 去重避免重复 watcher。
+  const activeProjectExpanded = activeProject
+    ? !!expandedProjectIds[activeProject.id]
+    : false;
 
   return (
     <aside
       className="relative flex flex-col border-r h-full flex-shrink-0 overflow-hidden"
+      data-active-not-expanded={!activeProjectExpanded && !!activeProject}
       style={{
         /* 宽度平滑过渡：240px ↔ 48px；拖拽时关闭过渡避免延迟感 */
         width: sidebarOpen ? sidebarWidth : sidebarCollapsedWidth,
@@ -158,6 +127,11 @@ export function Sidebar() {
           : "width 200ms var(--sg-ease-out, ease-out), min-width 200ms var(--sg-ease-out, ease-out)",
       }}
     >
+      {/* 兜底 sync：active project 未展开时也保持 git 状态实时 */}
+      {activeProject && !activeProjectExpanded && (
+        <HiddenProjectGitSync project={activeProject} />
+      )}
+
       {/* ====== 折叠模式：48px 图标条 ====== */}
       {!sidebarOpen && (
         <div
@@ -277,9 +251,14 @@ export function Sidebar() {
   );
 }
 
-/** 展开后的项目内容 — 按全局 viewMode 切视图 */
-function ProjectBody({ project }: { project: import("@/types/project").Project }) {
+/** 展开后的项目内容 — 按全局 viewMode 切视图
+ *
+ * 这里挂 useProjectGitSync 是关键：每个展开的项目都有独立的 git 同步，
+ * 切换 active 项目不会影响其他展开项目的状态实时性。
+ */
+function ProjectBody({ project }: { project: Project }) {
   const mode = useProjectStore((s) => s.viewMode);
+  useProjectGitSync(project);
   return (
     <>
       {mode === "files" && <FileTree project={project} />}
@@ -287,6 +266,12 @@ function ProjectBody({ project }: { project: import("@/types/project").Project }
       {mode === "history" && <HistoryView project={project} />}
     </>
   );
+}
+
+/** 兜底组件：用在 active project 未展开的场景。无 UI，只负责挂 hook */
+function HiddenProjectGitSync({ project }: { project: Project }) {
+  useProjectGitSync(project);
+  return null;
 }
 
 /** 折叠模式下的项目图标 */

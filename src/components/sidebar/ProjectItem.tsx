@@ -117,8 +117,12 @@ export function ProjectItem({ project, isActive, isExpanded }: ProjectItemProps)
     closeMenu();
   };
 
-  // 获取 git 分支名
-  const gitBranch = useProjectStore((s) => s.gitBranch);
+  // 获取本项目自己的 git 分支名（从 gitStatusByProject 派生）
+  // 以前用的是全局 s.gitBranch —— 那是 active project 的分支，多项目场景下
+  // 所有项目都会显示同一个分支，是错的。现在按 project.id 精确取本项目的。
+  const gitBranch = useProjectStore(
+    (s) => s.gitStatusByProject[project.id]?.branch ?? "",
+  );
 
   return (
     <>
