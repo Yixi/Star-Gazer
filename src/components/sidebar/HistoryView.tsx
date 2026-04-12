@@ -1,65 +1,89 @@
 /**
  * History 视图 — 浏览 commit 历史
  *
- * 上下分栏：
- * - 上段：commit 列表（支持单选/Cmd+toggle/Shift+range）
- * - 分隔条：可拖拽调整比例，显示 "N selected · shortA..shortB ✕"
- * - 下段：选中 commit 涉及的文件列表（复用 ChangedFileRow）
- *
- * 点击文件 → Panel 打开对应 range 的 diff
+ * - commit 列表占满侧边栏高度
+ * - 顶部紧凑状态栏：显示 "N selected · hashA..hashB ✕"，未选中时显示提示
+ * - 多选：单击/Cmd+toggle/Shift+range
+ * - 选中变化 → 自动在右侧 Panel 打开/更新 commit-files 视图（复用同一 tab）
  */
-import { useEffect, useMemo, useRef, useState } from "react";
-import { X, GitPullRequestArrow } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { X, Filter } from "lucide-react";
 import { useProjectStore } from "@/stores/projectStore";
 import { usePanelStore } from "@/stores/panelStore";
 import { useGitLog } from "@/hooks/useGitLog";
 import { CommitRow } from "./CommitRow";
-import { ChangedFileRow } from "./ChangedFileRow";
-import { gitCommitFiles, type GitFileChange } from "@/services/git";
+import { computeGraphLayout } from "@/lib/commitGraph";
 import type { Project } from "@/types/project";
+import type { GitLogEntry } from "@/services/git";
 
 interface HistoryViewProps {
   project: Project;
 }
 
-const DEFAULT_SPLIT = 0.55;
-const CONTAINER_HEIGHT = 480; // 默认显示高度，会被内容撑开或 flex 压缩
-
 /** 稳定的空数组引用，避免 Zustand selector 返回新引用导致无限循环 */
 const EMPTY_HASHES: string[] = [];
+
+/** commit-files tab 的稳定 id — 确保选中变化时更新同一 tab 而非新开 */
+const COMMIT_FILES_TAB_ID = "commit-files";
 
 export function HistoryView({ project }: HistoryViewProps) {
   const { entries, isLoading } = useGitLog(project.id, project.path);
   const selectedCommits = useProjectStore((s) => s.selectedCommits[project.id] ?? EMPTY_HASHES);
-  const splitRatio = useProjectStore((s) => s.historySplit[project.id] ?? DEFAULT_SPLIT);
-  const flat = useProjectStore((s) => s.flatModes[project.id] ?? false);
   const toggleCommitSelection = useProjectStore((s) => s.toggleCommitSelection);
   const clearCommitSelection = useProjectStore((s) => s.clearCommitSelection);
-  const setHistorySplit = useProjectStore((s) => s.setHistorySplit);
   const openTab = usePanelStore((s) => s.openTab);
-  const openPanel = usePanelStore((s) => s.openPanel);
 
-  // 下半区的文件列表：根据 selectedCommits 动态加载
-  const [commitFiles, setCommitFiles] = useState<GitFileChange[]>([]);
-  const [filesLoading, setFilesLoading] = useState(false);
+  // 分支过滤：null 表示全部分支
+  const [selectedBranches, setSelectedBranches] = useState<Set<string> | null>(null);
+  const [showBranchFilter, setShowBranchFilter] = useState(false);
 
-  useEffect(() => {
-    if (selectedCommits.length === 0) {
-      setCommitFiles([]);
-      return;
-    }
-    setFilesLoading(true);
-    (async () => {
-      try {
-        const files = await gitCommitFiles(project.path, selectedCommits);
-        setCommitFiles(files);
-      } catch (err) {
-        console.warn("获取 commit 文件失败:", err);
-      } finally {
-        setFilesLoading(false);
+  // 从 entries 的 refs 中提取所有本地分支名
+  const allBranches = useMemo(() => {
+    const branches = new Set<string>();
+    for (const e of entries) {
+      for (const ref of e.refs) {
+        const name = ref
+          .replace(/^HEAD ->\s*/, "")
+          .replace(/^tag:\s*/, "");
+        // 只收集本地分支（跳过 origin/xxx 和 tag）
+        if (!ref.startsWith("tag:") && !name.startsWith("origin/") && name !== "HEAD") {
+          branches.add(name.trim());
+        }
       }
-    })();
-  }, [selectedCommits, project.path]);
+    }
+    return Array.from(branches).sort();
+  }, [entries]);
+
+  // 根据分支过滤条件筛选 commits
+  const filteredEntries = useMemo(() => {
+    if (!selectedBranches || selectedBranches.size === 0) return entries;
+    // 从 selected branches 的 HEAD 开始做一次可达性遍历
+    const reachable = new Set<string>();
+    // 找到每个选中分支的 tip commit
+    const tips: string[] = [];
+    for (const entry of entries) {
+      for (const ref of entry.refs) {
+        const cleanName = ref.replace(/^HEAD ->\s*/, "").trim();
+        if (selectedBranches.has(cleanName) || selectedBranches.has(cleanName.replace(/^origin\//, ""))) {
+          tips.push(entry.hash);
+        }
+      }
+    }
+    const hashIndex = new Map<string, GitLogEntry>();
+    for (const e of entries) hashIndex.set(e.hash, e);
+    const stack = [...tips];
+    while (stack.length > 0) {
+      const h = stack.pop()!;
+      if (reachable.has(h)) continue;
+      reachable.add(h);
+      const e = hashIndex.get(h);
+      if (e) stack.push(...e.parents);
+    }
+    return entries.filter((e) => reachable.has(e.hash));
+  }, [entries, selectedBranches]);
+
+  // 计算分支图布局
+  const graphLayout = useMemo(() => computeGraphLayout(filteredEntries), [filteredEntries]);
 
   // 计算 range 起止（按 git log 顺序：entries[0] 是最新的）
   const { from, to, rangeLabel } = useMemo(() => {
@@ -68,7 +92,6 @@ export function HistoryView({ project }: HistoryViewProps) {
       .map((h) => entries.findIndex((e) => e.hash === h))
       .filter((i) => i >= 0);
     if (indices.length === 0) return { from: null, to: null, rangeLabel: null };
-    // 最旧的 index 最大，最新的最小
     const oldestIdx = Math.max(...indices);
     const newestIdx = Math.min(...indices);
     const oldest = entries[oldestIdx];
@@ -80,47 +103,13 @@ export function HistoryView({ project }: HistoryViewProps) {
     return { from: oldest.hash, to: newest.hash, rangeLabel: label };
   }, [selectedCommits, entries]);
 
-  // commit 行点击
-  const handleCommitClick = (e: React.MouseEvent, hash: string) => {
-    const modifier: "single" | "toggle" | "range" = e.shiftKey
-      ? "range"
-      : e.metaKey || e.ctrlKey
-        ? "toggle"
-        : "single";
-    const allHashes = entries.map((x) => x.hash);
-    toggleCommitSelection(project.id, hash, modifier, allHashes);
-  };
-
-  // 文件行点击 → 打开 range diff
-  const handleFileClick = (relPath: string) => {
-    if (!from || !to) return;
-    const fullPath = project.path + "/" + relPath;
-    const tabId =
-      selectedCommits.length === 1
-        ? `${to}:${fullPath}`
-        : `${from}..${to}:${fullPath}`;
+  // 选中变化 → 自动打开/更新 commit-files 面板
+  useEffect(() => {
+    if (selectedCommits.length === 0 || !from || !to || !rangeLabel) return;
     openTab({
-      id: tabId,
-      title: relPath.split("/").pop() || relPath,
-      type: "diff",
-      filePath: fullPath,
-      isDirty: false,
-      diffSource:
-        selectedCommits.length === 1
-          ? { kind: "commit", hash: to }
-          : { kind: "range", from, to },
-    });
-    openPanel();
-  };
-
-  // Diff all selected — 整体 range（不绑定文件）
-  const handleDiffAll = () => {
-    if (!from || !to || !rangeLabel) return;
-    const tabId = `${from}..${to}`;
-    openTab({
-      id: tabId,
-      title: `Diff ${rangeLabel}`,
-      type: "diff",
+      id: COMMIT_FILES_TAB_ID,
+      title: `Commit ${rangeLabel}`,
+      type: "commit-files",
       filePath: "",
       isDirty: false,
       diffSource:
@@ -128,34 +117,25 @@ export function HistoryView({ project }: HistoryViewProps) {
           ? { kind: "commit", hash: to }
           : { kind: "range", from, to },
     });
-    openPanel();
+  }, [selectedCommits, from, to, rangeLabel, openTab]);
+
+  const handleCommitClick = (e: React.MouseEvent, hash: string) => {
+    const modifier: "single" | "toggle" | "range" = e.shiftKey
+      ? "range"
+      : e.metaKey || e.ctrlKey
+        ? "toggle"
+        : "single";
+    const allHashes = filteredEntries.map((x) => x.hash);
+    toggleCommitSelection(project.id, hash, modifier, allHashes);
   };
 
-  // 分隔条拖拽
-  const containerRef = useRef<HTMLDivElement>(null);
-  const isDraggingRef = useRef(false);
-  const handleSplitMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    isDraggingRef.current = true;
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const handleMove = (me: MouseEvent) => {
-      if (!isDraggingRef.current || !rect) return;
-      const y = me.clientY - rect.top;
-      const ratio = y / rect.height;
-      setHistorySplit(project.id, ratio);
-    };
-    const handleUp = () => {
-      isDraggingRef.current = false;
-      document.removeEventListener("mousemove", handleMove);
-      document.removeEventListener("mouseup", handleUp);
-      document.body.style.cursor = "";
-    };
-
-    document.body.style.cursor = "row-resize";
-    document.addEventListener("mousemove", handleMove);
-    document.addEventListener("mouseup", handleUp);
+  const toggleBranch = (branch: string) => {
+    setSelectedBranches((prev) => {
+      const next = new Set(prev ?? []);
+      if (next.has(branch)) next.delete(branch);
+      else next.add(branch);
+      return next.size === 0 ? null : next;
+    });
   };
 
   if (isLoading && entries.length === 0) {
@@ -180,38 +160,22 @@ export function HistoryView({ project }: HistoryViewProps) {
     );
   }
 
-  const topHeight = Math.floor(CONTAINER_HEIGHT * splitRatio);
-  const bottomHeight = CONTAINER_HEIGHT - topHeight - 24; // 减去分隔条 24px
+  const branchFilterActive = selectedBranches !== null && selectedBranches.size > 0;
 
   return (
-    <div ref={containerRef} className="flex flex-col" style={{ height: CONTAINER_HEIGHT }}>
-      {/* 上段 — commit 列表 */}
-      <div className="overflow-y-auto" style={{ height: topHeight }}>
-        {entries.map((entry) => (
-          <CommitRow
-            key={entry.hash}
-            entry={entry}
-            selected={selectedCommits.includes(entry.hash)}
-            onClick={handleCommitClick}
-          />
-        ))}
-      </div>
-
-      {/* 分隔条 + 选区信息 */}
+    <div className="flex flex-col" style={{ position: "relative" }}>
+      {/* 紧凑状态栏 */}
       <div
         className="flex items-center justify-between flex-shrink-0 select-none"
         style={{
           height: 24,
-          padding: "0 12px",
+          padding: "0 8px 0 14px",
           background: "#0d0e13",
-          borderTop: "1px solid #1a1c23",
-          borderBottom: "1px solid #1a1c23",
-          cursor: "row-resize",
+          borderBottom: "1px solid #161820",
           fontSize: 10,
         }}
-        onMouseDown={handleSplitMouseDown}
       >
-        <div className="flex items-center" style={{ gap: 6, color: "#8b92a3" }}>
+        <div className="flex items-center min-w-0" style={{ gap: 6, color: "#8b92a3" }}>
           {selectedCommits.length > 0 ? (
             <>
               <span style={{ color: "#4a9eff", fontWeight: 600 }}>
@@ -219,148 +183,118 @@ export function HistoryView({ project }: HistoryViewProps) {
               </span>
               <span style={{ color: "#3a4150" }}>·</span>
               <span
-                className="tabular-nums"
+                className="tabular-nums truncate"
                 style={{ color: "#8b92a3", fontFamily: "'SF Mono', Menlo, monospace" }}
               >
                 {rangeLabel}
               </span>
             </>
           ) : (
-            <span style={{ color: "#4a5263" }}>Select commits to inspect files</span>
+            <span style={{ color: "#4a5263" }}>
+              {filteredEntries.length} commits
+              {branchFilterActive && ` · ${selectedBranches!.size} branches`}
+            </span>
           )}
         </div>
 
-        <div className="flex items-center" style={{ gap: 4 }}>
+        <div className="flex items-center flex-shrink-0" style={{ gap: 2 }}>
+          {/* 分支过滤按钮 */}
+          {allBranches.length > 0 && (
+            <button
+              className="flex items-center justify-center rounded transition-colors"
+              style={{
+                width: 18,
+                height: 16,
+                color: branchFilterActive ? "#4a9eff" : "#8b92a3",
+                background: branchFilterActive || showBranchFilter ? "rgba(74,158,255,0.12)" : "transparent",
+              }}
+              title="过滤分支"
+              onClick={() => setShowBranchFilter((v) => !v)}
+            >
+              <Filter className="w-3 h-3" />
+            </button>
+          )}
+          {/* 清空选择 */}
           {selectedCommits.length > 0 && (
-            <>
-              <button
-                className="flex items-center justify-center rounded hover:bg-white/[0.06]"
-                style={{ width: 16, height: 16, color: "#8b92a3" }}
-                title="Diff all selected"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDiffAll();
-                }}
-              >
-                <GitPullRequestArrow className="w-3 h-3" />
-              </button>
-              <button
-                className="flex items-center justify-center rounded hover:bg-white/[0.06]"
-                style={{ width: 16, height: 16, color: "#8b92a3" }}
-                title="清空选择"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  clearCommitSelection(project.id);
-                }}
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </>
+            <button
+              className="flex items-center justify-center rounded hover:bg-white/[0.06]"
+              style={{ width: 16, height: 16, color: "#8b92a3" }}
+              title="清空选择"
+              onClick={() => clearCommitSelection(project.id)}
+            >
+              <X className="w-3 h-3" />
+            </button>
           )}
         </div>
       </div>
 
-      {/* 下段 — 文件列表 */}
-      <div className="overflow-y-auto" style={{ height: Math.max(60, bottomHeight) }}>
-        {selectedCommits.length === 0 ? (
+      {/* 分支过滤下拉面板 */}
+      {showBranchFilter && (
+        <div
+          className="flex-shrink-0"
+          style={{
+            background: "#0d0e13",
+            borderBottom: "1px solid #161820",
+            maxHeight: 180,
+            overflowY: "auto",
+          }}
+        >
           <div
-            className="flex items-center justify-center text-xs"
-            style={{ height: 60, color: "#4a5263" }}
+            className="flex items-center justify-between"
+            style={{ padding: "4px 14px", fontSize: 9, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 }}
           >
-            选中 commit 查看文件变更
+            <span>BRANCHES</span>
+            {branchFilterActive && (
+              <button
+                className="hover:text-white"
+                style={{ color: "#4a9eff" }}
+                onClick={() => setSelectedBranches(null)}
+              >
+                show all
+              </button>
+            )}
           </div>
-        ) : filesLoading ? (
-          <div
-            className="flex items-center justify-center text-xs"
-            style={{ height: 60, color: "#6b7280" }}
-          >
-            加载文件列表...
-          </div>
-        ) : commitFiles.length === 0 ? (
-          <div
-            className="flex items-center justify-center text-xs"
-            style={{ height: 60, color: "#6b7280" }}
-          >
-            无文件变更
-          </div>
-        ) : (
-          <CommitFileList
-            files={commitFiles}
-            projectPath={project.path}
-            flat={flat}
-            onClick={handleFileClick}
+          {allBranches.map((branch) => {
+            const checked = !selectedBranches || selectedBranches.has(branch);
+            return (
+              <label
+                key={branch}
+                className="flex items-center cursor-pointer hover:bg-white/[0.04]"
+                style={{ padding: "3px 14px", gap: 8, fontSize: 11 }}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleBranch(branch)}
+                  className="w-3 h-3 accent-[#4a9eff] flex-shrink-0"
+                />
+                <span
+                  className="truncate"
+                  style={{
+                    color: checked ? "#e4e6eb" : "#6b7280",
+                    fontFamily: "'SF Mono', Menlo, monospace",
+                  }}
+                >
+                  {branch}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+
+      {/* commit 列表 — 固定最大高度内部滚动 */}
+      <div className="overflow-y-auto" style={{ maxHeight: 480 }}>
+        {filteredEntries.map((entry, idx) => (
+          <CommitRow
+            key={entry.hash}
+            entry={entry}
+            selected={selectedCommits.includes(entry.hash)}
+            graphNode={graphLayout.nodes[idx]}
+            onClick={handleCommitClick}
           />
-        )}
+        ))}
       </div>
     </div>
   );
-}
-
-/** 选中 commit 的文件列表渲染 */
-function CommitFileList({
-  files,
-  projectPath,
-  flat,
-  onClick,
-}: {
-  files: GitFileChange[];
-  projectPath: string;
-  flat: boolean;
-  onClick: (relPath: string) => void;
-}) {
-  if (flat) {
-    return (
-      <>
-        {files.map((f) => {
-          const parts = f.path.split("/");
-          const name = parts.pop() || f.path;
-          const prefix = parts.length > 0 ? parts.join("/") + "/" : undefined;
-          return (
-            <ChangedFileRow
-              key={f.path}
-              fullPath={projectPath + "/" + f.path}
-              name={name}
-              pathPrefix={prefix}
-              status={normalizeFileStatus(f.status)}
-              diffStat={{ additions: f.additions, deletions: f.deletions }}
-              onClick={() => onClick(f.path)}
-            />
-          );
-        })}
-      </>
-    );
-  }
-  // 简化树模式：按目录分组一级
-  // 为保持与 ChangesView 一致的视觉和行为，使用相同的压缩树展示
-  // 这里简化：直接用 flat 列表（可后续迭代加目录）
-  return (
-    <>
-      {files.map((f) => {
-        const parts = f.path.split("/");
-        const name = parts.pop() || f.path;
-        const prefix = parts.length > 0 ? parts.join("/") + "/" : undefined;
-        return (
-          <ChangedFileRow
-            key={f.path}
-            fullPath={projectPath + "/" + f.path}
-            name={name}
-            pathPrefix={prefix}
-            status={normalizeFileStatus(f.status)}
-            diffStat={{ additions: f.additions, deletions: f.deletions }}
-            onClick={() => onClick(f.path)}
-          />
-        );
-      })}
-    </>
-  );
-}
-
-function normalizeFileStatus(s: string): "modified" | "added" | "deleted" | "renamed" {
-  switch (s) {
-    case "added": return "added";
-    case "deleted": return "deleted";
-    case "renamed":
-    case "copied": return "renamed";
-    default: return "modified";
-  }
 }

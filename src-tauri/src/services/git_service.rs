@@ -328,28 +328,48 @@ impl GitService {
     }
 
     /// 获取 git 日志
+    /// - `--all`: 包含所有分支的 commits（方便画分支图）
+    /// - `%P`: 父 commits
+    /// - `%D`: 引用装饰（branch/tag）
     pub fn log(repo_path: &str, limit: u32) -> Result<Vec<GitLogEntry>, String> {
         let output = Self::exec(
             repo_path,
             &[
                 "log",
+                "--all",
                 &format!("-n{}", limit),
-                "--format=%H\t%h\t%an\t%ae\t%at\t%s",
+                "--format=%H\t%h\t%an\t%ae\t%at\t%P\t%D\t%s",
             ],
         )?;
 
         let mut entries = Vec::new();
 
         for line in output.lines() {
-            let parts: Vec<&str> = line.splitn(6, '\t').collect();
-            if parts.len() >= 6 {
+            let parts: Vec<&str> = line.splitn(8, '\t').collect();
+            if parts.len() >= 8 {
+                let parents: Vec<String> = parts[5]
+                    .split_whitespace()
+                    .filter(|s| !s.is_empty())
+                    .map(String::from)
+                    .collect();
+                let refs: Vec<String> = if parts[6].is_empty() {
+                    Vec::new()
+                } else {
+                    parts[6]
+                        .split(", ")
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect()
+                };
                 entries.push(GitLogEntry {
                     hash: parts[0].to_string(),
                     short_hash: parts[1].to_string(),
                     author_name: parts[2].to_string(),
                     author_email: parts[3].to_string(),
                     timestamp: parts[4].parse().unwrap_or(0),
-                    message: parts[5].to_string(),
+                    parents,
+                    refs,
+                    message: parts[7].to_string(),
                 });
             }
         }

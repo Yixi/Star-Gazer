@@ -95,3 +95,70 @@
 .diff-container .diff-gutter + .diff-gutter {
   border-left: 1px solid #1a1c23;
 }
+
+/* ============================
+   Prism / refractor 语法高亮（One Dark 风格）
+   ============================ */
+.diff-container .token.comment,
+.diff-container .token.prolog,
+.diff-container .token.doctype,
+.diff-container .token.cdata {
+  color: #5c6370;
+  font-style: italic;
+}
+.diff-container .token.punctuation {
+  color: #abb2bf;
+}
+.diff-container .token.namespace {
+  opacity: 0.7;
+}
+.diff-container .token.property,
+.diff-container .token.tag,
+.diff-container .token.constant,
+.diff-container .token.symbol,
+.diff-container .token.deleted {
+  color: #e06c75;
+}
+.diff-container .token.boolean,
+.diff-container .token.number {
+  color: #d19a66;
+}
+.diff-container .token.selector,
+.diff-container .token.attr-name,
+.diff-container .token.string,
+.diff-container .token.char,
+.diff-container .token.builtin,
+.diff-container .token.inserted {
+  color: #98c379;
+}
+.diff-container .token.operator,
+.diff-container .token.entity,
+.diff-container .token.url,
+.diff-container .language-css .token.string,
+.diff-container .style .token.string,
+.diff-container .token.variable {
+  color: #56b6c2;
+}
+.diff-container .token.atrule,
+.diff-container .token.attr-value,
+.diff-container .token.function,
+.diff-container .token.class-name {
+  color: #61afef;
+}
+.diff-container .token.keyword {
+  color: #c678dd;
+}
+.diff-container .token.regex,
+.diff-container .token.important {
+  color: #d19a66;
+}
+.diff-container .token.important,
+.diff-container .token.bold {
+  font-weight: 700;
+}
+.diff-container .token.italic {
+  font-style: italic;
+}
+.diff-container .token.entity {
+  cursor: help;
+}

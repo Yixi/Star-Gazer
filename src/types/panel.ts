@@ -1,5 +1,5 @@
 /** 面板 Tab 类型 */
-export type PanelTabType = "file" | "diff" | "markdown";
+export type PanelTabType = "file" | "diff" | "markdown" | "commit-files";
 
 /** Diff 数据源 */
 export type DiffSource =

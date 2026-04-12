@@ -47,41 +47,43 @@ export function Sidebar() {
     }
   }, [gitStatus, activeProject]);
 
-  // 文件监听 — 变更时重新加载文件树 + 刷新 git 状态
+  // 文件监听：
+  // - modify（仅内容变化）：只刷新 git 状态，不动文件树（避免丢失展开状态和已加载子节点）
+  // - create/remove/rename（结构变化）：刷新文件树 + git 状态
   const handleFileChange = useCallback(
-    (_event: FileChangeEvent) => {
-      if (activeProject) {
-        const loadFileTree = async () => {
-          try {
-            const { invoke } = await import("@tauri-apps/api/core");
-            const entries = await invoke<Array<{
-              name: string;
-              path: string;
-              isDir: boolean;
-              size: number;
-              modified: number;
-            }>>("list_dir", { path: activeProject.path });
-            const fileNodes = entries.map((entry) => {
-              const relativePath = entry.path.startsWith(activeProject.path)
-                ? entry.path.slice(activeProject.path.length).replace(/^\//, "")
-                : entry.name;
-              return {
-                id: relativePath || entry.name,
-                name: entry.name,
-                path: entry.path,
-                isDir: entry.isDir,
-                children: entry.isDir ? [] : undefined,
-              };
-            });
-            useProjectStore.getState().setProjectFileTree(activeProject.id, fileNodes);
-          } catch (err) {
-            console.warn("文件监听触发的文件树刷新失败:", err);
-          }
-        };
-        loadFileTree();
-        // 文件变化后也刷新 git 状态
-        refreshGitStatus();
-      }
+    (event: FileChangeEvent) => {
+      if (!activeProject) return;
+      refreshGitStatus();
+      const isStructural = event.kind !== "modify";
+      if (!isStructural) return;
+
+      (async () => {
+        try {
+          const { invoke } = await import("@tauri-apps/api/core");
+          const entries = await invoke<Array<{
+            name: string;
+            path: string;
+            isDir: boolean;
+            size: number;
+            modified: number;
+          }>>("list_dir", { path: activeProject.path });
+          const fileNodes = entries.map((entry) => {
+            const relativePath = entry.path.startsWith(activeProject.path)
+              ? entry.path.slice(activeProject.path.length).replace(/^\//, "")
+              : entry.name;
+            return {
+              id: relativePath || entry.name,
+              name: entry.name,
+              path: entry.path,
+              isDir: entry.isDir,
+              children: entry.isDir ? [] : undefined,
+            };
+          });
+          useProjectStore.getState().setProjectFileTree(activeProject.id, fileNodes);
+        } catch (err) {
+          console.warn("文件监听触发的文件树刷新失败:", err);
+        }
+      })();
     },
     [activeProject, refreshGitStatus]
   );

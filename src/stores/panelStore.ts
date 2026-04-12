@@ -58,9 +58,13 @@ export const usePanelStore = create<PanelState>((set) => ({
 
   openTab: (tab) =>
     set((state) => {
-      const exists = state.tabs.find((t) => t.id === tab.id);
-      if (exists) {
-        return { activeTabId: tab.id, isOpen: true };
+      const existingIdx = state.tabs.findIndex((t) => t.id === tab.id);
+      if (existingIdx >= 0) {
+        // 已存在则合并更新（保留 isDirty 状态，其他字段用新值）
+        const newTabs = [...state.tabs];
+        const prev = newTabs[existingIdx];
+        newTabs[existingIdx] = { ...tab, isDirty: prev.isDirty };
+        return { tabs: newTabs, activeTabId: tab.id, isOpen: true };
       }
       return {
         tabs: [...state.tabs, tab],

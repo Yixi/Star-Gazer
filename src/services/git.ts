@@ -39,6 +39,10 @@ export interface GitLogEntry {
   authorEmail: string;
   timestamp: number;
   message: string;
+  /** 父 commit hash 列表 */
+  parents: string[];
+  /** 分支/tag 引用装饰 */
+  refs: string[];
 }
 
 /** 获取 Git 仓库状态 */

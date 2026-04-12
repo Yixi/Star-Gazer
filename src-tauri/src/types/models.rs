@@ -66,6 +66,12 @@ pub struct GitLogEntry {
     pub author_email: String,
     pub timestamp: u64,
     pub message: String,
+    /// 父 commit hash 列表（merge 有多个父）
+    #[serde(default)]
+    pub parents: Vec<String>,
+    /// 分支/tag 引用装饰（如 ["HEAD -> main", "origin/main", "tag: v1.0"]）
+    #[serde(default)]
+    pub refs: Vec<String>,
 }
 
 /// 文件变更事件
