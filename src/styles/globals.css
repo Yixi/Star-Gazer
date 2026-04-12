@@ -144,8 +144,9 @@ hr,
   scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
 }
 
-/* react-arborist 内部滚动条隐藏 — 由外层 Sidebar 统一管理滚动 */
-.filetree-container [role="tree"] {
+/* react-arborist / react-window 内部滚动隐藏 — 由外层 Sidebar 统一管理滚动 */
+.filetree-container [role="tree"],
+.filetree-container [role="tree"] > div {
   overflow: hidden !important;
 }
 

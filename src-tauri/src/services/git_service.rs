@@ -266,19 +266,55 @@ impl GitService {
         Self::exec(path, &["rev-parse", "--git-dir"]).is_ok()
     }
 
-    /// 获取被 gitignore 忽略的文件/目录路径列表
-    /// 使用 `git status --porcelain --ignored` 获取 ignored 条目
-    pub fn ignored_paths(repo_path: &str) -> Result<Vec<String>, String> {
-        let output = Self::exec(repo_path, &[
-            "status", "--porcelain", "--ignored", "--untracked-files=all",
-        ])?;
-        let mut ignored = Vec::new();
-        for line in output.lines() {
-            // 被忽略的文件以 "!! " 开头
-            if let Some(path) = line.strip_prefix("!! ") {
-                ignored.push(path.trim_end_matches('/').to_string());
-            }
+    /// 检查给定的相对路径列表哪些被 gitignore 规则直接匹配
+    /// 使用 `git check-ignore` 精确检查每个路径自身是否匹配 gitignore 规则
+    /// （而不是像 `git status --ignored` 那样在子文件全被忽略时将整个目录报为 ignored）
+    pub fn check_ignored(repo_path: &str, paths: Vec<String>) -> Result<Vec<String>, String> {
+        if paths.is_empty() {
+            return Ok(Vec::new());
         }
+
+        // git check-ignore --stdin 从标准输入读取路径，每行一个
+        // 匹配到 gitignore 的路径会输出到 stdout
+        // Exit code: 0 表示至少一个匹配，1 表示没有匹配（我们都视为成功）
+        use std::io::Write;
+        use std::process::Stdio;
+
+        let mut child = std::process::Command::new("git")
+            .args(["check-ignore", "--stdin"])
+            .current_dir(repo_path)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("启动 git check-ignore 失败: {}", e))?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            let input = paths.join("\n");
+            stdin
+                .write_all(input.as_bytes())
+                .map_err(|e| format!("写入 stdin 失败: {}", e))?;
+        }
+
+        let output = child
+            .wait_with_output()
+            .map_err(|e| format!("等待 git check-ignore 失败: {}", e))?;
+
+        // 退出码 0 或 1 都是正常情况
+        let code = output.status.code().unwrap_or(-1);
+        if code != 0 && code != 1 {
+            return Err(format!(
+                "git check-ignore 异常退出: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let ignored: Vec<String> = stdout
+            .lines()
+            .map(|s| s.trim_end_matches('/').to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
         Ok(ignored)
     }
 }

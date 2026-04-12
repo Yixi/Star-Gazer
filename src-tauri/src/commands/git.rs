@@ -33,8 +33,11 @@ pub async fn git_log(repo_path: String, limit: Option<u32>) -> Result<Vec<GitLog
     GitService::log(&repo_path, limit)
 }
 
-/// 获取被 gitignore 忽略的文件列表
+/// 检查给定路径列表中哪些被 gitignore 规则直接匹配
 #[tauri::command]
-pub async fn git_ignored(repo_path: String) -> Result<Vec<String>, String> {
-    GitService::ignored_paths(&repo_path)
+pub async fn git_check_ignored(
+    repo_path: String,
+    paths: Vec<String>,
+) -> Result<Vec<String>, String> {
+    GitService::check_ignored(&repo_path, paths)
 }

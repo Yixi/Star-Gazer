@@ -53,27 +53,45 @@ export function FileTree({ project }: FileTreeProps) {
     });
   }, []);
 
-  // 初始加载文件树 + gitignore 列表
+  // 初始加载文件树
   useEffect(() => {
     loadedDirsRef.current.clear();
     loadFileTree(project.id, project.path);
-    // 加载 gitignore 文件列表
+  }, [project.id, project.path]);
+
+  // 文件树数据变化时：重算高度 + 批量检查 gitignore
+  useEffect(() => {
+    setTreeHeight(filterHidden(fileTree).length * ROW_HEIGHT);
+    recalcHeight();
+
+    // 收集所有文件路径（相对路径），批量查询 gitignore
+    const allPaths: string[] = [];
+    const collectPaths = (nodes: FileNode[]) => {
+      for (const node of nodes) {
+        const rel = node.path.startsWith(project.path)
+          ? node.path.slice(project.path.length).replace(/^\//, "")
+          : node.name;
+        if (rel) allPaths.push(rel);
+        if (node.children) collectPaths(node.children);
+      }
+    };
+    collectPaths(fileTree);
+
+    if (allPaths.length === 0) return;
+
     (async () => {
       try {
         const { invoke } = await import("@tauri-apps/api/core");
-        const ignored = await invoke<string[]>("git_ignored", { repoPath: project.path });
+        const ignored = await invoke<string[]>("git_check_ignored", {
+          repoPath: project.path,
+          paths: allPaths,
+        });
         setIgnoredPaths(new Set(ignored));
       } catch {
         // 非 git 仓库或命令不可用时忽略
       }
     })();
-  }, [project.id, project.path]);
-
-  // 文件树数据变化时重算高度
-  useEffect(() => {
-    setTreeHeight(filterHidden(fileTree).length * ROW_HEIGHT);
-    recalcHeight();
-  }, [fileTree, recalcHeight]);
+  }, [fileTree, project.path, recalcHeight]);
 
   /** 展开/折叠回调 — 展开时按需加载子目录内容 */
   const handleToggle = useCallback(
@@ -205,6 +223,20 @@ function dirEntriesToFileNodes(entries: DirEntry[], basePath: string): FileNode[
   });
 }
 
+/** 检查文件路径是否在 gitignore 中（精确匹配 + 祖先目录匹配） */
+function checkIgnored(relativePath: string, ignoredPaths: Set<string>): boolean {
+  // 精确匹配
+  if (ignoredPaths.has(relativePath)) return true;
+  // 检查祖先目录是否被忽略（如 node_modules 被忽略，则 node_modules/express 也算忽略）
+  const parts = relativePath.split("/");
+  let current = "";
+  for (let i = 0; i < parts.length - 1; i++) {
+    current = current ? current + "/" + parts[i] : parts[i];
+    if (ignoredPaths.has(current)) return true;
+  }
+  return false;
+}
+
 /** 从后端加载文件树 */
 async function loadFileTree(projectId: string, projectPath: string) {
   const store = useProjectStore.getState();
@@ -262,7 +294,7 @@ function FileTreeNode({ node, style, ignoredPaths, projectPath }: NodeRendererPr
   const relativePath = data.path.startsWith(projectPath)
     ? data.path.slice(projectPath.length).replace(/^\//, "")
     : data.name;
-  const isGitIgnored = ignoredPaths.has(relativePath) || ignoredPaths.has(relativePath + "/");
+  const isGitIgnored = checkIgnored(relativePath, ignoredPaths);
 
   // 从 fileDiffStats 推导 gitStatus（如果文件有 diff 则认为是 modified）
   const hasRealDiff = !!fileDiffStats[data.path];
