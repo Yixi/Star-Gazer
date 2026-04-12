@@ -29,6 +29,12 @@ const IGNORED_DIRS: &[&str] = &[
 ];
 
 /// 文件监听管理器
+///
+/// **引用计数**：同一个 path 可能被多次 `watch`（比如 Sidebar 的
+/// HiddenProjectGitSync 和 ProjectBody 都对 active project 调 watchDir）。
+/// 没有计数的话后一次 watch 会 noop，但其中任何一个先 unwatch 就会把整个
+/// 底层 watcher 销毁，导致还在订阅的组件收不到任何事件。
+/// 现在每次 watch 累加 refcount，unwatch 递减，归 0 才真正 drop。
 pub struct FileWatcherManager {
     watchers: Mutex<HashMap<String, WatcherHandle>>,
 }
@@ -38,6 +44,8 @@ struct WatcherHandle {
     _watcher: RecommendedWatcher,
     /// 用于通知停止去抖线程
     _stop_tx: mpsc::Sender<()>,
+    /// 活跃订阅者数量 — 每次 watch 加 1，unwatch 减 1，0 时 drop 整个 handle
+    refcount: usize,
 }
 
 impl FileWatcherManager {
@@ -47,14 +55,22 @@ impl FileWatcherManager {
         }
     }
 
-    /// 开始监听目录
+    /// 开始监听目录（支持引用计数）
+    ///
+    /// 已有 watcher 则只把 refcount + 1；没有才创建新的 notify watcher。
     pub fn watch(&self, app: AppHandle, path: &str) -> Result<(), String> {
         let path_str = path.to_string();
 
-        // 检查是否已在监听
+        // 已在监听 → refcount + 1 直接返回
         {
-            let watchers = self.watchers.lock().map_err(|e| e.to_string())?;
-            if watchers.contains_key(path) {
+            let mut watchers = self.watchers.lock().map_err(|e| e.to_string())?;
+            if let Some(handle) = watchers.get_mut(path) {
+                handle.refcount += 1;
+                log::debug!(
+                    "watch 已存在: {} (refcount={})",
+                    path_str,
+                    handle.refcount
+                );
                 return Ok(());
             }
         }
@@ -83,10 +99,11 @@ impl FileWatcherManager {
             Self::debounce_loop(app_clone, event_rx, stop_rx);
         });
 
-        // 存储 watcher
+        // 存储 watcher，refcount 从 1 开始
         let handle = WatcherHandle {
             _watcher: watcher,
             _stop_tx: stop_tx,
+            refcount: 1,
         };
 
         self.watchers
@@ -94,7 +111,7 @@ impl FileWatcherManager {
             .map_err(|e| e.to_string())?
             .insert(path_str.clone(), handle);
 
-        log::info!("开始监听目录: {}", path_str);
+        log::info!("开始监听目录: {} (refcount=1)", path_str);
         Ok(())
     }
 
@@ -234,10 +251,23 @@ impl FileWatcherManager {
         }
     }
 
-    /// 停止监听目录
+    /// 停止监听目录（支持引用计数）
+    ///
+    /// refcount 递减；归 0 才真正 drop watcher + 停止去抖线程。
     pub fn unwatch(&self, path: &str) -> Result<(), String> {
         let mut watchers = self.watchers.lock().map_err(|e| e.to_string())?;
-        if watchers.remove(path).is_some() {
+        if let Some(handle) = watchers.get_mut(path) {
+            if handle.refcount > 1 {
+                handle.refcount -= 1;
+                log::debug!(
+                    "unwatch 递减: {} (refcount={})",
+                    path,
+                    handle.refcount
+                );
+                return Ok(());
+            }
+            // refcount 到 0，真正移除
+            watchers.remove(path);
             log::info!("停止监听目录: {}", path);
         }
         Ok(())
