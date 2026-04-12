@@ -31,7 +31,7 @@ interface FileTreeProps {
   project: Project;
 }
 
-const ROW_HEIGHT = 28;
+const ROW_HEIGHT = 22;
 
 export function FileTree({ project }: FileTreeProps) {
   const fileTree = useProjectStore((s) => s.projectFileTrees[project.id] ?? EMPTY_TREE);
@@ -526,8 +526,8 @@ function FileTreeNode({
         /* 覆盖 react-arborist 的 paddingLeft，加上基础 14px */
         paddingLeft: basePaddingLeft,
         paddingRight: 14,
-        paddingTop: node.isInternal ? 4 : 5,
-        paddingBottom: node.isInternal ? 4 : 5,
+        paddingTop: 2,
+        paddingBottom: 2,
         /* 过渡动画 */
         transition: "opacity 300ms ease, background 300ms ease",
         opacity: isDimmed ? 0.35 : 1,

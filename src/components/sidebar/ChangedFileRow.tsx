@@ -57,7 +57,7 @@ export interface ChangedFileRowProps {
   style?: CSSProperties;
 }
 
-const ROW_HEIGHT = 28;
+const ROW_HEIGHT = 22;
 
 export function ChangedFileRow({
   fullPath,
@@ -101,8 +101,8 @@ export function ChangedFileRow({
         height: ROW_HEIGHT,
         paddingLeft: basePaddingLeft,
         paddingRight: 14,
-        paddingTop: isDir ? 4 : 5,
-        paddingBottom: isDir ? 4 : 5,
+        paddingTop: 2,
+        paddingBottom: 2,
         transition: "opacity 300ms ease, background 300ms ease",
         opacity: isDimmed ? 0.35 : 1,
         background: isHighlightedByAgent
