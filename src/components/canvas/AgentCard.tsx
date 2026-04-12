@@ -66,7 +66,12 @@ export function AgentCard({ agent }: AgentCardProps) {
     removeAgent,
     setCardDisplayMode,
     getCardDisplayMode,
+    bringAgentToFront,
   } = useCanvasStore();
+
+  // 订阅本卡片的 zOrder（单独 selector，避免 cardZOrder 整个 map 变化时
+  // 所有卡片都 re-render — 每张卡只关心自己的那个值）
+  const zOrder = useCanvasStore((s) => s.cardZOrder[agent.id] ?? 1);
 
   const cardRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
@@ -408,6 +413,8 @@ export function AgentCard({ agent }: AgentCardProps) {
       top: agent.position.y,
       width: agent.size.width,
       height: displayMode === "minimized" ? HEADER_HEIGHT : agent.size.height,
+      // 用 zIndex 做堆叠 — DOM 结构完全稳定，xterm 不会因为 DOM 移动而错乱
+      zIndex: zOrder,
     };
   };
 
@@ -445,6 +452,17 @@ export function AgentCard({ agent }: AgentCardProps) {
           cursor: hoverEdge ? getResizeCursor(hoverEdge) : undefined,
         }}
         onClick={() => selectAgent(agent.id)}
+        /**
+         * 点击卡片任意位置把它提到最顶层。
+         *
+         * 用 capture 阶段是因为：
+         * 1. header 的 handleDragStart 会 stopPropagation，bubble 的 onMouseDown
+         *    收不到 header 上的事件
+         * 2. capture 在 target 之前触发，无论后续是否 stopPropagation 都会跑
+         * 3. 终端区域的 mousedown 要原样传给 xterm 接收焦点，所以只在 capture
+         *    里做状态更新，不调 stopPropagation / preventDefault
+         */
+        onMouseDownCapture={() => bringAgentToFront(agent.id)}
         onAnimationEnd={handleAnimationEnd}
         onMouseMove={handleCardMouseMove}
         onMouseDown={handleCardMouseDown}

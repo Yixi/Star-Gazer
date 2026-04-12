@@ -7,7 +7,7 @@
  * - Hunk 分隔符，行号
  * - 从后端 git_diff 获取 unified diff 文本
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { parseDiff, Diff, Hunk, Decoration } from "react-diff-view";
 import type { FileData } from "react-diff-view";
 import { usePanelStore } from "@/stores/panelStore";
@@ -45,10 +45,29 @@ export function DiffView({ filePath, tabId }: DiffViewProps) {
     return `range:${diffSource.from}..${diffSource.to}`;
   }, [diffSource]);
 
+  // 记住当前"新鲜加载"的 signature。如果 effect 只是因为 statKey 变化被触发、
+  // 但 filePath/diffSource 没变，就算是**刷新**，不是新打开 —
+  // 刷新拿到空 diff 时保留当前视图不动，避免用户 commit 后内容被擦成
+  // "没有检测到差异"。
+  const freshLoadKeyRef = useRef<string>("");
+  // 最新 diffFiles 的 ref，供 effect 内部判断"是否已有内容"用（setState 闭包拿不到）
+  const diffFilesRef = useRef<FileData[]>([]);
   useEffect(() => {
+    diffFilesRef.current = diffFiles;
+  }, [diffFiles]);
+
+  useEffect(() => {
+    const freshKey = `${filePath}|${diffSourceKey}`;
+    const isFreshLoad = freshLoadKeyRef.current !== freshKey;
+    freshLoadKeyRef.current = freshKey;
+
     let cancelled = false;
-    setIsLoading(true);
-    setError(null);
+    if (isFreshLoad) {
+      // 切到新文件 / 新 diff 源：清空旧视图，显示 loading
+      setIsLoading(true);
+      setError(null);
+    }
+    // 刷新场景：不 setLoading(true)，保持当前视图稳定，不闪烁
 
     const loadDiff = async () => {
       try {
@@ -85,6 +104,13 @@ export function DiffView({ filePath, tabId }: DiffViewProps) {
         if (cancelled) return;
 
         if (!rawDiff || rawDiff.trim() === "") {
+          // 关键点：刷新场景拿到空 diff 时保留当前视图，不擦除
+          // 典型场景：用户 commit 了刚才在看的改动，fileDiffStats 变空触发刷新
+          if (!isFreshLoad && diffFilesRef.current.length > 0) {
+            setIsLoading(false);
+            return;
+          }
+          setDiffFiles([]);
           setError("没有检测到差异");
           setIsLoading(false);
           return;
@@ -109,6 +135,11 @@ export function DiffView({ filePath, tabId }: DiffViewProps) {
         }
       } catch (err) {
         if (cancelled) return;
+        // 刷新场景报错时也保留当前视图
+        if (!isFreshLoad && diffFilesRef.current.length > 0) {
+          setIsLoading(false);
+          return;
+        }
         console.warn("Failed to load diff, using mock:", err);
         // 开发时使用 mock diff
         loadMockDiff(filePath, setDiffFiles, setDiffStat, tabId);
@@ -119,7 +150,7 @@ export function DiffView({ filePath, tabId }: DiffViewProps) {
 
     loadDiff();
     return () => { cancelled = true; };
-    // statKey 依赖：当 git status 刷新后，若该文件的 +A -D 统计变了，重新 fetch diff
+    // statKey 依赖：当 git status 刷新后重新 fetch diff（但刷新场景遇空会保留当前视图）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filePath, tabId, setDiffStat, tab?.projectPath, activeProject?.path, diffSourceKey, statKey]);
 

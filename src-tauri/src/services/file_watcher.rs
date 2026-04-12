@@ -177,7 +177,37 @@ impl FileWatcherManager {
     }
 
     /// 判断路径是否应被忽略
+    ///
+    /// 特殊情况：虽然 `.git` 整个目录在 IGNORED_DIRS 里，但**我们需要一部分
+    /// `.git` 内部信号**才能检测到 commit / 切分支 / stage 变化：
+    ///
+    /// - `.git/HEAD`   — 切分支 / commit / reset 时会改
+    /// - `.git/index`  — git add / rm / 任何 staging 操作会改
+    /// - `.git/refs/*` — branch / tag 的创建、删除、推送
+    ///
+    /// 这三类路径放行，其他 `.git` 内部文件（objects / logs / lfs 等噪音）
+    /// 继续过滤。路径放行后会触发前端 `refreshGitStatus()`，从而在 UI 上
+    /// 反映最新的 git 状态。
     fn should_ignore(path: &Path) -> bool {
+        let path_str = path.to_string_lossy();
+
+        // 先做 .git 内部白名单判定
+        let in_dot_git = path_str.contains("/.git/") || path_str.ends_with("/.git");
+        if in_dot_git {
+            // refs/ 下任意文件放行
+            if path_str.contains("/.git/refs/") {
+                return false;
+            }
+            // HEAD / index 放行（精确匹配文件名）
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if name == "HEAD" || name == "index" {
+                    return false;
+                }
+            }
+            // 其他 .git 内部路径继续过滤
+            return true;
+        }
+
         for component in path.components() {
             if let std::path::Component::Normal(name) = component {
                 let name_str = name.to_string_lossy();

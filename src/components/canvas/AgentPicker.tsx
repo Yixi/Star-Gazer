@@ -1,6 +1,6 @@
 /**
  * Agent Picker - 创建新 Agent 的弹窗
- * 选择 agent 类型、项目、是否在 worktree 中启动
+ * 选择 agent 类型、项目
  */
 import { useState, useCallback, useEffect, useRef } from "react";
 import { X, Terminal, Code, Cpu, Settings } from "lucide-react";
@@ -48,7 +48,6 @@ const AGENT_TYPES = [
 export function AgentPicker({ onClose }: AgentPickerProps) {
   const [selectedType, setSelectedType] = useState<string>("claude-code");
   const [agentName, setAgentName] = useState("");
-  const [useWorktree, setUseWorktree] = useState(false);
   const { agents, addAgent } = useCanvasStore();
   const { projects, activeProject } = useProjectStore();
   const [selectedProjectId, setSelectedProjectId] = useState(
@@ -220,23 +219,6 @@ export function AgentPicker({ onClose }: AgentPickerProps) {
             </select>
           </div>
 
-          {/* Worktree 选项 */}
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={useWorktree}
-              onChange={(e) => setUseWorktree(e.target.checked)}
-              className="w-4 h-4 rounded accent-[#4a9eff]"
-            />
-            <div>
-              <div className="text-xs text-white font-medium">
-                在 Git Worktree 中启动
-              </div>
-              <div className="text-[10px] text-[#6b7280] mt-0.5">
-                创建隔离的工作树，避免分支冲突
-              </div>
-            </div>
-          </label>
         </div>
 
         {/* 底部操作 */}
