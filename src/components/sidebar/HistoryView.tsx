@@ -27,7 +27,7 @@ const EMPTY_HASHES: string[] = [];
 const COMMIT_FILES_TAB_ID = "commit-files";
 
 /** commit 行高（与 CommitRow 内部保持一致） */
-const ROW_HEIGHT = 32;
+const ROW_HEIGHT = 24;
 /** 虚拟滚动上下各多渲染的行数，避免快速滚动露白 */
 const OVERSCAN = 8;
 /** 列表容器最大高度 */
@@ -296,6 +296,7 @@ export function HistoryView({ project }: HistoryViewProps) {
         entries={filteredEntries}
         graphLayout={graphLayout}
         selectedCommits={selectedCommits}
+        repoPath={project.path}
         onCommitClick={handleCommitClick}
       />
     </div>
@@ -312,11 +313,13 @@ function VirtualCommitList({
   entries,
   graphLayout,
   selectedCommits,
+  repoPath,
   onCommitClick,
 }: {
   entries: GitLogEntry[];
   graphLayout: ReturnType<typeof computeGraphLayout>;
   selectedCommits: string[];
+  repoPath: string;
   onCommitClick: (e: React.MouseEvent, hash: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -353,7 +356,7 @@ function VirtualCommitList({
         entry={entry}
         selected={selectedSet.has(entry.hash)}
         graphNode={graphLayout.nodes[i]}
-        totalLanes={graphLayout.maxLanes}
+        repoPath={repoPath}
         onClick={onCommitClick}
       />,
     );

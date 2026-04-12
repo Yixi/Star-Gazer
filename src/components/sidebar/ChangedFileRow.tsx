@@ -67,19 +67,8 @@ export function ChangedFileRow({
   style,
 }: ChangedFileRowProps) {
   const activeTabId = usePanelStore((s) => s.activeTabId);
-  const writingFiles = useProjectStore((s) => s.writingFiles);
-  const hoveredAgentId = useProjectStore((s) => s.hoveredAgentId);
-  const agentFileMap = useProjectStore((s) => s.agentFileMap);
-
-  const isWriting = writingFiles.has(fullPath);
+  const isWriting = useProjectStore((s) => s.writingFiles.has(fullPath));
   const isActiveInPanel = !isDir && activeTabId === fullPath;
-
-  const isHighlightedByAgent =
-    hoveredAgentId !== null && agentFileMap[hoveredAgentId]?.includes(fullPath);
-  const isDimmed = hoveredAgentId !== null && !isHighlightedByAgent;
-  const highlightColor = isHighlightedByAgent
-    ? AGENT_COLOR_HEX[agentColor ?? "blue"] ?? "#4a9eff"
-    : undefined;
 
   const isDeleted = status === "deleted";
   const isAdded = status === "added";
@@ -95,31 +84,21 @@ export function ChangedFileRow({
         paddingRight: 14,
         paddingTop: 2,
         paddingBottom: 2,
-        transition: "opacity 300ms ease, background 300ms ease",
-        opacity: isDimmed ? 0.35 : 1,
-        background: isHighlightedByAgent
-          ? `linear-gradient(90deg, ${highlightColor}18 0%, transparent 100%)`
-          : isActiveInPanel
-            ? "rgba(74, 158, 255, 0.08)"
-            : "transparent",
+        transition: "background 300ms ease",
+        background: isActiveInPanel ? "rgba(74, 158, 255, 0.08)" : "transparent",
         position: "relative",
         ...style,
       }}
       className="flex items-center cursor-pointer hover:bg-white/[0.04]"
       onClick={onClick}
     >
-      {/* 左侧 2px 颜色竖条 */}
+      {/* 左侧 2px 颜色竖条（仅 active-in-panel） */}
       <div
         className="absolute left-0 top-0 bottom-0"
         style={{
-          width: isHighlightedByAgent || isActiveInPanel ? 2 : 0,
-          backgroundColor: isHighlightedByAgent
-            ? (highlightColor ?? "transparent")
-            : isActiveInPanel
-              ? "#4a9eff"
-              : "transparent",
-          boxShadow: isHighlightedByAgent ? `0 0 6px ${highlightColor}60` : "none",
-          transition: "width 300ms ease, box-shadow 300ms ease",
+          width: isActiveInPanel ? 2 : 0,
+          backgroundColor: isActiveInPanel ? "#4a9eff" : "transparent",
+          transition: "width 300ms ease",
         }}
       />
 
@@ -165,7 +144,7 @@ export function ChangedFileRow({
           className="truncate"
           style={{
             fontSize: 13,
-            color: isHighlightedByAgent || isActiveInPanel
+            color: isActiveInPanel
               ? "#ffffff"
               : isGitIgnored
                 ? "#4a5263"
@@ -176,7 +155,7 @@ export function ChangedFileRow({
                     : "#b8bcc4",
             fontStyle: isUntracked ? "italic" : "normal",
             textDecoration: isDeleted ? "line-through" : "none",
-            fontWeight: isHighlightedByAgent ? 600 : isActiveInPanel ? 500 : 400,
+            fontWeight: isActiveInPanel ? 500 : 400,
             transition: "color 300ms ease, font-weight 300ms ease",
           }}
         >
@@ -236,10 +215,6 @@ export function ChangedFileRow({
             className="w-2 h-2 rounded-full ml-auto flex-shrink-0"
             style={{
               backgroundColor: AGENT_COLOR_HEX[agentColor] ?? "#4a9eff",
-              boxShadow: isHighlightedByAgent
-                ? `0 0 6px ${AGENT_COLOR_HEX[agentColor]}80`
-                : "none",
-              transition: "box-shadow 300ms ease",
             }}
           />
         )}

@@ -1,11 +1,11 @@
 /**
  * Commit 行组件 — History 视图的 commit 列表项
  *
- * 布局（高度 32px）：
+ * 布局（高度 24px，紧凑）：
  * - 最左：分支图 SVG 列（CommitGraphColumn）
- * - short hash（mono 11px #8b92a3）
+ * - short hash（mono 10px #8b92a3）
  * - 分支/tag badges（可选）
- * - message（13px #b8bcc4 truncate）
+ * - message（12px #b8bcc4 truncate）
  * - 右：相对时间（9px #6b7280）
  *
  * 交互：
@@ -13,16 +13,23 @@
  * - Cmd/Ctrl+Click → toggle
  * - Shift+Click → range
  */
+import { useRef, useState } from "react";
 import type { GitLogEntry } from "@/services/git";
 import type { GraphNode } from "@/lib/commitGraph";
 import { CommitGraphColumn } from "./CommitGraphColumn";
+import { CommitTooltip } from "./CommitTooltip";
+
+/** hover 显示 tooltip 前的延迟 — 避免快速滚过时闪烁 */
+const HOVER_SHOW_DELAY = 400;
+/** 鼠标离开 row 后延迟关闭 — 留出时间让鼠标移动到 tooltip 上 */
+const HOVER_CLOSE_DELAY = 120;
 
 interface CommitRowProps {
   entry: GitLogEntry;
   selected: boolean;
   graphNode?: GraphNode;
-  /** 整张图的最大 lane 数（固定 SVG 宽度，避免行间抖动） */
-  totalLanes: number;
+  /** 仓库路径，用于 tooltip 拉 commit 详情 */
+  repoPath?: string;
   onClick: (e: React.MouseEvent, hash: string) => void;
 }
 
@@ -30,17 +37,53 @@ export function CommitRow({
   entry,
   selected,
   graphNode,
-  totalLanes,
+  repoPath,
   onClick,
 }: CommitRowProps) {
   const relTime = formatRelativeTime(entry.timestamp);
   const parsedRefs = parseRefs(entry.refs);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [tooltipAnchor, setTooltipAnchor] = useState<DOMRect | null>(null);
+  const showTimerRef = useRef<number | null>(null);
+  const closeTimerRef = useRef<number | null>(null);
+
+  const clearShowTimer = () => {
+    if (showTimerRef.current !== null) {
+      window.clearTimeout(showTimerRef.current);
+      showTimerRef.current = null;
+    }
+  };
+  const clearCloseTimer = () => {
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  };
+
+  const handleMouseEnter = () => {
+    if (!repoPath) return;
+    clearCloseTimer();
+    clearShowTimer();
+    showTimerRef.current = window.setTimeout(() => {
+      const rect = rowRef.current?.getBoundingClientRect();
+      if (rect) setTooltipAnchor(rect);
+    }, HOVER_SHOW_DELAY);
+  };
+
+  const handleMouseLeave = () => {
+    clearShowTimer();
+    clearCloseTimer();
+    closeTimerRef.current = window.setTimeout(() => {
+      setTooltipAnchor(null);
+    }, HOVER_CLOSE_DELAY);
+  };
 
   return (
     <div
+      ref={rowRef}
       className="flex items-center cursor-pointer select-none"
       style={{
-        height: 32,
+        height: 24,
         paddingLeft: 8,
         paddingRight: 10,
         gap: 6,
@@ -49,12 +92,13 @@ export function CommitRow({
         transition: "background 150ms ease, border-color 150ms ease",
       }}
       onClick={(e) => onClick(e, entry.hash)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       {/* 分支图列 */}
       {graphNode && (
         <CommitGraphColumn
           node={graphNode}
-          totalLanes={totalLanes}
           selected={selected}
         />
       )}
@@ -114,6 +158,22 @@ export function CommitRow({
       <span className="flex-shrink-0" style={{ fontSize: 9, color: "#6b7280" }}>
         {relTime}
       </span>
+
+      {/* hover tooltip */}
+      {tooltipAnchor && repoPath && (
+        <CommitTooltip
+          repoPath={repoPath}
+          hash={entry.hash}
+          anchorRect={tooltipAnchor}
+          onMouseEnter={() => {
+            // 鼠标移到 tooltip 上时取消待关闭
+            clearCloseTimer();
+          }}
+          onMouseLeave={() => {
+            setTooltipAnchor(null);
+          }}
+        />
+      )}
     </div>
   );
 }

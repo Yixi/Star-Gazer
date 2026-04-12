@@ -1,7 +1,9 @@
 //! Git 命令封装
 //! 参考 VSCode 的实现，通过 shell out 到系统 git 命令
 
-use crate::types::models::{GitBranch, GitFileChange, GitLogEntry, GitStatusSummary};
+use crate::types::models::{
+    GitBranch, GitCommitDetail, GitFileChange, GitLogEntry, GitStatusSummary,
+};
 use std::collections::HashMap;
 use std::process::Command;
 
@@ -178,6 +180,10 @@ impl GitService {
     }
 
     /// 获取文件 diff（同时包含 staged 和 unstaged）
+    ///
+    /// 对 untracked 文件（从未 `git add` 过的新文件）做特殊处理：
+    /// `git diff` 不会报告它们，这里直接读取文件内容合成一份 "new file"
+    /// unified diff，让前端的 react-diff-view 能正常渲染"全绿"新增视图。
     pub fn diff(repo_path: &str, file_path: Option<&str>) -> Result<String, String> {
         let mut result = String::new();
 
@@ -214,7 +220,108 @@ impl GitService {
             Err(e) => log::warn!("获取 staged diff 失败: {}", e),
         }
 
+        // fallback: 如果指定了文件且 git diff 没拿到任何内容，检查是否 untracked
+        // 是的话合成 new file diff 返回，避免前端显示"没有检测到差异"
+        if result.is_empty() {
+            if let Some(fp) = file_path {
+                if let Ok(synthetic) = Self::synthesize_untracked_diff(repo_path, fp) {
+                    if !synthetic.is_empty() {
+                        result = synthetic;
+                    }
+                }
+            }
+        }
+
         Ok(result)
+    }
+
+    /// 为 untracked 文件合成一份 "new file" unified diff
+    ///
+    /// 只有在文件确实 untracked 且可读时才返回非空；否则返回 `Ok("")`，
+    /// 让调用方按原样继续处理（例如 tracked 但无改动 → 真的就没有差异）。
+    fn synthesize_untracked_diff(repo_path: &str, file_path: &str) -> Result<String, String> {
+        use std::path::PathBuf;
+
+        // 归一化路径：file_path 可能是绝对（FileTree 传的 data.path）或相对（仓库内）
+        let full_path = {
+            let p = PathBuf::from(file_path);
+            if p.is_absolute() {
+                p
+            } else {
+                PathBuf::from(repo_path).join(file_path)
+            }
+        };
+
+        if !full_path.is_file() {
+            return Ok(String::new());
+        }
+
+        // 确认文件 untracked：ls-files --error-unmatch 成功说明文件已被追踪
+        let ls_files = Command::new("git")
+            .args(["ls-files", "--error-unmatch", "--"])
+            .arg(&full_path)
+            .current_dir(repo_path)
+            .output()
+            .map_err(|e| format!("执行 git ls-files 失败: {}", e))?;
+        if ls_files.status.success() {
+            // 已追踪但无变更 — 不需要合成
+            return Ok(String::new());
+        }
+
+        // 读取文件原始字节先判二进制（含 NUL 的视为二进制）
+        let bytes = std::fs::read(&full_path)
+            .map_err(|e| format!("读取文件失败: {}", e))?;
+        let is_binary = bytes.contains(&0u8);
+
+        // 计算用于 diff header 的相对路径（失败就保持原样）
+        let rel_path = {
+            let repo_canon = PathBuf::from(repo_path)
+                .canonicalize()
+                .ok();
+            let file_canon = full_path.canonicalize().ok();
+            match (repo_canon, file_canon) {
+                (Some(r), Some(f)) => f
+                    .strip_prefix(&r)
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_else(|_| file_path.to_string()),
+                _ => file_path.to_string(),
+            }
+        };
+
+        let mut out = String::new();
+        out.push_str(&format!("diff --git a/{rp} b/{rp}\n", rp = rel_path));
+        out.push_str("new file mode 100644\n");
+
+        if is_binary {
+            out.push_str(&format!(
+                "Binary files /dev/null and b/{} differ\n",
+                rel_path
+            ));
+            return Ok(out);
+        }
+
+        let content = String::from_utf8_lossy(&bytes).to_string();
+        let lines: Vec<&str> = content.lines().collect();
+        let line_count = lines.len();
+        out.push_str("--- /dev/null\n");
+        out.push_str(&format!("+++ b/{}\n", rel_path));
+
+        if line_count == 0 {
+            // 空文件：没有 hunk 内容，只保留 header（足够 react-diff-view 显示"新建空文件"）
+            return Ok(out);
+        }
+
+        out.push_str(&format!("@@ -0,0 +1,{} @@\n", line_count));
+        for line in &lines {
+            out.push('+');
+            out.push_str(line);
+            out.push('\n');
+        }
+        if !content.ends_with('\n') {
+            out.push_str("\\ No newline at end of file\n");
+        }
+
+        Ok(out)
     }
 
     /// git 的空树哈希 —— 可作为任何 commit 的"之前"引用
@@ -423,6 +530,63 @@ impl GitService {
         }
 
         Ok(entries)
+    }
+
+    /// 获取单个 commit 的完整详情（hover tooltip 用）
+    ///
+    /// 一次 `git show` 同时拿到元信息 + numstat，用 `\0` 作字段分隔避免正文
+    /// 里的换行和 tab 把格式搞乱。
+    pub fn commit_detail(repo_path: &str, hash: &str) -> Result<GitCommitDetail, String> {
+        validate_git_ref(hash)?;
+
+        // format: hash\0short\0an\0ae\0ts\0subject\0body\0
+        // 之后紧跟一个换行 + numstat 输出
+        let output = Self::exec(
+            repo_path,
+            &[
+                "show",
+                "--format=format:%H%x00%h%x00%an%x00%ae%x00%at%x00%s%x00%b%x00",
+                "--numstat",
+                hash,
+            ],
+        )?;
+
+        let mut parts = output.splitn(8, '\0');
+        let hash_s = parts.next().unwrap_or("").to_string();
+        let short_hash = parts.next().unwrap_or("").to_string();
+        let author_name = parts.next().unwrap_or("").to_string();
+        let author_email = parts.next().unwrap_or("").to_string();
+        let timestamp = parts.next().unwrap_or("0").parse::<u64>().unwrap_or(0);
+        let subject = parts.next().unwrap_or("").to_string();
+        let body = parts.next().unwrap_or("").trim().to_string();
+        let rest = parts.next().unwrap_or("");
+
+        // 解析 numstat 统计（`add\tdel\tpath` 或二进制 `-\t-\tpath`）
+        let mut files_changed = 0u32;
+        let mut insertions = 0u32;
+        let mut deletions = 0u32;
+        for line in rest.lines() {
+            let cols: Vec<&str> = line.splitn(3, '\t').collect();
+            if cols.len() != 3 {
+                continue;
+            }
+            files_changed += 1;
+            insertions += cols[0].parse::<u32>().unwrap_or(0);
+            deletions += cols[1].parse::<u32>().unwrap_or(0);
+        }
+
+        Ok(GitCommitDetail {
+            hash: hash_s,
+            short_hash,
+            author_name,
+            author_email,
+            timestamp,
+            subject,
+            body,
+            files_changed,
+            insertions,
+            deletions,
+        })
     }
 
     /// 检查路径是否是 git 仓库

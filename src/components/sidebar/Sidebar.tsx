@@ -8,7 +8,7 @@
  * - 内容使用 150ms 淡入/淡出
  * - Cmd+B 快捷键切换
  */
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { FolderOpen } from "lucide-react";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useProjectStore } from "@/stores/projectStore";
@@ -22,10 +22,50 @@ import { ChangesView } from "./ChangesView";
 import { HistoryView } from "./HistoryView";
 import type { FileChangeEvent } from "@/services/watcher";
 
+/** Sidebar 宽度可拖拽范围 */
+const MIN_SIDEBAR_WIDTH = 180;
+const MAX_SIDEBAR_WIDTH = 480;
+
 export function Sidebar() {
   const { sidebarWidth, sidebarOpen, sidebarCollapsedWidth, toggleSidebar } =
     useSettingsStore();
+  const setSidebarWidth = useSettingsStore((s) => s.setSidebarWidth);
   const { projects, activeProject, expandedProjectIds } = useProjectStore();
+
+  // 右缘宽度拖拽 —
+  // 拖拽期间关掉 200ms 的 width 过渡，避免光标和面板边缘有延迟感
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeStateRef = useRef({ startX: 0, startWidth: 0 });
+
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      if (!sidebarOpen) return;
+      e.preventDefault();
+      resizeStateRef.current = { startX: e.clientX, startWidth: sidebarWidth };
+      setIsResizing(true);
+
+      const handleMove = (me: MouseEvent) => {
+        const delta = me.clientX - resizeStateRef.current.startX;
+        const next = Math.max(
+          MIN_SIDEBAR_WIDTH,
+          Math.min(MAX_SIDEBAR_WIDTH, resizeStateRef.current.startWidth + delta),
+        );
+        setSidebarWidth(next);
+      };
+      const handleUp = () => {
+        setIsResizing(false);
+        document.removeEventListener("mousemove", handleMove);
+        document.removeEventListener("mouseup", handleUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      document.addEventListener("mousemove", handleMove);
+      document.addEventListener("mouseup", handleUp);
+    },
+    [sidebarOpen, sidebarWidth, setSidebarWidth],
+  );
 
   // Cmd+B 切换侧边栏
   useEffect(() => {
@@ -106,14 +146,16 @@ export function Sidebar() {
 
   return (
     <aside
-      className="flex flex-col border-r h-full flex-shrink-0 overflow-hidden"
+      className="relative flex flex-col border-r h-full flex-shrink-0 overflow-hidden"
       style={{
-        /* 宽度平滑过渡：240px ↔ 48px */
+        /* 宽度平滑过渡：240px ↔ 48px；拖拽时关闭过渡避免延迟感 */
         width: sidebarOpen ? sidebarWidth : sidebarCollapsedWidth,
         minWidth: sidebarOpen ? sidebarWidth : sidebarCollapsedWidth,
         backgroundColor: "var(--sg-bg-sidebar, #0d0e13)",
         borderColor: "var(--sg-border-primary, #1a1c23)",
-        transition: "width 200ms var(--sg-ease-out, ease-out), min-width 200ms var(--sg-ease-out, ease-out)",
+        transition: isResizing
+          ? "none"
+          : "width 200ms var(--sg-ease-out, ease-out), min-width 200ms var(--sg-ease-out, ease-out)",
       }}
     >
       {/* ====== 折叠模式：48px 图标条 ====== */}
@@ -146,6 +188,24 @@ export function Sidebar() {
 
           {/* 添加项目 */}
           <AddProjectButton collapsed />
+        </div>
+      )}
+
+      {/* 右缘拖拽握把 — 4px 命中区，hover 时在 1px 边线处显示蓝色高亮 */}
+      {sidebarOpen && (
+        <div
+          className="absolute top-0 right-0 h-full group z-10"
+          style={{
+            width: 4,
+            cursor: "col-resize",
+            transform: "translateX(2px)", // 跨越边框，让命中区包含边框两侧
+          }}
+          onMouseDown={handleResizeStart}
+        >
+          <div
+            className="absolute top-0 bottom-0 right-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+            style={{ width: 2, backgroundColor: "var(--sg-accent)" }}
+          />
         </div>
       )}
 

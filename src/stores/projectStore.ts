@@ -28,10 +28,6 @@ interface ProjectState {
   fileDiffStats: Record<string, FileDiffStat>;
   /** 正在写入的文件路径集合 */
   writingFiles: Set<string>;
-  /** 当前 hover 高亮的 agent ID */
-  hoveredAgentId: string | null;
-  /** agent 修改的文件映射 (agentId -> filePaths[]) */
-  agentFileMap: Record<string, string[]>;
   /** 侧边栏视图模式（全局，所有项目共用） */
   viewMode: SidebarViewMode;
   /** Changes/History 文件列表排版（全局，tree/flat） */
@@ -63,10 +59,6 @@ interface ProjectState {
   setFileDiffStats: (stats: Record<string, FileDiffStat>) => void;
   /** 标记文件正在写入 */
   setFileWriting: (path: string, writing: boolean) => void;
-  /** 设置 hover 的 agent */
-  setHoveredAgent: (agentId: string | null) => void;
-  /** 设置 agent 文件映射 */
-  setAgentFileMap: (map: Record<string, string[]>) => void;
   /** 更新指定项目中目录节点的子节点（按需加载） */
   updateNodeChildren: (projectId: string, nodeId: string, children: FileNode[]) => void;
 
@@ -100,8 +92,6 @@ export const useProjectStore = create<ProjectState>((set) => ({
   gitBranch: "main",
   fileDiffStats: {},
   writingFiles: new Set(),
-  hoveredAgentId: null,
-  agentFileMap: {},
   viewMode: "files",
   flatMode: false,
   selectedCommits: {},
@@ -156,10 +146,6 @@ export const useProjectStore = create<ProjectState>((set) => ({
       if (writing) { newSet.add(path); } else { newSet.delete(path); }
       return { writingFiles: newSet };
     }),
-
-  setHoveredAgent: (agentId) => set({ hoveredAgentId: agentId }),
-
-  setAgentFileMap: (map) => set({ agentFileMap: map }),
 
   updateNodeChildren: (projectId, nodeId, children) =>
     set((state) => {

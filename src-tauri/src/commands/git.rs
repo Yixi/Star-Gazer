@@ -2,7 +2,9 @@
 //! 通过 shell out 到系统 git 命令实现（参考 VSCode）
 
 use crate::services::git_service::GitService;
-use crate::types::models::{GitBranch, GitFileChange, GitLogEntry, GitStatusSummary};
+use crate::types::models::{
+    GitBranch, GitCommitDetail, GitFileChange, GitLogEntry, GitStatusSummary,
+};
 
 /// 获取 Git 仓库状态
 #[tauri::command]
@@ -63,4 +65,13 @@ pub async fn git_commit_files(
 ) -> Result<Vec<GitFileChange>, String> {
     log::info!("获取 commit 文件列表: {} ({}..{})", repo_path, from, to);
     GitService::commit_files_range(&repo_path, &from, &to)
+}
+
+/// 获取单个 commit 的完整详情（hover tooltip 用）
+#[tauri::command]
+pub async fn git_commit_detail(
+    repo_path: String,
+    hash: String,
+) -> Result<GitCommitDetail, String> {
+    GitService::commit_detail(&repo_path, &hash)
 }

@@ -19,7 +19,6 @@ import { usePanelStore } from "@/stores/panelStore";
 import type { FileNode } from "@/types/project";
 import { FileIcon } from "@/utils/fileIcon";
 import { AGENT_COLOR_HEX } from "@/constants/agentColors";
-import { useShallow } from "zustand/react/shallow";
 
 /** 始终隐藏的条目（git 内部目录和 macOS 系统文件） */
 const ALWAYS_HIDDEN = new Set([".git", ".DS_Store"]);
@@ -419,7 +418,6 @@ async function loadFileTree(projectId: string, projectPath: string) {
  * - Caret: ▼/▶ 文字, 9px, #6b7280, 10px 宽
  * - 图标: 📂/📁/📄 emoji, 11px
  * - active-in-panel: 蓝色左边条 + 淡蓝背景
- * - Agent hover: 背景渐变 + 颜色竖条 + 文件名加粗
  */
 function FileTreeNode({
   node,
@@ -437,25 +435,8 @@ function FileTreeNode({
   const data = node.data;
   const openTab = usePanelStore((s) => s.openTab);
   const activeTabId = usePanelStore((s) => s.activeTabId);
-
-  // 关键性能优化：把 writingFiles / hoveredAgentId / agentFileMap 三个独立
-  // selector 合并为一个 useShallow，派生出本节点真正关心的 3 个布尔值。
-  // 这样只有当**本节点的**写入 / 高亮 / dim 状态发生变化时才会 re-render，
-  // 而不是任意其他节点状态变化都连带整个树 re-render。
-  const { isWriting, isHighlightedByAgent, isDimmed } = useProjectStore(
-    useShallow((s) => {
-      const writing = s.writingFiles.has(data.path);
-      const hoveredId = s.hoveredAgentId;
-      const isHL =
-        hoveredId !== null && (s.agentFileMap[hoveredId]?.includes(data.path) ?? false);
-      const dimmed = hoveredId !== null && !isHL;
-      return {
-        isWriting: writing,
-        isHighlightedByAgent: isHL,
-        isDimmed: dimmed,
-      };
-    }),
-  );
+  // writingFiles 是 Set 引用，set 自身变化才触发 re-render；has() O(1)
+  const isWriting = useProjectStore((s) => s.writingFiles.has(data.path));
 
   // 检查是否在 gitignore 中（用相对路径匹配）
   const relativePath = data.path.startsWith(projectPath)
@@ -467,11 +448,6 @@ function FileTreeNode({
   const localDiffStat = diffByPath[data.path];
   const localStatus = statusByPath[data.path];
   const effectiveGitStatus = data.gitStatus || localStatus;
-
-  /* ====== Hover 关联高亮颜色 ====== */
-  const highlightColor = isHighlightedByAgent
-    ? AGENT_COLOR_HEX[data.agentColor ?? "blue"] ?? "#4a9eff"
-    : undefined;
 
   /* ====== Active-in-panel ====== */
   const isActiveInPanel = !data.isDir && activeTabId === data.path;
@@ -529,33 +505,21 @@ function FileTreeNode({
         paddingRight: 14,
         paddingTop: 2,
         paddingBottom: 2,
-        /* 过渡动画 */
-        transition: "opacity 300ms ease, background 300ms ease",
-        opacity: isDimmed ? 0.35 : 1,
-        /* 背景 — agent hover 优先，active-in-panel 次之 */
-        background: isHighlightedByAgent
-          ? `linear-gradient(90deg, ${highlightColor}18 0%, transparent 100%)`
-          : isActiveInPanel
-            ? "rgba(74, 158, 255, 0.08)"
-            : "transparent",
+        transition: "background 300ms ease",
+        background: isActiveInPanel ? "rgba(74, 158, 255, 0.08)" : "transparent",
         position: "relative",
       }}
       className="flex items-center cursor-pointer hover:bg-white/[0.04]"
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
     >
-      {/* 左侧 2px 颜色竖条 */}
+      {/* 左侧 2px 颜色竖条（仅 active-in-panel） */}
       <div
         className="absolute left-0 top-0 bottom-0"
         style={{
-          width: isHighlightedByAgent || isActiveInPanel ? 2 : 0,
-          backgroundColor: isHighlightedByAgent
-            ? (highlightColor ?? "transparent")
-            : isActiveInPanel
-              ? "#4a9eff"
-              : "transparent",
-          boxShadow: isHighlightedByAgent ? `0 0 6px ${highlightColor}60` : "none",
-          transition: "width 300ms ease, box-shadow 300ms ease",
+          width: isActiveInPanel ? 2 : 0,
+          backgroundColor: isActiveInPanel ? "#4a9eff" : "transparent",
+          transition: "width 300ms ease",
         }}
       />
 
@@ -586,12 +550,12 @@ function FileTreeNode({
           />
         </span>
 
-        {/* 文件名 — 13px, agent hover 白色600 / active-in-panel 白色500 */}
+        {/* 文件名 — 13px, active-in-panel 白色500 */}
         <span
           className="truncate"
           style={{
             fontSize: 13,
-            color: isHighlightedByAgent || isActiveInPanel
+            color: isActiveInPanel
               ? "#ffffff"
               : isGitIgnored
                 ? "#4a5263"
@@ -602,7 +566,7 @@ function FileTreeNode({
                     : "#b8bcc4",
             fontStyle: isUntracked ? "italic" : "normal",
             textDecoration: isDeleted ? "line-through" : "none",
-            fontWeight: isHighlightedByAgent ? 600 : isActiveInPanel ? 500 : 400,
+            fontWeight: isActiveInPanel ? 500 : 400,
             transition: "color 300ms ease, font-weight 300ms ease",
           }}
         >
@@ -637,10 +601,6 @@ function FileTreeNode({
             className="w-2 h-2 rounded-full ml-auto flex-shrink-0"
             style={{
               backgroundColor: AGENT_COLOR_HEX[data.agentColor] ?? "#4a9eff",
-              boxShadow: isHighlightedByAgent
-                ? `0 0 6px ${AGENT_COLOR_HEX[data.agentColor]}80`
-                : "none",
-              transition: "box-shadow 300ms ease",
             }}
           />
         )}

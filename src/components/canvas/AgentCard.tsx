@@ -20,7 +20,6 @@
 import { useRef, useCallback, useMemo, useState, useEffect } from "react";
 import { X, Minus, Maximize2, Minimize2 } from "lucide-react";
 import { useCanvasStore } from "@/stores/canvasStore";
-import { useProjectStore } from "@/stores/projectStore";
 import { TerminalView } from "@/components/terminal/TerminalView";
 import { PulsingDot } from "@/components/ui/PulsingDot";
 import type { Agent } from "@/types/agent";
@@ -68,8 +67,6 @@ export function AgentCard({ agent }: AgentCardProps) {
     setCardDisplayMode,
     getCardDisplayMode,
   } = useCanvasStore();
-
-  const setHoveredAgent = useProjectStore((s) => s.setHoveredAgent);
 
   const cardRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
@@ -454,11 +451,9 @@ export function AgentCard({ agent }: AgentCardProps) {
         onMouseLeave={() => {
           setHoverEdge(null);
           setIsHovered(false);
-          setHoveredAgent(null);
         }}
         onMouseEnter={() => {
           setIsHovered(true);
-          setHoveredAgent(agent.id);
         }}
         data-agent-id={agent.id}
         data-agent-color={agent.color}

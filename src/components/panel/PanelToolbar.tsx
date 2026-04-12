@@ -22,16 +22,36 @@ export function PanelToolbar({ tab }: PanelToolbarProps) {
 
   // 生成面包屑路径 — 优先用 tab 自己记的 projectPath，保证切换 active project
   // 后，旧 tab 的面包屑仍显示它所属项目的相对路径
-  const breadcrumbs = generateBreadcrumbs(
-    tab.filePath,
-    tab.projectPath ?? activeProject?.path,
-  );
+  const effectiveProjectPath = tab.projectPath ?? activeProject?.path;
+  const breadcrumbs = generateBreadcrumbs(tab.filePath, effectiveProjectPath);
   const stat = diffStats[tab.id];
 
   // 是否有 Git 改动（可以切换到 diff 模式）
+  //
+  // 关键点：`fileDiffStats` 只包含 tracked 且有 staged/unstaged 行数的文件，
+  // **untracked 新文件不在里面**。之前的判断只查 fileDiffStats，一旦用户把
+  // untracked 文件从 diff 切到 file 模式，`tab.type === "diff"` 也变 false，
+  // 整个 toggle 就消失再也切不回去了。这里额外从该项目的 gitStatusByProject
+  // 的 `untracked` 列表查一下，untracked 文件一样显示 diff/file toggle。
   const fileDiffStats = useProjectStore((s) => s.fileDiffStats);
-  const hasChanges = !!fileDiffStats[tab.filePath] ||
-    tab.type === "diff";
+  const projects = useProjectStore((s) => s.projects);
+  const gitStatusByProject = useProjectStore((s) => s.gitStatusByProject);
+
+  const owningProject = effectiveProjectPath
+    ? projects.find((p) => p.path === effectiveProjectPath)
+    : undefined;
+  const projectGitStatus = owningProject
+    ? gitStatusByProject[owningProject.id]
+    : undefined;
+  const relativeFilePath =
+    effectiveProjectPath && tab.filePath.startsWith(effectiveProjectPath)
+      ? tab.filePath.slice(effectiveProjectPath.length).replace(/^\//, "")
+      : tab.filePath;
+  const isUntracked =
+    projectGitStatus?.untracked.includes(relativeFilePath) ?? false;
+
+  const hasChanges =
+    !!fileDiffStats[tab.filePath] || isUntracked || tab.type === "diff";
 
   // 是否为可预览文件（markdown、图片等）
   const ext = tab.filePath.split(".").pop()?.toLowerCase() ?? "";

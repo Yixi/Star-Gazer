@@ -11,23 +11,32 @@
 import type { GraphNode } from "@/lib/commitGraph";
 
 const LANE_WIDTH = 12;
-const ROW_HEIGHT = 32;
-const NODE_RADIUS = 3.5;
+const ROW_HEIGHT = 24;
+const NODE_RADIUS = 3;
 
 interface CommitGraphColumnProps {
   node: GraphNode;
-  /** 整张图的最大 lane 数 — 用于固定 SVG 宽度，避免行间抖动 */
-  totalLanes: number;
   /** 是否高亮（commit 被选中） */
   selected?: boolean;
 }
 
+/** 计算本行实际占用的最大 lane（含 passThrough / upper / lower / 自身 lane） */
+function maxLaneOfRow(node: GraphNode): number {
+  let m = node.lane;
+  for (const p of node.passThrough) if (p.lane > m) m = p.lane;
+  for (const u of node.upperToNode) if (u.fromLane > m) m = u.fromLane;
+  for (const l of node.lowerFromNode) if (l.toLane > m) m = l.toLane;
+  return m;
+}
+
 export function CommitGraphColumn({
   node,
-  totalLanes,
   selected,
 }: CommitGraphColumnProps) {
-  const width = Math.max(1, totalLanes) * LANE_WIDTH + LANE_WIDTH / 2;
+  // SVG 宽度 = 本行最宽 lane + 半个 lane 的右留白
+  // （不再按全局 totalLanes 对齐，让后续 hash/message 紧跟图元，节约空间）
+  const rowMax = maxLaneOfRow(node);
+  const width = (rowMax + 1) * LANE_WIDTH;
   const centerY = ROW_HEIGHT / 2;
   const myX = laneX(node.lane);
 

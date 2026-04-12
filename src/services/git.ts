@@ -31,6 +31,22 @@ export interface GitFileChange {
   deletions: number;
 }
 
+/** 单个 commit 的完整详情（hover tooltip 用） */
+export interface GitCommitDetail {
+  hash: string;
+  shortHash: string;
+  authorName: string;
+  authorEmail: string;
+  timestamp: number;
+  /** commit 标题（第一行） */
+  subject: string;
+  /** commit 正文（第一行之后，可能为空） */
+  body: string;
+  filesChanged: number;
+  insertions: number;
+  deletions: number;
+}
+
 /** Git 日志条目 */
 export interface GitLogEntry {
   hash: string;
@@ -91,4 +107,12 @@ export async function gitCommitFiles(
   to: string,
 ): Promise<GitFileChange[]> {
   return invoke("git_commit_files", { repoPath, from, to });
+}
+
+/** 获取单个 commit 的完整详情（hover tooltip 用） */
+export async function gitCommitDetail(
+  repoPath: string,
+  hash: string,
+): Promise<GitCommitDetail> {
+  return invoke("git_commit_detail", { repoPath, hash });
 }

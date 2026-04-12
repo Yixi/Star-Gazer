@@ -56,6 +56,25 @@ pub struct GitBranch {
     pub upstream: Option<String>,
 }
 
+/// 单个 commit 的详细信息（hover tooltip 用）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCommitDetail {
+    pub hash: String,
+    pub short_hash: String,
+    pub author_name: String,
+    pub author_email: String,
+    pub timestamp: u64,
+    /// commit 标题（第一行）
+    pub subject: String,
+    /// commit 正文（第一行之后的部分，可能为空）
+    pub body: String,
+    /// 变更文件总数
+    pub files_changed: u32,
+    pub insertions: u32,
+    pub deletions: u32,
+}
+
 /// Git 日志条目
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
