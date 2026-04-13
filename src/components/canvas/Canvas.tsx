@@ -15,8 +15,16 @@ import { FAB } from "./FAB";
 import { AgentPicker } from "./AgentPicker";
 
 export function Canvas() {
-  const { agents, viewport, zoom, isPanning, setViewport, setIsPanning } =
-    useCanvasStore();
+  const {
+    agents,
+    viewport,
+    zoom,
+    isPanning,
+    setViewport,
+    setIsPanning,
+    setZoom,
+    relayoutAgents,
+  } = useCanvasStore();
   const canvasRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const lastMouse = useRef({ x: 0, y: 0 });
@@ -207,6 +215,18 @@ export function Canvas() {
     return () => el.removeEventListener("wheel", preventDefaultWheel);
   }, []);
 
+  /** 触发重排：用画布容器宽度（除以当前 zoom 还原到画布坐标系） */
+  const handleRelayout = useCallback(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const cssWidth = el.clientWidth;
+    // Canvas 内容层用了 CSS zoom，画布坐标系宽度 = CSS 宽度 / zoom
+    const canvasWidth = cssWidth / (zoom || 1);
+    relayoutAgents(canvasWidth);
+    // 重排后把 zoom 也复位到 100%，避免视口缩放后定位错乱
+    setZoom(1);
+  }, [zoom, relayoutAgents, setZoom]);
+
   /** 根据状态决定光标样式 */
   const getCursorClass = () => {
     if (isPanning || isDragging.current) return "cursor-grabbing";
@@ -226,7 +246,7 @@ export function Canvas() {
       onWheel={handleWheel}
     >
       {/* 画布工具栏 */}
-      <CanvasToolbar />
+      <CanvasToolbar onRelayout={handleRelayout} />
 
       {/* 画布内容层 */}
       <div

@@ -60,7 +60,19 @@ interface CanvasState {
   getCardDisplayMode: (id: string) => CardDisplayMode;
   /** 获取 agent 的堆叠 z 值（默认 1） */
   getCardZOrder: (id: string) => number;
+  /**
+   * 重排所有 Agent 卡片为不重叠的网格。
+   * 用 shelf-pack 算法：按当前数组顺序逐个放置，
+   * 行宽超出 availableWidth 时换行。最大化卡片会先复位为 normal，
+   * 最小化卡片按头部高度计入行高。重排后视口归零。
+   */
+  relayoutAgents: (availableWidth: number) => void;
 }
+
+/** 重排算法用的常量 */
+const RELAYOUT_PADDING = 24;
+const RELAYOUT_GAP = 20;
+const MINIMIZED_HEIGHT = 36;
 
 export const useCanvasStore = create<CanvasState>((set, get) => ({
   agents: [],
@@ -157,4 +169,47 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   getCardZOrder: (id) => {
     return get().cardZOrder[id] ?? 1;
   },
+
+  relayoutAgents: (availableWidth) =>
+    set((state) => {
+      if (state.agents.length === 0) return state;
+
+      const maxRowRight =
+        Math.max(400, availableWidth) - RELAYOUT_PADDING;
+      let cursorX = RELAYOUT_PADDING;
+      let cursorY = RELAYOUT_PADDING;
+      let rowHeight = 0;
+
+      // 把 maximized 的卡片复位为 normal — 重排后该是干净网格
+      const nextDisplayModes = { ...state.cardDisplayModes };
+
+      const nextAgents = state.agents.map((agent) => {
+        if (nextDisplayModes[agent.id] === "maximized") {
+          nextDisplayModes[agent.id] = "normal";
+        }
+        const w = agent.size.width;
+        const h =
+          nextDisplayModes[agent.id] === "minimized"
+            ? MINIMIZED_HEIGHT
+            : agent.size.height;
+
+        // 行内放不下就换行（除非已经在行首）
+        if (cursorX !== RELAYOUT_PADDING && cursorX + w > maxRowRight) {
+          cursorX = RELAYOUT_PADDING;
+          cursorY += rowHeight + RELAYOUT_GAP;
+          rowHeight = 0;
+        }
+
+        const placed = { ...agent, position: { x: cursorX, y: cursorY } };
+        cursorX += w + RELAYOUT_GAP;
+        if (h > rowHeight) rowHeight = h;
+        return placed;
+      });
+
+      return {
+        agents: nextAgents,
+        cardDisplayModes: nextDisplayModes,
+        viewport: { x: 0, y: 0 },
+      };
+    }),
 }));
