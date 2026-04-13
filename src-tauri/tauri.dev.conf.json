@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Star Gazer Dev",
+  "identifier": "com.yixi.stargazer.dev",
+  "app": {
+    "windows": [
+      {
+        "title": "Star Gazer Dev"
+      }
+    ]
+  }
+}
