@@ -106,6 +106,22 @@ a,
   transition: background-color 150ms ease, color 150ms ease, opacity 150ms ease, box-shadow 150ms ease, transform 100ms ease;
 }
 
+/* Tailwind v4 移除了 button 默认的 cursor: pointer，这里全局补回 —
+   所有可点击元素 hover 时显示手型光标。disabled 按钮维持默认指针。 */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+a[href],
+summary,
+label[for],
+select:not(:disabled),
+[type="button"]:not(:disabled),
+[type="submit"]:not(:disabled),
+[type="reset"]:not(:disabled),
+[type="checkbox"]:not(:disabled),
+[type="radio"]:not(:disabled) {
+  cursor: pointer;
+}
+
 /* 所有分隔线使用统一颜色 */
 hr,
 [data-slot="separator"] {

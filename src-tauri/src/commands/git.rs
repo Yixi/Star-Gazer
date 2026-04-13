@@ -75,3 +75,31 @@ pub async fn git_commit_detail(
 ) -> Result<GitCommitDetail, String> {
     GitService::commit_detail(&repo_path, &hash)
 }
+
+/// 创建 commit — 若无 staged 改动会自动 `git add -A`
+#[tauri::command]
+pub async fn git_commit(repo_path: String, message: String) -> Result<(), String> {
+    log::info!("Git commit: {} ({} chars)", repo_path, message.len());
+    GitService::commit(&repo_path, &message)
+}
+
+/// Push 当前分支到远端（无 upstream 时自动 `-u origin <branch>`）
+#[tauri::command]
+pub async fn git_push(repo_path: String) -> Result<(), String> {
+    log::info!("Git push: {}", repo_path);
+    GitService::push(&repo_path)
+}
+
+/// Pull 当前分支（--ff-only）
+#[tauri::command]
+pub async fn git_pull(repo_path: String) -> Result<(), String> {
+    log::info!("Git pull: {}", repo_path);
+    GitService::pull(&repo_path)
+}
+
+/// Fetch 所有远端 + prune
+#[tauri::command]
+pub async fn git_fetch(repo_path: String) -> Result<(), String> {
+    log::info!("Git fetch: {}", repo_path);
+    GitService::fetch(&repo_path)
+}

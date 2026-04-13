@@ -41,6 +41,10 @@ pub fn run() {
             git::git_diff_range,
             git::git_commit_files,
             git::git_commit_detail,
+            git::git_commit,
+            git::git_push,
+            git::git_pull,
+            git::git_fetch,
             // 文件系统命令
             fs::read_file,
             fs::write_file,

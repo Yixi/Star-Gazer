@@ -600,6 +600,105 @@ impl GitService {
         Self::exec(path, &["rev-parse", "--git-dir"]).is_ok()
     }
 
+    /// 提交 — 若无 staged 改动则先 `git add -A`（VSCode 的 smart commit 行为）
+    ///
+    /// 通过 `--file=-` 从 stdin 喂 message，避免 message 里有引号 / 反引号 / `$`
+    /// 等被 shell 误解的字符。空 message 拒绝。
+    pub fn commit(repo_path: &str, message: &str) -> Result<(), String> {
+        let trimmed = message.trim();
+        if trimmed.is_empty() {
+            return Err("commit message 不能为空".to_string());
+        }
+
+        // 检查是否有 staged 改动；没有就把所有 working 变更（含 untracked）暂存
+        let cached = Self::exec(repo_path, &["diff", "--cached", "--name-only"])
+            .unwrap_or_default();
+        if cached.trim().is_empty() {
+            Self::exec(repo_path, &["add", "-A"])?;
+        }
+
+        // 用 stdin 喂 message —— 比 `-m` 安全，原样保留特殊字符和换行
+        use std::io::Write;
+        use std::process::Stdio;
+        let mut child = Command::new("git")
+            .args(["commit", "--file=-"])
+            .current_dir(repo_path)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("启动 git commit 失败: {}", e))?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin
+                .write_all(message.as_bytes())
+                .map_err(|e| format!("写入 commit message 失败: {}", e))?;
+        }
+
+        let output = child
+            .wait_with_output()
+            .map_err(|e| format!("等待 git commit 失败: {}", e))?;
+
+        if output.status.success() {
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            Err(if stderr.trim().is_empty() {
+                format!("git commit 失败，退出码: {:?}", output.status.code())
+            } else {
+                stderr
+            })
+        }
+    }
+
+    /// 当前分支名（detached HEAD 返回 None）
+    fn current_branch(repo_path: &str) -> Option<String> {
+        let out = Self::exec(repo_path, &["symbolic-ref", "--quiet", "--short", "HEAD"]).ok()?;
+        let name = out.trim();
+        if name.is_empty() { None } else { Some(name.to_string()) }
+    }
+
+    /// Push 当前分支 — 若没有 upstream 则自动 `-u origin <branch>` 创建追踪
+    pub fn push(repo_path: &str) -> Result<(), String> {
+        // 先尝试普通 push
+        let direct = Command::new("git")
+            .args(["push"])
+            .current_dir(repo_path)
+            .output()
+            .map_err(|e| format!("执行 git push 失败: {}", e))?;
+
+        if direct.status.success() {
+            return Ok(());
+        }
+
+        let stderr = String::from_utf8_lossy(&direct.stderr).to_string();
+
+        // 没有 upstream 的典型 stderr 关键字
+        let needs_upstream = stderr.contains("has no upstream branch")
+            || stderr.contains("no upstream configured")
+            || stderr.contains("set-upstream");
+
+        if needs_upstream {
+            let branch = Self::current_branch(repo_path)
+                .ok_or_else(|| "当前处于 detached HEAD，无法 push".to_string())?;
+            // 默认 origin；远端不叫 origin 的项目会失败，让 stderr 透传
+            Self::exec(repo_path, &["push", "-u", "origin", &branch])?;
+            return Ok(());
+        }
+
+        Err(stderr)
+    }
+
+    /// Pull 当前分支 — 默认 `--ff-only`，遇 diverged 让用户自己决定 rebase/merge
+    pub fn pull(repo_path: &str) -> Result<(), String> {
+        Self::exec(repo_path, &["pull", "--ff-only"]).map(|_| ())
+    }
+
+    /// Fetch 所有远端 + prune 掉已删除的远端分支
+    pub fn fetch(repo_path: &str) -> Result<(), String> {
+        Self::exec(repo_path, &["fetch", "--all", "--prune"]).map(|_| ())
+    }
+
     /// 检查给定的相对路径列表哪些被 gitignore 规则直接匹配
     /// 使用 `git check-ignore` 精确检查每个路径自身是否匹配 gitignore 规则
     /// （而不是像 `git status --ignored` 那样在子文件全被忽略时将整个目录报为 ignored）

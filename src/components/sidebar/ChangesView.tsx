@@ -12,6 +12,7 @@ import { useMemo, useState } from "react";
 import { useProjectStore } from "@/stores/projectStore";
 import { usePanelStore } from "@/stores/panelStore";
 import { ChangedFileRow } from "./ChangedFileRow";
+import { CommitBar } from "./CommitBar";
 import type { Project } from "@/types/project";
 import type { GitFileChange } from "@/services/git";
 
@@ -101,41 +102,44 @@ export function ChangesView({ project }: ChangesViewProps) {
     );
   }
 
-  if (changes.length === 0) {
-    return (
-      <div
-        className="flex items-center justify-center text-xs"
-        style={{ height: 60, color: "#6b7280" }}
-      >
-        没有未提交的变更
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col">
-      {/* 顶部统计 */}
-      <div
-        className="flex items-center justify-between flex-shrink-0"
-        style={{
-          padding: "4px 14px",
-          fontSize: 10,
-          color: "#6b7280",
-          fontFamily: "'SF Mono', Menlo, monospace",
-        }}
-      >
-        <span>{changes.length} changed</span>
-        <span className="tabular-nums" style={{ gap: 4 }}>
-          {totalAdd > 0 && <span style={{ color: "#22c55e" }}>+{totalAdd} </span>}
-          {totalDel > 0 && <span style={{ color: "#ef4444" }}>-{totalDel}</span>}
-        </span>
-      </div>
+      {/* Commit / Push / Pull / Fetch 操作条 — 即使没有本地改动也常驻，方便 sync */}
+      <CommitBar project={project} />
 
-      {/* 文件列表 */}
-      {flat ? (
-        <FlatList changes={changes} onClick={handleClickFile} projectPath={project.path} />
+      {changes.length === 0 ? (
+        <div
+          className="flex items-center justify-center text-xs"
+          style={{ height: 48, color: "#6b7280" }}
+        >
+          没有未提交的变更
+        </div>
       ) : (
-        <TreeList changes={changes} onClick={handleClickFile} projectPath={project.path} />
+        <>
+          {/* 顶部统计 */}
+          <div
+            className="flex items-center justify-between flex-shrink-0"
+            style={{
+              padding: "4px 14px",
+              fontSize: 10,
+              color: "#6b7280",
+              fontFamily: "'SF Mono', Menlo, monospace",
+            }}
+          >
+            <span>{changes.length} changed</span>
+            <span className="tabular-nums" style={{ gap: 4 }}>
+              {totalAdd > 0 && <span style={{ color: "#22c55e" }}>+{totalAdd} </span>}
+              {totalDel > 0 && <span style={{ color: "#ef4444" }}>-{totalDel}</span>}
+            </span>
+          </div>
+
+          {/* 文件列表 */}
+          {flat ? (
+            <FlatList changes={changes} onClick={handleClickFile} projectPath={project.path} />
+          ) : (
+            <TreeList changes={changes} onClick={handleClickFile} projectPath={project.path} />
+          )}
+        </>
       )}
     </div>
   );

@@ -116,3 +116,26 @@ export async function gitCommitDetail(
 ): Promise<GitCommitDetail> {
   return invoke("git_commit_detail", { repoPath, hash });
 }
+
+/** 创建 commit；无 staged 改动时后端会自动 `git add -A` */
+export async function gitCommit(
+  repoPath: string,
+  message: string,
+): Promise<void> {
+  return invoke("git_commit", { repoPath, message });
+}
+
+/** Push 当前分支；首次无 upstream 时自动 `-u origin <branch>` */
+export async function gitPush(repoPath: string): Promise<void> {
+  return invoke("git_push", { repoPath });
+}
+
+/** Pull 当前分支（--ff-only） */
+export async function gitPull(repoPath: string): Promise<void> {
+  return invoke("git_pull", { repoPath });
+}
+
+/** Fetch 所有远端 + prune */
+export async function gitFetch(repoPath: string): Promise<void> {
+  return invoke("git_fetch", { repoPath });
+}
