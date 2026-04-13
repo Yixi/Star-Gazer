@@ -182,18 +182,18 @@ export function CommitBar({ project }: CommitBarProps) {
         </div>
       </div>
 
-      {/* Message 输入框 */}
+      {/* Message 输入框 — 默认单行高度，输入多行时浏览器自动滚动；用户也可以手动 resize */}
       <textarea
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={`Message (⌘⏎ to commit on "${branch}")`}
-        rows={2}
+        rows={1}
         spellCheck={false}
         style={{
           width: "100%",
           resize: "none",
-          padding: "6px 8px",
+          padding: "5px 8px",
           fontSize: 12,
           lineHeight: 1.5,
           fontFamily: "inherit",
@@ -202,6 +202,7 @@ export function CommitBar({ project }: CommitBarProps) {
           border: "1px solid #1f232c",
           borderRadius: 4,
           outline: "none",
+          minHeight: 26,
         }}
         onFocus={(e) => {
           e.currentTarget.style.borderColor = "#4a9eff";
