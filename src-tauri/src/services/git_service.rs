@@ -75,8 +75,14 @@ impl GitService {
     }
 
     /// 解析 git status --porcelain=v2 --branch 输出
+    ///
+    /// `--untracked-files=all` 让 git 展开新目录里的每个文件，避免出现
+    /// `? path/to/dir/` 这种带尾斜杠的目录条目（前端拿不到文件名）。
     pub fn status(repo_path: &str) -> Result<GitStatusSummary, String> {
-        let output = Self::exec(repo_path, &["status", "--porcelain=v2", "--branch"])?;
+        let output = Self::exec(
+            repo_path,
+            &["status", "--porcelain=v2", "--branch", "--untracked-files=all"],
+        )?;
 
         // 获取 unstaged 和 staged 的 numstat
         let unstaged_stats = Self::exec(repo_path, &["diff", "--numstat"])
