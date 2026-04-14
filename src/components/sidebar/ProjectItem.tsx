@@ -13,7 +13,7 @@
  * - Close Project
  * - Remove from Star Gazer
  */
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import {
   Trash2,
@@ -124,6 +124,29 @@ export function ProjectItem({ project, isActive, isExpanded }: ProjectItemProps)
     (s) => s.gitStatusByProject[project.id]?.branch ?? "",
   );
 
+  // Changes 视图下，折叠态也要在 header 展示项目总 +/- 统计
+  const viewMode = useProjectStore((s) => s.viewMode);
+  const projectGitStatus = useProjectStore(
+    (s) => s.gitStatusByProject[project.id],
+  );
+  const diffSummary = useMemo(() => {
+    if (viewMode !== "changes" || !projectGitStatus) return null;
+    // staged + unstaged 全部累加。ChangesView 的合并策略是按 path dedupe 后
+    // 再各自 += additions/deletions —— 总和等价于这里的简单相加。
+    let add = 0;
+    let del = 0;
+    for (const c of projectGitStatus.staged) {
+      add += c.additions;
+      del += c.deletions;
+    }
+    for (const c of projectGitStatus.unstaged) {
+      add += c.additions;
+      del += c.deletions;
+    }
+    if (add === 0 && del === 0) return null;
+    return { add, del };
+  }, [viewMode, projectGitStatus]);
+
   return (
     <>
       <button
@@ -212,6 +235,26 @@ export function ProjectItem({ project, isActive, isExpanded }: ProjectItemProps)
             }}
           >
             {gitBranch}
+          </span>
+        )}
+        {/* Changes 视图折叠态：项目级 +/- 统计 */}
+        {!isExpanded && diffSummary && (
+          <span
+            className="flex-shrink-0 tabular-nums flex items-center gap-1"
+            style={{
+              fontSize: 10,
+              fontFamily: "'SF Mono', Menlo, monospace",
+              fontWeight: 500,
+              textTransform: "none",
+              letterSpacing: 0,
+            }}
+          >
+            {diffSummary.add > 0 && (
+              <span style={{ color: "#22c55e" }}>+{diffSummary.add}</span>
+            )}
+            {diffSummary.del > 0 && (
+              <span style={{ color: "#ef4444" }}>-{diffSummary.del}</span>
+            )}
           </span>
         )}
       </button>

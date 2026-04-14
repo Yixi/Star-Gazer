@@ -108,6 +108,7 @@ export function Sidebar() {
   // 兜底：active project 未展开时也保持一份 git 同步（否则 StatusBar 上的
   // 分支名和全局 fileDiffStats 无源数据）。展开的项目由 ProjectBody 自己
   // 挂 sync；FileWatcherManager 按 path 去重避免重复 watcher。
+  const viewMode = useProjectStore((s) => s.viewMode);
   const activeProjectExpanded = activeProject
     ? !!expandedProjectIds[activeProject.id]
     : false;
@@ -131,6 +132,18 @@ export function Sidebar() {
       {activeProject && !activeProjectExpanded && (
         <HiddenProjectGitSync project={activeProject} />
       )}
+
+      {/*
+        Changes 视图下，ProjectItem header 会在折叠态展示项目总 +/- 统计，
+        所以折叠的项目也必须保持 git 状态同步。active project 已经由上面那段
+        兜底（若未展开），这里只补剩下的折叠项目。
+      */}
+      {viewMode === "changes" &&
+        projects.map((p) => {
+          if (expandedProjectIds[p.id]) return null;
+          if (activeProject && p.id === activeProject.id) return null;
+          return <HiddenProjectGitSync key={p.id} project={p} />;
+        })}
 
       {/* ====== 折叠模式：48px 图标条 ====== */}
       {!sidebarOpen && (
