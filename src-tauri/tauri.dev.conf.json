@@ -8,5 +8,16 @@
         "title": "Star Gazer Dev"
       }
     ]
+  },
+  "bundle": {
+    "fileAssociations": [
+      {
+        "ext": ["sgw"],
+        "name": "Star Gazer Workspace",
+        "description": "Star Gazer workspace file",
+        "role": "Editor",
+        "rank": "Owner"
+      }
+    ]
   }
 }

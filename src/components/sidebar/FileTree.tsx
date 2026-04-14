@@ -390,10 +390,20 @@ function checkIgnored(relativePath: string, ignoredPaths: Set<string>): boolean 
   return false;
 }
 
-/** 从后端加载文件树 */
-async function loadFileTree(projectId: string, projectPath: string) {
+/** 从后端加载文件树
+ *
+ * 失败时写入空数组 —— 之前是 fallback 到 getMockFileTree()，会让所有 project
+ * 都显示同一份假数据（src/package.json/tsconfig.json/README.md），掩盖真正的
+ * 错误原因（通常是 fs 沙箱未同步 / canonicalize 失败）。现在改为空 + 一次性
+ * 重试：第一次 sync 可能还没到后端，200ms 后再试一次兜底 race。
+ */
+async function loadFileTree(
+  projectId: string,
+  projectPath: string,
+  attempt = 0,
+) {
   const store = useProjectStore.getState();
-  store.setLoading(true);
+  if (attempt === 0) store.setLoading(true);
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     const entries = await invoke<DirEntry[]>("list_dir", {
@@ -402,10 +412,20 @@ async function loadFileTree(projectId: string, projectPath: string) {
     const fileNodes = dirEntriesToFileNodes(entries, projectPath);
     store.setProjectFileTree(projectId, fileNodes);
   } catch (err) {
-    console.warn("Failed to load file tree, using mock data:", err);
-    store.setProjectFileTree(projectId, getMockFileTree());
+    // 首次失败很可能是沙箱 sync 还没落地，退回 200ms 后再试一次
+    if (attempt === 0) {
+      setTimeout(() => {
+        void loadFileTree(projectId, projectPath, 1);
+      }, 200);
+      return;
+    }
+    console.warn(
+      `Failed to load file tree for ${projectPath}:`,
+      err,
+    );
+    store.setProjectFileTree(projectId, []);
   } finally {
-    store.setLoading(false);
+    if (attempt === 0) store.setLoading(false);
   }
 }
 
@@ -609,101 +629,3 @@ function FileTreeNode({
   );
 }
 
-/** 开发用 mock 文件树数据 */
-function getMockFileTree(): FileNode[] {
-  return [
-    {
-      id: "src",
-      name: "src",
-      path: "/mock/src",
-      isDir: true,
-      children: [
-        {
-          id: "src/main.tsx",
-          name: "main.tsx",
-          path: "/mock/src/main.tsx",
-          isDir: false,
-          gitStatus: "unchanged",
-        },
-        {
-          id: "src/App.tsx",
-          name: "App.tsx",
-          path: "/mock/src/App.tsx",
-          isDir: false,
-          gitStatus: "modified",
-          diffStat: { additions: 12, deletions: 3 },
-        },
-        {
-          id: "src/components",
-          name: "components",
-          path: "/mock/src/components",
-          isDir: true,
-          children: [
-            {
-              id: "src/components/Sidebar.tsx",
-              name: "Sidebar.tsx",
-              path: "/mock/src/components/Sidebar.tsx",
-              isDir: false,
-              gitStatus: "modified",
-              agentColor: "blue",
-              diffStat: { additions: 45, deletions: 8 },
-            },
-            {
-              id: "src/components/Canvas.tsx",
-              name: "Canvas.tsx",
-              path: "/mock/src/components/Canvas.tsx",
-              isDir: false,
-              gitStatus: "unchanged",
-            },
-          ],
-        },
-        {
-          id: "src/utils.ts",
-          name: "utils.ts",
-          path: "/mock/src/utils.ts",
-          isDir: false,
-          gitStatus: "added",
-          agentColor: "green",
-          diffStat: { additions: 28, deletions: 0 },
-        },
-        {
-          id: "src/old-file.ts",
-          name: "old-file.ts",
-          path: "/mock/src/old-file.ts",
-          isDir: false,
-          gitStatus: "deleted",
-          diffStat: { additions: 0, deletions: 15 },
-        },
-        {
-          id: "src/temp.ts",
-          name: "temp.ts",
-          path: "/mock/src/temp.ts",
-          isDir: false,
-          gitStatus: "untracked",
-        },
-      ],
-    },
-    {
-      id: "package.json",
-      name: "package.json",
-      path: "/mock/package.json",
-      isDir: false,
-      gitStatus: "modified",
-      diffStat: { additions: 3, deletions: 1 },
-    },
-    {
-      id: "tsconfig.json",
-      name: "tsconfig.json",
-      path: "/mock/tsconfig.json",
-      isDir: false,
-      gitStatus: "unchanged",
-    },
-    {
-      id: "README.md",
-      name: "README.md",
-      path: "/mock/README.md",
-      isDir: false,
-      gitStatus: "unchanged",
-    },
-  ];
-}

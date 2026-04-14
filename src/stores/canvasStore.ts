@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { Agent } from "@/types/agent";
+import type { WorkspaceCanvasSnapshot } from "@/types/workspace";
 
 /** 卡片显示模式 */
 export type CardDisplayMode = "normal" | "minimized" | "maximized";
@@ -31,6 +32,23 @@ interface CanvasState {
   /** 缩放范围 */
   zoomMin: number;
   zoomMax: number;
+  /**
+   * 最大化快照 — 某张卡片进入 maximized 时冻结的画布和卡片状态。
+   *
+   * 为什么要快照：AgentCard 渲染在 data-canvas-layer 这个带 transform+zoom
+   * 的父层里，直接给卡片加 `position: fixed` 会因祖先 transform 被吃掉（退
+   * 化成相对祖先定位）+ 祖先 zoom 再叠乘 100vw/100vh，出现诡异大小/偏移。
+   * 解法：进入 maximized 时把 zoom/viewport 重置为 1/(0,0)，让 canvas-layer
+   * 变成 identity transform，卡片 `position: absolute; inset: 0` 就能精确填满
+   * canvas 区域；退出时用这个快照恢复原 zoom/viewport + 原卡片 pos/size。
+   */
+  maximizeSnapshot: {
+    agentId: string;
+    zoom: number;
+    viewport: { x: number; y: number };
+    agentPosition: { x: number; y: number };
+    agentSize: { width: number; height: number };
+  } | null;
 
   /** 添加 Agent */
   addAgent: (agent: Agent) => void;
@@ -44,6 +62,11 @@ interface CanvasState {
   updateAgentSize: (id: string, size: { width: number; height: number }) => void;
   /** 更新 Agent 状态 */
   updateAgentStatus: (id: string, status: Agent["status"]) => void;
+  /**
+   * 清除所有引用某 group 的 agent scope（把 scope 设为 undefined）。
+   * 项目组被删除时调用 —— 卡片本身保留，仅熄灭运行指示联动。
+   */
+  clearAgentScopesForGroup: (groupId: string) => void;
   /** 选中 Agent */
   selectAgent: (id: string | null) => void;
   /** 更新视口 */
@@ -58,6 +81,10 @@ interface CanvasState {
   setCardDisplayMode: (id: string, mode: CardDisplayMode) => void;
   /** 获取卡片显示模式 */
   getCardDisplayMode: (id: string) => CardDisplayMode;
+  /** 进入某卡片的最大化：快照画布和卡片状态，画布复位到 identity */
+  enterCardMaximize: (id: string) => void;
+  /** 退出最大化：从快照恢复画布和卡片状态 */
+  exitCardMaximize: () => void;
   /** 获取 agent 的堆叠 z 值（默认 1） */
   getCardZOrder: (id: string) => number;
   /**
@@ -67,6 +94,13 @@ interface CanvasState {
    * 最小化卡片按头部高度计入行高。重排后视口归零。
    */
   relayoutAgents: (availableWidth: number) => void;
+
+  /**
+   * 从 workspace 文件快照批量替换画布状态。
+   *
+   * nextZOrder 取 cardZOrder 的最大值 + 1，保证后续 bringAgentToFront 不冲突。
+   */
+  hydrateFromWorkspace: (snapshot: WorkspaceCanvasSnapshot) => void;
 }
 
 /** 重排算法用的常量 */
@@ -85,6 +119,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   isPanning: false,
   zoomMin: 0.5,
   zoomMax: 2,
+  maximizeSnapshot: null,
 
   addAgent: (agent) =>
     set((state) => ({
@@ -98,7 +133,18 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     set((state) => {
       const { [id]: _m, ...restModes } = state.cardDisplayModes;
       const { [id]: _z, ...restZ } = state.cardZOrder;
+      // 如果删的正好是最大化的那张，恢复画布并清快照
+      const snap = state.maximizeSnapshot;
+      const restoreCanvas =
+        snap && snap.agentId === id
+          ? {
+              zoom: snap.zoom,
+              viewport: snap.viewport,
+              maximizeSnapshot: null,
+            }
+          : {};
       return {
+        ...restoreCanvas,
         agents: state.agents.filter((a) => a.id !== id),
         cardDisplayModes: restModes,
         cardZOrder: restZ,
@@ -129,6 +175,18 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   updateAgentStatus: (id, status) =>
     set((state) => ({
       agents: state.agents.map((a) => (a.id === id ? { ...a, status } : a)),
+    })),
+
+  clearAgentScopesForGroup: (groupId) =>
+    set((state) => ({
+      agents: state.agents.map((a) => {
+        if (a.scope?.kind === "group" && a.scope.groupId === groupId) {
+          const next: Agent = { ...a };
+          delete next.scope;
+          return next;
+        }
+        return a;
+      }),
     })),
 
   selectAgent: (id) => set({ selectedAgentId: id }),
@@ -165,6 +223,50 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   getCardDisplayMode: (id) => {
     return get().cardDisplayModes[id] ?? "normal";
   },
+
+  enterCardMaximize: (id) =>
+    set((state) => {
+      // 已经有别的卡片最大化时先拒绝，避免快照被覆盖
+      if (state.maximizeSnapshot && state.maximizeSnapshot.agentId !== id) {
+        return state;
+      }
+      const agent = state.agents.find((a) => a.id === id);
+      if (!agent) return state;
+      return {
+        maximizeSnapshot: {
+          agentId: id,
+          zoom: state.zoom,
+          viewport: state.viewport,
+          agentPosition: agent.position,
+          agentSize: agent.size,
+        },
+        // 重置画布 transform，让 canvas-layer 变成 identity
+        // 这样子元素的 absolute inset:0 就能精确贴合 canvas 容器
+        zoom: 1,
+        viewport: { x: 0, y: 0 },
+        cardDisplayModes: { ...state.cardDisplayModes, [id]: "maximized" },
+      };
+    }),
+
+  exitCardMaximize: () =>
+    set((state) => {
+      const snap = state.maximizeSnapshot;
+      if (!snap) return state;
+      return {
+        zoom: snap.zoom,
+        viewport: snap.viewport,
+        agents: state.agents.map((a) =>
+          a.id === snap.agentId
+            ? { ...a, position: snap.agentPosition, size: snap.agentSize }
+            : a,
+        ),
+        cardDisplayModes: {
+          ...state.cardDisplayModes,
+          [snap.agentId]: "normal",
+        },
+        maximizeSnapshot: null,
+      };
+    }),
 
   getCardZOrder: (id) => {
     return get().cardZOrder[id] ?? 1;
@@ -210,6 +312,23 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         agents: nextAgents,
         cardDisplayModes: nextDisplayModes,
         viewport: { x: 0, y: 0 },
+        // 重排会清掉 maximized 状态，对应快照也必须作废
+        maximizeSnapshot: null,
       };
     }),
+
+  hydrateFromWorkspace: (snapshot) => {
+    const zValues = Object.values(snapshot.cardZOrder);
+    const maxZ = zValues.length > 0 ? Math.max(...zValues) : 0;
+    set({
+      agents: snapshot.agents,
+      viewport: snapshot.viewport,
+      zoom: snapshot.zoom,
+      cardDisplayModes: snapshot.cardDisplayModes,
+      cardZOrder: snapshot.cardZOrder,
+      nextZOrder: maxZ + 1,
+      selectedAgentId: null,
+      isPanning: false,
+    });
+  },
 }));

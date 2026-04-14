@@ -25,13 +25,21 @@ import {
   PanelRightOpen,
   PanelRightClose,
   Bot,
+  Layers,
 } from "lucide-react";
 import { FileIcon } from "@/utils/fileIcon";
 import { useProjectStore } from "@/stores/projectStore";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { usePanelStore } from "@/stores/panelStore";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { useWorkspaceStore } from "@/stores/workspaceStore";
+import * as workspaceService from "@/services/workspace";
 import type { FileNode } from "@/types/project";
+import type { RecentEntry } from "@/types/workspace";
+
+const SGW_FILTERS = [
+  { name: "Star Gazer Workspace", extensions: ["sgw"] },
+];
 
 /** 稳定空数组，避免 Zustand selector 无限循环 */
 const EMPTY_FILE_TREE: FileNode[] = [];
@@ -58,6 +66,8 @@ export function CommandPalette() {
   const openTab = usePanelStore((s) => s.openTab);
   const addProject = useProjectStore((s) => s.addProject);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
+  const currentWorkspaceName = useWorkspaceStore((s) => s.currentName);
+  const recentWorkspaces = useWorkspaceStore((s) => s.recent);
 
   // Cmd+K 命令面板 / Cmd+P 文件搜索 / Cmd+O 添加项目
   useEffect(() => {
@@ -82,9 +92,19 @@ export function CommandPalette() {
           setOpen(true);
         }
       }
-      if (e.key === "o" && (e.metaKey || e.ctrlKey)) {
+      if (e.key === "o" && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
         e.preventDefault();
         handleAddProject();
+      }
+      // Shift+Cmd+O 打开 workspace 文件
+      if (e.key === "O" && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+        e.preventDefault();
+        handleOpenWorkspace();
+      }
+      // Shift+Cmd+N 新建 workspace
+      if (e.key === "N" && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+        e.preventDefault();
+        handleNewWorkspace();
       }
     };
     document.addEventListener("keydown", handleKeyDown);
@@ -129,7 +149,11 @@ export function CommandPalette() {
   // 收集所有文件（扁平化文件树）
   const allFiles = flattenFileTree(fileTree);
 
-  // 添加项目 - 持久化到后端
+  // 添加项目 —— 智能分流：
+  // - Single（目录是 git 仓库） → 直接添加
+  // - Group（下面有子 git 仓库） → 关面板 + 派发事件，让 Sidebar 弹 ImportGroupDialog
+  // - Empty → 降级为单目录添加
+  // 持久化由 workspace autosave 负责。
   const handleAddProject = useCallback(async () => {
     try {
       const { open: openDialog } = await import("@tauri-apps/plugin-dialog");
@@ -138,35 +162,123 @@ export function CommandPalette() {
         multiple: false,
         title: "选择项目文件夹",
       });
-      if (selected && typeof selected === "string") {
-        try {
-          const { invoke } = await import("@tauri-apps/api/core");
-          const project = await invoke<{
-            id: string;
-            name: string;
-            path: string;
-            lastOpened: number;
-          }>("add_project", { path: selected });
-          addProject(project);
-          setActiveProject(project);
-        } catch (backendErr) {
-          console.warn("Backend add_project failed, creating locally:", backendErr);
-          const name = selected.split("/").pop() || selected;
-          const project = {
-            id: `project-${Date.now()}`,
-            name,
-            path: selected,
-            lastOpened: Date.now(),
-          };
-          addProject(project);
-          setActiveProject(project);
+      if (!selected || typeof selected !== "string") {
+        handleClose();
+        return;
+      }
+
+      const newId = (prefix: string): string =>
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? `${prefix}-${crypto.randomUUID()}`
+          : `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const basename = (p: string): string =>
+        p.split("/").filter(Boolean).pop() ?? p;
+
+      let scan: workspaceService.ScanGitReposResult;
+      try {
+        scan = await workspaceService.scanGitRepos(selected);
+      } catch (err) {
+        console.warn("scanGitRepos failed:", err);
+        scan = { kind: "empty" };
+      }
+
+      if (scan.kind === "single") {
+        const project = {
+          id: newId("project"),
+          name: scan.name,
+          path: scan.path,
+          lastOpened: Date.now(),
+        };
+        addProject(project);
+        setActiveProject(project);
+      } else if (scan.kind === "group") {
+        const group = {
+          id: newId("group"),
+          name: scan.parentName,
+          path: scan.parentPath,
+        };
+        const members = scan.members.map((m) => ({
+          id: newId("project"),
+          name: m.name,
+          path: m.path,
+          lastOpened: Date.now(),
+        }));
+        // 必须 await —— sync_workspace_project_paths 需要先落地，
+        // 否则 FileTree 挂载后的 list_dir 会被后端沙箱拒
+        await useProjectStore.getState().addProjectGroup(group, members);
+        if (members.length > 0) {
+          setActiveProject({ ...members[0], groupId: group.id });
         }
+      } else {
+        // empty：降级为单目录添加
+        const project = {
+          id: newId("project"),
+          name: basename(selected),
+          path: selected,
+          lastOpened: Date.now(),
+        };
+        addProject(project);
+        setActiveProject(project);
       }
     } catch (err) {
       console.warn("Tauri dialog not available:", err);
     }
     handleClose();
   }, [addProject, setActiveProject, handleClose]);
+
+  // --- Workspace 操作 ---
+
+  const handleOpenWorkspace = useCallback(async () => {
+    try {
+      const { open: openDialog } = await import("@tauri-apps/plugin-dialog");
+      const selected = await openDialog({
+        multiple: false,
+        filters: SGW_FILTERS,
+        title: "打开 Workspace 文件",
+      });
+      if (selected && typeof selected === "string") {
+        await workspaceService.openWorkspaceInWindow(selected);
+      }
+    } catch (err) {
+      console.warn("打开 workspace 失败:", err);
+    }
+    handleClose();
+  }, [handleClose]);
+
+  const handleNewWorkspace = useCallback(async () => {
+    try {
+      const { save } = await import("@tauri-apps/plugin-dialog");
+      const selected = await save({
+        defaultPath: "workspace.sgw",
+        filters: SGW_FILTERS,
+        title: "新建 Workspace",
+      });
+      if (!selected) {
+        handleClose();
+        return;
+      }
+      const fileName =
+        selected.split("/").pop() ?? selected.split("\\").pop() ?? "workspace";
+      const name = fileName.replace(/\.sgw$/i, "") || "Workspace";
+      await workspaceService.createWorkspaceFile(selected, name);
+      await workspaceService.openWorkspaceInWindow(selected);
+    } catch (err) {
+      console.warn("新建 workspace 失败:", err);
+    }
+    handleClose();
+  }, [handleClose]);
+
+  const handleOpenRecentWorkspace = useCallback(
+    async (entry: RecentEntry) => {
+      try {
+        await workspaceService.openWorkspaceInWindow(entry.path);
+      } catch (err) {
+        console.warn("打开 recent workspace 失败:", err);
+      }
+      handleClose();
+    },
+    [handleClose],
+  );
 
   /** 通过 window 事件通知 Canvas 打开 AgentPicker，可选预设类型 */
   const openAgentPicker = useCallback(
@@ -274,6 +386,42 @@ export function CommandPalette() {
           {/* 命令模式 */}
           {mode === "command" && (
             <>
+              {/* Workspace */}
+              <Command.Group heading={<GroupHeading>Workspace</GroupHeading>}>
+                <CommandItem
+                  icon={<FolderOpen className="w-4 h-4" />}
+                  label="打开 Workspace 文件..."
+                  shortcut="⇧⌘O"
+                  keywords={["open", "workspace", "sgw"]}
+                  onSelect={handleOpenWorkspace}
+                />
+                <CommandItem
+                  icon={<Plus className="w-4 h-4" />}
+                  label="新建 Workspace..."
+                  shortcut="⇧⌘N"
+                  keywords={["new", "workspace", "create"]}
+                  onSelect={handleNewWorkspace}
+                />
+                {currentWorkspaceName && (
+                  <CommandItem
+                    icon={<Layers className="w-4 h-4" />}
+                    label={`当前 Workspace: ${currentWorkspaceName}`}
+                    keywords={["current", "workspace"]}
+                    onSelect={handleClose}
+                  />
+                )}
+                {recentWorkspaces.slice(0, 8).map((ws) => (
+                  <CommandItem
+                    key={ws.path}
+                    icon={<Layers className="w-4 h-4" />}
+                    label={`最近: ${ws.name}`}
+                    description={ws.path}
+                    keywords={["recent", "workspace", ws.name, ws.path]}
+                    onSelect={() => handleOpenRecentWorkspace(ws)}
+                  />
+                ))}
+              </Command.Group>
+
               {/* 项目 */}
               <Command.Group heading={<GroupHeading>项目</GroupHeading>}>
                 <CommandItem

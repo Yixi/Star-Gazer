@@ -63,15 +63,42 @@ export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
   const [bypassPermissions, setBypassPermissions] = useState(false);
   const { agents, addAgent } = useCanvasStore();
   const { projects, activeProject } = useProjectStore();
+  const projectGroups = useProjectStore((s) => s.projectGroups);
   const lastAgentProjectId = useSettingsStore((s) => s.lastAgentProjectId);
   const setLastAgentProjectId = useSettingsStore((s) => s.setLastAgentProjectId);
 
-  // 初始项目优先级：上次记忆 → 当前激活项目 → 空
-  const [selectedProjectId, setSelectedProjectId] = useState(() => {
-    if (lastAgentProjectId && projects.some((p) => p.id === lastAgentProjectId)) {
-      return lastAgentProjectId;
+  /**
+   * 目标 key 格式：
+   *   - `p-{projectId}`  → 独立项目 或 组成员
+   *   - `g-{groupId}`    → 整个项目组
+   *
+   * 之所以用前缀区分而不是直接 id，是因为要让"组 X"和"项目 X"同时存在于同一个
+   * 下拉列表里并各自被选中。存 settingsStore.lastAgentProjectId 时也带前缀，
+   * 向后兼容旧值（无前缀时按独立项目处理）。
+   */
+  const [selectedTargetKey, setSelectedTargetKey] = useState<string>(() => {
+    // 优先级：上次记忆 → 当前活跃项目（所属组或自身）→ 第一个独立项目 → 空
+    if (lastAgentProjectId) {
+      // 带前缀或不带前缀都兼容
+      if (lastAgentProjectId.startsWith("g-")) {
+        const gid = lastAgentProjectId.slice(2);
+        if (projectGroups.some((g) => g.id === gid)) return lastAgentProjectId;
+      } else if (lastAgentProjectId.startsWith("p-")) {
+        const pid = lastAgentProjectId.slice(2);
+        if (projects.some((p) => p.id === pid)) return lastAgentProjectId;
+      } else if (projects.some((p) => p.id === lastAgentProjectId)) {
+        // 旧格式：纯 project id
+        return `p-${lastAgentProjectId}`;
+      }
     }
-    return activeProject?.id ?? "";
+    if (activeProject) {
+      // 活跃项目所属组优先
+      if (activeProject.groupId) {
+        return `g-${activeProject.groupId}`;
+      }
+      return `p-${activeProject.id}`;
+    }
+    return "";
   });
   const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -88,12 +115,30 @@ export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
   const handleCreate = useCallback(() => {
     const usedColors = agents.map((a) => a.color);
     const color = getNextColor(usedColors);
-    const project = projects.find((p) => p.id === selectedProjectId);
     const type = AGENT_TYPES.find((t) => t.id === selectedType);
 
     const name =
       agentName.trim() ||
       `${type?.name ?? "Agent"} #${agents.length + 1}`;
+
+    // 从 selectedTargetKey 解出 cwd + scope
+    let cwd = "/tmp";
+    let scope: Agent["scope"] = undefined;
+    if (selectedTargetKey.startsWith("g-")) {
+      const gid = selectedTargetKey.slice(2);
+      const group = projectGroups.find((g) => g.id === gid);
+      if (group) {
+        cwd = group.path;
+        scope = { kind: "group", groupId: gid };
+      }
+    } else if (selectedTargetKey.startsWith("p-")) {
+      const pid = selectedTargetKey.slice(2);
+      const project = projects.find((p) => p.id === pid);
+      if (project) {
+        cwd = project.path;
+        scope = { kind: "project", projectId: pid };
+      }
+    }
 
     // claude-code + bypass → 覆盖启动命令带上 --dangerously-skip-permissions
     // agentType 仍是 "claude-code"（保留色盘/图标），但 agent.command 会被
@@ -115,21 +160,23 @@ export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
         y: 100 + agents.length * 40,
       },
       size: { width: 680, height: 480 },
-      cwd: project?.path ?? "/tmp",
+      cwd,
+      ...(scope ? { scope } : {}),
       ...(command ? { command } : {}),
     };
 
     addAgent(agent);
-    // 记住这次选的项目，下次打开 picker 作为默认
-    setLastAgentProjectId(selectedProjectId || null);
+    // 记住这次选的目标（带前缀），下次打开 picker 作为默认
+    setLastAgentProjectId(selectedTargetKey || null);
     onClose();
   }, [
     agents,
     agentName,
     selectedType,
-    selectedProjectId,
+    selectedTargetKey,
     bypassPermissions,
     projects,
+    projectGroups,
     addAgent,
     setLastAgentProjectId,
     onClose,
@@ -264,26 +311,47 @@ export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
             />
           </div>
 
-          {/* 项目选择 */}
+          {/* 项目 / 组选择
+             *
+             * 列表构造：独立项目在前，项目组在后（方便用户找"多仓库"入口）。
+             * 组成员**不**单独列出（要单独选中某个成员需要新建 agent 时把 group
+             * 里的成员作为独立项目处理，Phase 1 不支持；只能选组整体或独立项目）。
+             */}
           <div>
             <label className="block text-xs text-[#8b92a3] font-medium mb-2 uppercase tracking-wider">
               项目
             </label>
             <select
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
+              value={selectedTargetKey}
+              onChange={(e) => setSelectedTargetKey(e.target.value)}
               className="w-full px-3 py-2 rounded-lg text-sm text-white outline-none focus:ring-1 focus:ring-[#4a9eff] transition-colors appearance-none"
               style={{
                 background: "#0d0f14",
                 border: "1px solid #1f2128",
               }}
             >
-              <option value="">选择项目...</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
+              <option value="">选择项目 / 项目组...</option>
+              {projects
+                .filter((p) => !p.groupId)
+                .map((p) => (
+                  <option key={`p-${p.id}`} value={`p-${p.id}`}>
+                    {p.name}
+                  </option>
+                ))}
+              {projectGroups.length > 0 && (
+                <optgroup label="项目组（多仓库）">
+                  {projectGroups.map((g) => {
+                    const memberCount = projects.filter(
+                      (p) => p.groupId === g.id,
+                    ).length;
+                    return (
+                      <option key={`g-${g.id}`} value={`g-${g.id}`}>
+                        {g.name} ({memberCount} 个仓库)
+                      </option>
+                    );
+                  })}
+                </optgroup>
+              )}
             </select>
           </div>
 

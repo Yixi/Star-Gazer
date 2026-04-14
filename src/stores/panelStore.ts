@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { PanelTab } from "@/types/panel";
+import type { WorkspacePanelSnapshot } from "@/types/workspace";
 
 interface PanelState {
   /** 面板是否展开 */
@@ -41,6 +42,9 @@ interface PanelState {
   reorderTabs: (fromIndex: number, toIndex: number) => void;
   /** 设置 Diff 统计 */
   setDiffStat: (tabId: string, additions: number, deletions: number) => void;
+
+  /** 从 workspace 文件快照批量替换面板状态 */
+  hydrateFromWorkspace: (snapshot: WorkspacePanelSnapshot) => void;
 }
 
 export const usePanelStore = create<PanelState>((set) => ({
@@ -156,4 +160,13 @@ export const usePanelStore = create<PanelState>((set) => ({
     set((state) => ({
       diffStats: { ...state.diffStats, [tabId]: { additions, deletions } },
     })),
+
+  hydrateFromWorkspace: (snapshot) =>
+    set({
+      tabs: snapshot.tabs,
+      activeTabId: snapshot.activeTabId,
+      isOpen: snapshot.isOpen,
+      width: Math.max(320, Math.min(1200, snapshot.width || 800)),
+      diffStats: {},
+    }),
 }));

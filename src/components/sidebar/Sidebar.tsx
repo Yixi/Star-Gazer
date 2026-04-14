@@ -8,18 +8,21 @@
  * - 内容使用 150ms 淡入/淡出
  * - Cmd+B 快捷键切换
  */
-import { useEffect, useCallback, useRef, useState } from "react";
+import { useEffect, useCallback, useRef, useState, useMemo } from "react";
 import { FolderOpen } from "lucide-react";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useProjectStore } from "@/stores/projectStore";
 import { useProjectGitSync } from "@/hooks/useProjectGitSync";
+import { useFlipReorder } from "@/hooks/useFlipReorder";
 import { FileTree } from "./FileTree";
 import { ProjectItem } from "./ProjectItem";
+import { ProjectGroupItem } from "./ProjectGroupItem";
 import { AddProjectButton } from "./AddProjectButton";
 import { ScopeSwitcher } from "./ScopeSwitcher";
 import { ChangesView } from "./ChangesView";
 import { HistoryView } from "./HistoryView";
-import type { Project } from "@/types/project";
+import { WorkspaceSwitcher } from "@/components/workspace/WorkspaceSwitcher";
+import type { Project, ProjectGroup } from "@/types/project";
 
 /** Sidebar 宽度可拖拽范围 */
 const MIN_SIDEBAR_WIDTH = 180;
@@ -30,6 +33,8 @@ export function Sidebar() {
     useSettingsStore();
   const setSidebarWidth = useSettingsStore((s) => s.setSidebarWidth);
   const { projects, activeProject, expandedProjectIds } = useProjectStore();
+  const projectGroups = useProjectStore((s) => s.projectGroups);
+  const toggleProjectExpanded = useProjectStore((s) => s.toggleProjectExpanded);
 
   // 把 active project 的 git 状态派生出全局 UI 用的 gitBranch / fileDiffStats
   // （StatusBar 顶栏、PanelToolbar 等消费这两个派生值；
@@ -109,13 +114,106 @@ export function Sidebar() {
   // 分支名和全局 fileDiffStats 无源数据）。展开的项目由 ProjectBody 自己
   // 挂 sync；FileWatcherManager 按 path 去重避免重复 watcher。
   const viewMode = useProjectStore((s) => s.viewMode);
+  const reorderSidebarEntries = useProjectStore(
+    (s) => s.reorderSidebarEntries,
+  );
   const activeProjectExpanded = activeProject
     ? !!expandedProjectIds[activeProject.id]
     : false;
 
+  /**
+   * 构建 sidebar 顶层行列表 —— 组整体占一行，独立项目各占一行。
+   * 顺序取自 `projects` 数组：遇到带 groupId 的成员就把 group 行插在该组
+   * 首次出现的位置，后续同组成员不再重复产出行。
+   */
+  type SidebarRow =
+    | { kind: "group"; group: ProjectGroup; members: Project[] }
+    | { kind: "project"; project: Project };
+  const sidebarRows = useMemo<SidebarRow[]>(() => {
+    const rows: SidebarRow[] = [];
+    const seen = new Set<string>();
+    for (const p of projects) {
+      if (p.groupId) {
+        if (seen.has(p.groupId)) continue;
+        seen.add(p.groupId);
+        const group = projectGroups.find((g) => g.id === p.groupId);
+        if (!group) {
+          // 孤儿成员（groupId 指向已删的组）—— 当独立项目处理
+          rows.push({ kind: "project", project: p });
+          continue;
+        }
+        const members = projects.filter((x) => x.groupId === p.groupId);
+        rows.push({ kind: "group", group, members });
+      } else {
+        rows.push({ kind: "project", project: p });
+      }
+    }
+    return rows;
+  }, [projects, projectGroups]);
+
+  // FLIP 的 key：group 和 project 走不同前缀避免 id 碰撞
+  const rowKeys = useMemo(
+    () =>
+      sidebarRows.map((r) =>
+        r.kind === "group" ? `g-${r.group.id}` : `p-${r.project.id}`,
+      ),
+    [sidebarRows],
+  );
+  const registerFlipRef = useFlipReorder(rowKeys);
+
+  // 拖拽排序：key = group.id 或 project.id（不带前缀，由 store 逻辑处理）
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    id: string;
+    position: "before" | "after";
+  } | null>(null);
+
+  const handleProjectDragStart = useCallback(
+    (e: React.DragEvent, id: string) => {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("application/x-stargazer-project", id);
+      setDraggingId(id);
+    },
+    [],
+  );
+
+  const handleProjectDragOver = useCallback(
+    (e: React.DragEvent, id: string) => {
+      if (!draggingId || draggingId === id) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const position: "before" | "after" =
+        e.clientY - rect.top < rect.height / 2 ? "before" : "after";
+      setDropTarget((prev) => {
+        if (prev && prev.id === id && prev.position === position) return prev;
+        return { id, position };
+      });
+    },
+    [draggingId],
+  );
+
+  const handleProjectDragEnd = useCallback(() => {
+    setDraggingId(null);
+    setDropTarget(null);
+  }, []);
+
+  const handleProjectDrop = useCallback(
+    (e: React.DragEvent, id: string) => {
+      e.preventDefault();
+      const fromId = draggingId;
+      const pos = dropTarget?.position ?? "before";
+      setDraggingId(null);
+      setDropTarget(null);
+      if (!fromId || fromId === id) return;
+      reorderSidebarEntries(fromId, id, pos);
+    },
+    [draggingId, dropTarget, reorderSidebarEntries],
+  );
+
   return (
     <aside
-      className="relative flex flex-col border-r h-full flex-shrink-0 overflow-hidden"
+      className="relative flex flex-col border-r h-full flex-shrink-0 overflow-hidden select-none"
       data-active-not-expanded={!activeProjectExpanded && !!activeProject}
       style={{
         /* 宽度平滑过渡：240px ↔ 48px；拖拽时关闭过渡避免延迟感 */
@@ -163,6 +261,9 @@ export function Sidebar() {
             <FolderOpen className="w-5 h-5" />
           </button>
 
+          {/* Workspace Switcher —— 折叠态的图标入口 */}
+          <WorkspaceSwitcher collapsed />
+
           {/* 项目图标列表 */}
           {projects.map((project) => (
             <CollapsedProjectIcon
@@ -205,6 +306,9 @@ export function Sidebar() {
             animation: "sg-fade-in 150ms var(--sg-ease-out, ease-out) both",
           }}
         >
+          {/* Workspace switcher —— 置于所有内容最上方 */}
+          <WorkspaceSwitcher />
+
           {/* 标题栏 — 设计稿: padding 12px 14px */}
           <div
             className="flex items-center justify-between flex-shrink-0 border-b"
@@ -240,19 +344,136 @@ export function Sidebar() {
                 {/* 全局视图切换条 — 所有项目共享的 Files/Changes/History 切换 */}
                 <ScopeSwitcher />
                 <div className="flex-1 overflow-y-auto">
-                  {projects.map((project) => {
-                  const isActive = activeProject?.id === project.id;
-                  const isExpanded = !!expandedProjectIds[project.id];
-                  return (
-                    <div key={project.id} className="flex flex-col flex-shrink-0">
-                      <ProjectItem
-                        project={project}
-                        isActive={isActive}
-                        isExpanded={isExpanded}
-                      />
-                      {isExpanded && <ProjectBody project={project} />}
-                    </div>
-                  );
+                  {sidebarRows.map((row) => {
+                    if (row.kind === "project") {
+                      const project = row.project;
+                      const isActive = activeProject?.id === project.id;
+                      const isExpanded = !!expandedProjectIds[project.id];
+                      const isDragging = draggingId === project.id;
+                      const indicator =
+                        dropTarget?.id === project.id ? dropTarget.position : null;
+                      return (
+                        <div
+                          key={`p-${project.id}`}
+                          ref={registerFlipRef(`p-${project.id}`)}
+                          className="flex flex-col flex-shrink-0 relative"
+                          style={{
+                            opacity: isDragging ? 0.4 : 1,
+                            willChange: isDragging
+                              ? "transform, opacity"
+                              : undefined,
+                          }}
+                        >
+                          <div
+                            draggable
+                            onDragStart={(e) =>
+                              handleProjectDragStart(e, project.id)
+                            }
+                            onDragOver={(e) =>
+                              handleProjectDragOver(e, project.id)
+                            }
+                            onDragEnd={handleProjectDragEnd}
+                            onDrop={(e) => handleProjectDrop(e, project.id)}
+                          >
+                            <ProjectItem
+                              project={project}
+                              isActive={isActive}
+                              isExpanded={isExpanded}
+                            />
+                          </div>
+                          {isExpanded && <ProjectBody project={project} />}
+                          {indicator && (
+                            <div
+                              className="absolute left-0 right-0 pointer-events-none"
+                              style={{
+                                [indicator === "before" ? "top" : "bottom"]: -1,
+                                height: 2,
+                                background: "#4a9eff",
+                                boxShadow: "0 0 6px rgba(74,158,255,0.7)",
+                                zIndex: 10,
+                              }}
+                            />
+                          )}
+                        </div>
+                      );
+                    }
+
+                    // row.kind === "group"
+                    const group = row.group;
+                    const groupExpanded = !!expandedProjectIds[group.id];
+                    const isDragging = draggingId === group.id;
+                    const indicator =
+                      dropTarget?.id === group.id ? dropTarget.position : null;
+                    return (
+                      <div
+                        key={`g-${group.id}`}
+                        ref={registerFlipRef(`g-${group.id}`)}
+                        className="flex flex-col flex-shrink-0 relative"
+                        style={{
+                          opacity: isDragging ? 0.4 : 1,
+                          willChange: isDragging
+                            ? "transform, opacity"
+                            : undefined,
+                        }}
+                      >
+                        <div
+                          draggable
+                          onDragStart={(e) =>
+                            handleProjectDragStart(e, group.id)
+                          }
+                          onDragOver={(e) =>
+                            handleProjectDragOver(e, group.id)
+                          }
+                          onDragEnd={handleProjectDragEnd}
+                          onDrop={(e) => handleProjectDrop(e, group.id)}
+                        >
+                          <ProjectGroupItem
+                            group={group}
+                            members={row.members}
+                            isExpanded={groupExpanded}
+                            onToggleExpanded={() =>
+                              toggleProjectExpanded(group.id)
+                            }
+                          />
+                        </div>
+                        {/* 组展开 → 成员（ProjectItem，depth=1） */}
+                        {groupExpanded &&
+                          row.members.map((member) => {
+                            const memberActive =
+                              activeProject?.id === member.id;
+                            const memberExpanded =
+                              !!expandedProjectIds[member.id];
+                            return (
+                              <div
+                                key={member.id}
+                                className="flex flex-col flex-shrink-0"
+                              >
+                                <ProjectItem
+                                  project={member}
+                                  isActive={memberActive}
+                                  isExpanded={memberExpanded}
+                                  depth={1}
+                                />
+                                {memberExpanded && (
+                                  <ProjectBody project={member} />
+                                )}
+                              </div>
+                            );
+                          })}
+                        {indicator && (
+                          <div
+                            className="absolute left-0 right-0 pointer-events-none"
+                            style={{
+                              [indicator === "before" ? "top" : "bottom"]: -1,
+                              height: 2,
+                              background: "#4a9eff",
+                              boxShadow: "0 0 6px rgba(74,158,255,0.7)",
+                              zIndex: 10,
+                            }}
+                          />
+                        )}
+                      </div>
+                    );
                   })}
                 </div>
               </>

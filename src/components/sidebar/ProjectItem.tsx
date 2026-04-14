@@ -35,9 +35,11 @@ interface ProjectItemProps {
   project: Project;
   isActive: boolean;
   isExpanded: boolean;
+  /** 缩进层级（组成员为 1，独立项目为 0） */
+  depth?: number;
 }
 
-export function ProjectItem({ project, isActive, isExpanded }: ProjectItemProps) {
+export function ProjectItem({ project, isActive, isExpanded, depth = 0 }: ProjectItemProps) {
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
   const toggleProjectExpanded = useProjectStore((s) => s.toggleProjectExpanded);
   const removeProject = useProjectStore((s) => s.removeProject);
@@ -50,9 +52,24 @@ export function ProjectItem({ project, isActive, isExpanded }: ProjectItemProps)
   const menuRef = useRef<HTMLDivElement>(null);
 
   // 该项目下是否有运行中的 agent
-  const hasRunningAgent = agents.some(
-    (a) => a.cwd.startsWith(project.path) && a.status === "running"
-  );
+  //
+  // 优先级：
+  // 1. agent.scope.kind === "project" 显式关联这个 project → 亮
+  // 2. agent.scope.kind === "group" 关联这个 project 所属的组 → 亮
+  // 3. 老 agent 没 scope 字段 → 降级到 cwd.startsWith(project.path)
+  const hasRunningAgent = agents.some((a) => {
+    if (a.status !== "running") return false;
+    if (a.scope?.kind === "project" && a.scope.projectId === project.id) return true;
+    if (
+      a.scope?.kind === "group" &&
+      project.groupId &&
+      a.scope.groupId === project.groupId
+    ) {
+      return true;
+    }
+    if (!a.scope && a.cwd.startsWith(project.path)) return true;
+    return false;
+  });
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -73,28 +90,15 @@ export function ProjectItem({ project, isActive, isExpanded }: ProjectItemProps)
 
   const closeMenu = () => setContextMenu(null);
 
-  const handleRemove = async () => {
-    // 从后端持久化中移除
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("remove_project", { id: project.id });
-    } catch (err) {
-      console.warn("Backend remove_project failed:", err);
-    }
+  const handleRemove = () => {
+    // 纯前端操作，workspace autosave 会把新 projects 列表写回磁盘
     removeProject(project.id);
     closeMenu();
   };
 
-  const handleCloseProject = async () => {
+  const handleCloseProject = () => {
     if (isActive) {
       setActiveProject(null);
-    }
-    // 从后端持久化中移除
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("remove_project", { id: project.id });
-    } catch (err) {
-      console.warn("Backend remove_project failed:", err);
     }
     removeProject(project.id);
     closeMenu();
@@ -152,7 +156,7 @@ export function ProjectItem({ project, isActive, isExpanded }: ProjectItemProps)
       <button
         className="w-full flex items-center cursor-pointer select-none group"
         style={{
-          padding: "9px 12px 9px 10px",
+          padding: `9px 12px 9px ${10 + depth * 16}px`,
           gap: 8,
           fontSize: 12,
           color: isActive ? "#ffffff" : "#c8ccd3",

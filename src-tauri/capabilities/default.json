@@ -1,12 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Star Gazer 主窗口权限",
-  "windows": ["main"],
+  "description": "Star Gazer 主窗口 + 所有 workspace 副窗口权限",
+  "windows": ["main", "ws-*"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
     "core:window:allow-set-focus",
+    "core:window:allow-close",
+    "core:window:allow-destroy",
     "opener:default",
     "shell:allow-spawn",
     "shell:allow-execute",

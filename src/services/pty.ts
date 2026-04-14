@@ -35,17 +35,23 @@ export async function closeTerminal(id: string): Promise<void> {
   return invoke("close_terminal", { id });
 }
 
-/** 监听终端输出事件 */
+/** 监听终端输出事件
+ *
+ * 后端用 4096 字节定长 buf 读 PTY，中文 UTF-8 是 3 字节、emoji 是 4 字节，
+ * chunk 边界切到字符中间会让单次 decode 产生乱码。这里给每个监听器分配一个
+ * 常驻 TextDecoder，调用 `.decode(bytes, { stream: true })` 让半截字节被缓存
+ * 到下次 event 再拼接，从根本上消除跨 chunk 的乱码。
+ */
 export async function onTerminalOutput(
   id: string,
   callback: (data: string) => void
 ): Promise<UnlistenFn> {
+  const decoder = new TextDecoder("utf-8");
   return listen<{ terminalId: string; data: number[] }>("terminal-output", (event) => {
     if (event.payload.terminalId !== id) return;
-    // 后端发送 Vec<u8>，需要解码为字符串
     const bytes = new Uint8Array(event.payload.data);
-    const text = new TextDecoder().decode(bytes);
-    callback(text);
+    const text = decoder.decode(bytes, { stream: true });
+    if (text.length > 0) callback(text);
   });
 }
 

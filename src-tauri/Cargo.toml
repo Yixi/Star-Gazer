@@ -42,3 +42,7 @@ uuid = { version = "1", features = ["v4"] }
 
 # 系统调用（用于 PTY 进程信号管理）
 libc = "0.2"
+
+# Workspace 文件路径哈希 + URL-safe 编码
+sha1 = "0.10"
+base64 = "0.22"

@@ -2,7 +2,7 @@
 //! 参考 VSCode 的 PtyHostService 设计，管理多个 PTY 实例
 
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -39,12 +39,15 @@ pub struct PtyInstance {
 /// PTY 管理器 - 管理所有活跃的终端进程
 pub struct PtyManager {
     instances: Arc<Mutex<HashMap<String, PtyInstance>>>,
+    /// Tauri window label → 该窗口持有的 terminalId 集合，用于窗口关闭时定向清理
+    window_terminals: Arc<Mutex<HashMap<String, HashSet<String>>>>,
 }
 
 impl PtyManager {
     pub fn new() -> Self {
         Self {
             instances: Arc::new(Mutex::new(HashMap::new())),
+            window_terminals: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -57,6 +60,7 @@ impl PtyManager {
         cols: u16,
         rows: u16,
         _command: Option<String>,
+        window_label: String,
     ) -> Result<u32, String> {
         let pty_system = native_pty_system();
 
@@ -137,11 +141,28 @@ impl PtyManager {
         instances.insert(id.to_string(), instance);
         drop(instances);
 
+        // 把 terminalId 登记到 window_terminals 映射
+        if let Ok(mut map) = self.window_terminals.lock() {
+            map.entry(window_label.clone())
+                .or_insert_with(HashSet::new)
+                .insert(id.to_string());
+        }
+
         // 启动异步任务读取 PTY 输出
         let terminal_id = id.to_string();
         let instances_clone = Arc::clone(&self.instances);
+        let window_terminals_clone = Arc::clone(&self.window_terminals);
+        let emit_label = window_label.clone();
         std::thread::spawn(move || {
-            Self::read_output(app, reader, child, terminal_id, instances_clone);
+            Self::read_output(
+                app,
+                reader,
+                child,
+                terminal_id,
+                instances_clone,
+                window_terminals_clone,
+                emit_label,
+            );
         });
 
         log::info!("PTY 创建成功: id={}, pid={}", id, pid);
@@ -155,6 +176,8 @@ impl PtyManager {
         mut child: Box<dyn portable_pty::Child + Send + Sync>,
         terminal_id: String,
         instances: Arc<Mutex<HashMap<String, PtyInstance>>>,
+        window_terminals: Arc<Mutex<HashMap<String, HashSet<String>>>>,
+        window_label: String,
     ) {
         let mut buf = [0u8; 4096];
         loop {
@@ -169,7 +192,9 @@ impl PtyManager {
                         terminal_id: terminal_id.clone(),
                         data,
                     };
-                    if let Err(e) = app.emit("terminal-output", &payload) {
+                    if let Err(e) =
+                        app.emit_to(window_label.as_str(), "terminal-output", &payload)
+                    {
                         log::error!("发送终端输出事件失败: {}", e);
                         break;
                     }
@@ -199,11 +224,20 @@ impl PtyManager {
             terminal_id: terminal_id.clone(),
             exit_code,
         };
-        let _ = app.emit("terminal-exit", &exit_payload);
+        let _ = app.emit_to(window_label.as_str(), "terminal-exit", &exit_payload);
 
         // 从实例列表中移除
         if let Ok(mut map) = instances.lock() {
             map.remove(&terminal_id);
+        }
+        // 从 window_terminals 中移除
+        if let Ok(mut map) = window_terminals.lock() {
+            if let Some(set) = map.get_mut(&window_label) {
+                set.remove(&terminal_id);
+                if set.is_empty() {
+                    map.remove(&window_label);
+                }
+            }
         }
 
         log::info!("PTY 进程退出: id={}", terminal_id);
@@ -298,8 +332,79 @@ impl PtyManager {
 
             log::info!("关闭终端: id={}, pid={}", id, pid);
         }
+        drop(instances);
+
+        // 同步清理 window_terminals 映射（不重要但保持一致）
+        if let Ok(mut map) = self.window_terminals.lock() {
+            let mut empty_labels: Vec<String> = Vec::new();
+            for (label, set) in map.iter_mut() {
+                if set.remove(id) && set.is_empty() {
+                    empty_labels.push(label.clone());
+                }
+            }
+            for l in empty_labels {
+                map.remove(&l);
+            }
+        }
 
         Ok(())
+    }
+
+    /// 关闭某个窗口下所有 PTY 进程（窗口销毁时调用）
+    ///
+    /// 不要持锁调 libc::kill，先把要关的 terminalId 抽出来再逐个清理。
+    pub fn close_by_window(&self, label: &str) {
+        // 取出该窗口的 terminalIds
+        let ids: Vec<String> = match self.window_terminals.lock() {
+            Ok(mut map) => match map.remove(label) {
+                Some(set) => set.into_iter().collect(),
+                None => return,
+            },
+            Err(p) => match p.into_inner().remove(label) {
+                Some(set) => set.into_iter().collect(),
+                None => return,
+            },
+        };
+
+        if ids.is_empty() {
+            return;
+        }
+
+        // 收集 pids + 释放 writer/master
+        let mut pids: Vec<u32> = Vec::new();
+        {
+            let mut instances = match self.instances.lock() {
+                Ok(g) => g,
+                Err(p) => p.into_inner(),
+            };
+            for id in &ids {
+                if let Some(instance) = instances.remove(id) {
+                    let pid = instance.pid;
+                    drop(instance.write_tx);
+                    drop(instance.master);
+                    if pid > 0 {
+                        unsafe {
+                            libc::kill(pid as i32, libc::SIGTERM);
+                        }
+                        pids.push(pid);
+                    }
+                }
+            }
+        }
+
+        // 兜底 SIGKILL
+        if !pids.is_empty() {
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(3));
+                for pid in &pids {
+                    unsafe {
+                        libc::kill(*pid as i32, libc::SIGKILL);
+                    }
+                }
+            });
+        }
+
+        log::info!("关闭窗口 {} 的 PTY 进程 ({}个)", label, ids.len());
     }
 
     /// 关闭所有 PTY 进程（应用退出时调用）
@@ -338,6 +443,11 @@ impl PtyManager {
                     libc::kill(*pid as i32, libc::SIGKILL);
                 }
             }
+        }
+
+        // 清空 window_terminals
+        if let Ok(mut map) = self.window_terminals.lock() {
+            map.clear();
         }
 
         log::info!("已关闭所有 PTY 进程 ({}个)", ids.len());

@@ -2,12 +2,13 @@
 //! 管理 PTY 进程的创建、输入输出、调整大小和关闭
 
 use crate::services::pty_manager::PtyManager;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, State, WebviewWindow};
 
 /// 创建新的终端 PTY 进程
 #[tauri::command]
 pub async fn create_terminal(
     app: AppHandle,
+    window: WebviewWindow,
     pty_manager: State<'_, PtyManager>,
     id: String,
     cwd: String,
@@ -15,15 +16,17 @@ pub async fn create_terminal(
     rows: u16,
     command: Option<String>,
 ) -> Result<u32, String> {
+    let label = window.label().to_string();
     log::info!(
-        "创建终端: id={}, cwd={}, cols={}, rows={}, command={:?}",
+        "创建终端: id={}, cwd={}, cols={}, rows={}, command={:?}, window={}",
         id,
         cwd,
         cols,
         rows,
-        command
+        command,
+        label
     );
-    pty_manager.create(app, &id, &cwd, cols, rows, command)
+    pty_manager.create(app, &id, &cwd, cols, rows, command, label)
 }
 
 /// 向终端写入数据（用户输入）

@@ -13,7 +13,6 @@
  * 面板为"浮动覆盖层" — 从右侧滑入，悬浮在 Canvas 之上，不抢 flex 空间。
  * 动画用 transform: translateX GPU 加速，240ms cubic-bezier。
  */
-import { useEffect } from "react";
 import { TitleBar } from "@/components/titlebar/TitleBar";
 import { Sidebar } from "@/components/sidebar/Sidebar";
 import { Canvas } from "@/components/canvas/Canvas";
@@ -22,38 +21,46 @@ import { StatusBar } from "@/components/statusbar/StatusBar";
 import { CommandPalette } from "@/components/command-palette/CommandPalette";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
-import { useProjectStore } from "@/stores/projectStore";
+import { useWorkspaceBootstrap } from "@/hooks/useWorkspaceBootstrap";
+import { useWorkspaceAutosave } from "@/hooks/useWorkspaceAutosave";
+import { useWorkspaceStore } from "@/stores/workspaceStore";
+import { WorkspacePicker } from "@/components/workspace/WorkspacePicker";
 
 function App() {
   // 注册全局快捷键（Cmd+W 关闭 Tab、Cmd+S 保存等）
   useGlobalShortcuts();
 
-  // 应用启动时从后端加载已保存的项目列表
-  useEffect(() => {
-    const loadProjects = async () => {
-      try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        const projects = await invoke<Array<{
-          id: string;
-          name: string;
-          path: string;
-          lastOpened: number;
-        }>>("list_projects");
-        const store = useProjectStore.getState();
-        for (const project of projects) {
-          store.addProject(project);
-        }
-        // 如果有项目，自动激活最近使用的
-        if (projects.length > 0) {
-          const sorted = [...projects].sort((a, b) => b.lastOpened - a.lastOpened);
-          store.setActiveProject(sorted[0]);
-        }
-      } catch (err) {
-        console.warn("加载项目列表失败（可能在非 Tauri 环境）:", err);
-      }
-    };
-    loadProjects();
-  }, []);
+  // 启动时加载 workspace 文件并分发到各 store（严格只跑一次）
+  useWorkspaceBootstrap();
+  // 订阅 store 变更，500ms 防抖写回 workspace 文件
+  useWorkspaceAutosave();
+
+  const isReady = useWorkspaceStore((s) => s.isReady);
+  const currentPath = useWorkspaceStore((s) => s.currentPath);
+
+  if (!isReady) {
+    return (
+      <div
+        className="flex items-center justify-center h-screen w-screen dark"
+        style={{ backgroundColor: "#0d0e13", color: "#6b7280", fontSize: 12 }}
+      >
+        Loading workspace…
+      </div>
+    );
+  }
+
+  // 没有绑定 workspace —— 空状态 picker（不可关闭）
+  if (!currentPath) {
+    return (
+      <div
+        className="h-screen w-screen dark"
+        style={{ backgroundColor: "#0d0e13" }}
+      >
+        <WorkspacePicker closable={false} />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden dark">
       {/* 应用标题栏 */}

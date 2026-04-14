@@ -13,6 +13,7 @@ import { useCallback } from "react";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { usePanelStore } from "@/stores/panelStore";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { useWorkspaceStore } from "@/stores/workspaceStore";
 
 export function TitleBar() {
   /** 拖拽窗口 — Overlay 模式下需要程序化调用 startDragging */
@@ -31,6 +32,7 @@ export function TitleBar() {
   const agents = useCanvasStore((s) => s.agents);
   const activeTabId = usePanelStore((s) => s.activeTabId);
   const tabs = usePanelStore((s) => s.tabs);
+  const workspaceName = useWorkspaceStore((s) => s.currentName);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
@@ -40,7 +42,8 @@ export function TitleBar() {
     ? `${agents.length} agent${agents.length > 1 ? "s" : ""}`
     : "";
   const filePart = activeTab ? ` \u00B7 ${activeTab.title}${activeTab.type === "diff" ? " (diff)" : ""}` : "";
-  const title = `Star Gazer${agentSummary ? ` \u2014 ${agentSummary}` : ""}${filePart}`;
+  const wsPart = workspaceName ? ` \u00B7 ${workspaceName}` : "";
+  const title = `Star Gazer${wsPart}${agentSummary ? ` \u2014 ${agentSummary}` : ""}${filePart}`;
 
   return (
     <header

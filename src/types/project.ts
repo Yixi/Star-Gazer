@@ -8,6 +8,27 @@ export interface Project {
   path: string;
   /** 最后打开时间 */
   lastOpened: number;
+  /**
+   * 所属项目组 ID（可选）。
+   * - 非空：这是一个父目录组的成员
+   * - 空 / 缺失：这是一个独立项目（旧语义，完全兼容老 workspace）
+   */
+  groupId?: string;
+}
+
+/**
+ * 项目组 — 由 "父目录 + 下面若干 git 仓库" 形成的逻辑分组。
+ *
+ * - 组内成员通过 `Project.groupId === ProjectGroup.id` 反查，不在组里存 memberIds
+ *   以避免双向同步带来的一致性问题。
+ * - `path` 是父目录自身的绝对路径；当 agent 关联整个组时，PTY 就在这个目录启动。
+ */
+export interface ProjectGroup {
+  id: string;
+  /** 默认取父目录 basename，可用户重命名 */
+  name: string;
+  /** 父目录绝对路径 */
+  path: string;
 }
 
 /** 文件树节点 */

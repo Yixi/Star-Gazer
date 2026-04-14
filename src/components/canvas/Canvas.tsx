@@ -178,14 +178,11 @@ export function Canvas() {
         e.preventDefault();
         setShowPicker(true);
       }
-      // Esc 退出最大化的卡片
+      // Esc 退出最大化的卡片（exitCardMaximize 会同步恢复 zoom/viewport）
       if (e.code === "Escape") {
         const state = useCanvasStore.getState();
-        // 找到最大化的卡片并恢复
-        for (const agent of state.agents) {
-          if (state.getCardDisplayMode(agent.id) === "maximized") {
-            state.setCardDisplayMode(agent.id, "normal");
-          }
+        if (state.maximizeSnapshot) {
+          state.exitCardMaximize();
         }
       }
     };

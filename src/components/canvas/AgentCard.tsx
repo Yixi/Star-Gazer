@@ -67,6 +67,8 @@ export function AgentCard({ agent }: AgentCardProps) {
     setCardDisplayMode,
     getCardDisplayMode,
     bringAgentToFront,
+    enterCardMaximize,
+    exitCardMaximize,
   } = useCanvasStore();
 
   // 订阅本卡片的 zOrder（单独 selector，避免 cardZOrder 整个 map 变化时
@@ -83,8 +85,8 @@ export function AgentCard({ agent }: AgentCardProps) {
   const rafId = useRef<number>(0);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [hoverEdge, setHoverEdge] = useState<ResizeDirection>(null);
-  // 保存最大化前的位置和大小
-  const prevState = useRef({ position: agent.position, size: agent.size });
+  // 最大化前的 agent 位置/大小 + 画布 zoom/viewport 由 canvasStore 的
+  // maximizeSnapshot 集中保管，这里不再本地缓存，避免两套状态不一致。
 
   /** 拖拽中状态（用于视觉反馈） */
   const [dragging, setDragging] = useState(false);
@@ -297,17 +299,11 @@ export function AgentCard({ agent }: AgentCardProps) {
   /** 双击头部切换最大化 */
   const handleHeaderDoubleClick = useCallback(() => {
     if (displayMode === "maximized") {
-      setCardDisplayMode(agent.id, "normal");
-      updateAgentPosition(agent.id, prevState.current.position);
-      updateAgentSize(agent.id, prevState.current.size);
+      exitCardMaximize();
     } else {
-      prevState.current = { position: agent.position, size: agent.size };
-      setCardDisplayMode(agent.id, "maximized");
+      enterCardMaximize(agent.id);
     }
-  }, [
-    agent.id, agent.position, agent.size, displayMode,
-    setCardDisplayMode, updateAgentPosition, updateAgentSize,
-  ]);
+  }, [agent.id, displayMode, enterCardMaximize, exitCardMaximize]);
 
   /** 双击标题文本进入编辑模式 */
   const handleNameDoubleClick = useCallback((e: React.MouseEvent) => {
@@ -392,18 +388,23 @@ export function AgentCard({ agent }: AgentCardProps) {
     [isExiting, agent.id, removeAgent],
   );
 
-  /** 计算卡片定位样式 */
+  /** 计算卡片定位样式
+   *
+   * maximized 时用 `position: absolute; inset: 0` 贴满 canvas-layer。
+   * canvasStore.enterCardMaximize 会把 zoom/viewport 重置为 1/(0,0)，
+   * canvas-layer 变成 identity transform，子元素 inset:0 就能精确等于
+   * canvas 容器的尺寸。不用 fixed + 100vw/vh 是因为 transform 祖先会
+   * 劫持 fixed 的 containing block + zoom 会叠乘 viewport 单位。
+   */
   const getCardStyle = (): React.CSSProperties => {
     if (displayMode === "maximized") {
       return {
-        position: "fixed",
+        position: "absolute",
         left: 0,
         top: 0,
         right: 0,
         bottom: 0,
-        width: "100vw",
-        height: "100vh",
-        zIndex: 100,
+        zIndex: 999,
         borderRadius: 0,
       };
     }

@@ -3,24 +3,25 @@
 //! 安全模型：所有路径必须位于至少一个已注册项目的根目录内，
 //! 通过 canonicalize 解析 symlink/`..` 后再做 starts_with 校验，
 //! 防止恶意前端构造 `../../etc/passwd` 之类的路径穿越。
+//! 项目路径由前端通过 `sync_workspace_project_paths` 注入到 WorkspaceManager。
 
 use crate::services::file_watcher::FileWatcherManager;
-use crate::services::project_manager::ProjectManager;
+use crate::services::workspace_manager::WorkspaceManager;
 use crate::types::models::DirEntry;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, State};
 
 /// 必须-已存在：canonicalize 目标路径，校验位于某个已注册项目内
-fn resolve_existing(pm: &ProjectManager, path: &str) -> Result<PathBuf, String> {
+fn resolve_existing(ws: &WorkspaceManager, path: &str) -> Result<PathBuf, String> {
     let canonical = Path::new(path)
         .canonicalize()
         .map_err(|_| format!("路径无法解析或不存在: {}", safe_err_path(path)))?;
-    ensure_in_projects(pm, &canonical)?;
+    ws.ensure_path_in_projects(&canonical)?;
     Ok(canonical)
 }
 
 /// 可能-新文件：对父目录 canonicalize，校验位于某个已注册项目内
-fn resolve_new(pm: &ProjectManager, path: &str) -> Result<PathBuf, String> {
+fn resolve_new(ws: &WorkspaceManager, path: &str) -> Result<PathBuf, String> {
     let p = Path::new(path);
     let parent = p.parent().ok_or_else(|| "无效路径（无父目录）".to_string())?;
     let file_name = p
@@ -30,24 +31,8 @@ fn resolve_new(pm: &ProjectManager, path: &str) -> Result<PathBuf, String> {
         .canonicalize()
         .map_err(|_| "父目录无法解析或不存在".to_string())?;
     let full = parent_canonical.join(file_name);
-    ensure_in_projects(pm, &full)?;
+    ws.ensure_path_in_projects(&full)?;
     Ok(full)
-}
-
-/// 校验 canonical 路径位于某个已注册项目内
-fn ensure_in_projects(pm: &ProjectManager, canonical: &Path) -> Result<(), String> {
-    let projects = pm.list()?;
-    if projects.is_empty() {
-        return Err("未注册任何项目，文件操作被拒绝".to_string());
-    }
-    for project in &projects {
-        if let Ok(project_canonical) = Path::new(&project.path).canonicalize() {
-            if canonical.starts_with(&project_canonical) {
-                return Ok(());
-            }
-        }
-    }
-    Err("路径不在任何已注册项目内，操作被拒绝".to_string())
 }
 
 /// 错误日志里避免暴露绝对路径的完整内容（留下最后两段即可）
@@ -63,10 +48,10 @@ fn safe_err_path(path: &str) -> String {
 /// 读取文件内容
 #[tauri::command]
 pub async fn read_file(
-    project_manager: State<'_, ProjectManager>,
+    workspace_manager: State<'_, WorkspaceManager>,
     path: String,
 ) -> Result<String, String> {
-    let canonical = resolve_existing(&project_manager, &path)?;
+    let canonical = resolve_existing(&workspace_manager, &path)?;
     tokio::fs::read_to_string(&canonical)
         .await
         .map_err(|e| format!("读取文件失败: {}", e))
@@ -75,11 +60,11 @@ pub async fn read_file(
 /// 写入文件内容
 #[tauri::command]
 pub async fn write_file(
-    project_manager: State<'_, ProjectManager>,
+    workspace_manager: State<'_, WorkspaceManager>,
     path: String,
     content: String,
 ) -> Result<(), String> {
-    let canonical = resolve_new(&project_manager, &path)?;
+    let canonical = resolve_new(&workspace_manager, &path)?;
     tokio::fs::write(&canonical, content)
         .await
         .map_err(|e| format!("写入文件失败: {}", e))
@@ -88,10 +73,10 @@ pub async fn write_file(
 /// 列出目录内容
 #[tauri::command]
 pub async fn list_dir(
-    project_manager: State<'_, ProjectManager>,
+    workspace_manager: State<'_, WorkspaceManager>,
     path: String,
 ) -> Result<Vec<DirEntry>, String> {
-    let canonical = resolve_existing(&project_manager, &path)?;
+    let canonical = resolve_existing(&workspace_manager, &path)?;
     let mut entries = Vec::new();
     let mut dir = tokio::fs::read_dir(&canonical)
         .await
@@ -133,10 +118,10 @@ pub async fn list_dir(
 /// 创建目录
 #[tauri::command]
 pub async fn create_dir(
-    project_manager: State<'_, ProjectManager>,
+    workspace_manager: State<'_, WorkspaceManager>,
     path: String,
 ) -> Result<(), String> {
-    let canonical = resolve_new(&project_manager, &path)?;
+    let canonical = resolve_new(&workspace_manager, &path)?;
     tokio::fs::create_dir_all(&canonical)
         .await
         .map_err(|e| format!("创建目录失败: {}", e))
@@ -145,10 +130,10 @@ pub async fn create_dir(
 /// 删除文件或目录
 #[tauri::command]
 pub async fn remove_entry(
-    project_manager: State<'_, ProjectManager>,
+    workspace_manager: State<'_, WorkspaceManager>,
     path: String,
 ) -> Result<(), String> {
-    let canonical = resolve_existing(&project_manager, &path)?;
+    let canonical = resolve_existing(&workspace_manager, &path)?;
     if canonical.is_dir() {
         tokio::fs::remove_dir_all(&canonical)
             .await
@@ -163,12 +148,12 @@ pub async fn remove_entry(
 /// 重命名文件或目录
 #[tauri::command]
 pub async fn rename_entry(
-    project_manager: State<'_, ProjectManager>,
+    workspace_manager: State<'_, WorkspaceManager>,
     old_path: String,
     new_path: String,
 ) -> Result<(), String> {
-    let old_canonical = resolve_existing(&project_manager, &old_path)?;
-    let new_canonical = resolve_new(&project_manager, &new_path)?;
+    let old_canonical = resolve_existing(&workspace_manager, &old_path)?;
+    let new_canonical = resolve_new(&workspace_manager, &new_path)?;
     tokio::fs::rename(&old_canonical, &new_canonical)
         .await
         .map_err(|e| format!("重命名失败: {}", e))
@@ -177,13 +162,13 @@ pub async fn rename_entry(
 /// 检查路径是否存在
 #[tauri::command]
 pub async fn path_exists(
-    project_manager: State<'_, ProjectManager>,
+    workspace_manager: State<'_, WorkspaceManager>,
     path: String,
 ) -> Result<bool, String> {
     // 不存在的路径直接返回 false（不抛错），存在的路径必须在项目内
     match Path::new(&path).canonicalize() {
         Ok(canonical) => {
-            ensure_in_projects(&project_manager, &canonical)?;
+            workspace_manager.ensure_path_in_projects(&canonical)?;
             Ok(true)
         }
         Err(_) => Ok(false),
@@ -194,11 +179,11 @@ pub async fn path_exists(
 #[tauri::command]
 pub async fn watch_dir(
     app: AppHandle,
-    project_manager: State<'_, ProjectManager>,
+    workspace_manager: State<'_, WorkspaceManager>,
     watcher: State<'_, FileWatcherManager>,
     path: String,
 ) -> Result<(), String> {
-    let canonical = resolve_existing(&project_manager, &path)?;
+    let canonical = resolve_existing(&workspace_manager, &path)?;
     log::info!("开始监听目录: {:?}", canonical.file_name());
     watcher.watch(app, &canonical.to_string_lossy())
 }
@@ -217,4 +202,118 @@ pub async fn unwatch_dir(
         .unwrap_or(path.clone());
     log::info!("停止监听目录");
     watcher.unwatch(&canonical)
+}
+
+// ========================================
+// 智能目录扫描 - 判断用户选择的目录是单 git 项目还是多项目父目录
+// ========================================
+
+/// 被 scan_git_repos 扫到的子目录条目
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitRepoEntry {
+    pub name: String,
+    pub path: String,
+}
+
+/// 扫描结果：三态枚举
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum ScanResult {
+    /// 给定目录本身就是一个 git 仓库
+    Single { path: String, name: String },
+    /// 给定目录不是 git 仓库，但其直接子目录里有若干 git 仓库
+    Group {
+        parent_path: String,
+        parent_name: String,
+        members: Vec<GitRepoEntry>,
+    },
+    /// 既不是 git 仓库，子目录里也没有 git 仓库
+    Empty,
+}
+
+/// 子目录扫描时跳过的噪声目录名
+const SCAN_BLACKLIST: &[&str] = &[
+    "node_modules",
+    "target",
+    "dist",
+    "build",
+    ".next",
+    ".nuxt",
+    "venv",
+    ".venv",
+    "__pycache__",
+];
+
+/// 扫描给定路径，判断它是单个 git 仓库还是一个装有若干 git 仓库的父目录
+///
+/// **不走路径沙箱** —— 这个命令只读目录项和 `.git` 是否存在，无副作用，
+/// 且被调用时目标路径通常还没被加进 workspace 的允许列表里。
+#[tauri::command]
+pub async fn scan_git_repos(path: String) -> Result<ScanResult, String> {
+    let canonical = match Path::new(&path).canonicalize() {
+        Ok(p) => p,
+        Err(_) => return Ok(ScanResult::Empty),
+    };
+    if !canonical.is_dir() {
+        return Ok(ScanResult::Empty);
+    }
+
+    // 1) 给定目录本身是 git 仓库 → Single
+    if canonical.join(".git").exists() {
+        let name = canonical
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "project".to_string());
+        return Ok(ScanResult::Single {
+            path: canonical.to_string_lossy().to_string(),
+            name,
+        });
+    }
+
+    // 2) 否则只扫一层子目录
+    let mut members: Vec<GitRepoEntry> = Vec::new();
+    let mut dir = tokio::fs::read_dir(&canonical)
+        .await
+        .map_err(|e| format!("读取目录失败: {}", e))?;
+    while let Some(entry) = dir.next_entry().await.map_err(|e| e.to_string())? {
+        let file_name = entry.file_name();
+        let name = file_name.to_string_lossy().to_string();
+        if name.starts_with('.') {
+            continue; // 隐藏目录 / . / ..
+        }
+        if SCAN_BLACKLIST.iter().any(|b| *b == name) {
+            continue;
+        }
+        let metadata = match entry.metadata().await {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        if !metadata.is_dir() {
+            continue;
+        }
+        let child_path = entry.path();
+        if !child_path.join(".git").exists() {
+            continue;
+        }
+        members.push(GitRepoEntry {
+            name,
+            path: child_path.to_string_lossy().to_string(),
+        });
+    }
+
+    if members.is_empty() {
+        return Ok(ScanResult::Empty);
+    }
+
+    members.sort_by(|a, b| a.name.cmp(&b.name));
+    let parent_name = canonical
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "workspace".to_string());
+    Ok(ScanResult::Group {
+        parent_path: canonical.to_string_lossy().to_string(),
+        parent_name,
+        members,
+    })
 }
