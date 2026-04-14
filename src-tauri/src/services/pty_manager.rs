@@ -4,6 +4,7 @@
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use std::collections::HashMap;
 use std::io::{Read, Write};
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter};
 
@@ -24,11 +25,15 @@ pub struct TerminalExitPayload {
 }
 
 /// PTY 实例信息
+///
+/// 写入路径通过 mpsc channel 串行化到一个专用写入线程，复刻 VSCode/node-pty
+/// 的 `_writeQueue` 模型：命令端只做 send，保证 FIFO；真实 `write_all`/`flush`
+/// 全部由写线程按序执行，避免并发 Tauri async command 抢锁导致乱序。
 pub struct PtyInstance {
     pub id: String,
     pub pid: u32,
     pub master: Box<dyn MasterPty + Send>,
-    pub writer: Box<dyn Write + Send>,
+    pub write_tx: mpsc::Sender<Vec<u8>>,
 }
 
 /// PTY 管理器 - 管理所有活跃的终端进程
@@ -102,19 +107,28 @@ impl PtyManager {
             .take_writer()
             .map_err(|e| format!("获取 writer 失败: {}", e))?;
 
+        // 建 mpsc channel 驱动一个专用写入线程：所有 write 命令按 send 顺序入队，
+        // 写线程串行执行 write_all + flush，保证跨并发 invoke 的字节顺序。
+        let (write_tx, write_rx) = mpsc::channel::<Vec<u8>>();
+        let writer_thread_id = id.to_string();
+        std::thread::spawn(move || {
+            Self::drain_writes(writer_thread_id, writer, write_rx);
+        });
+
         // 存储实例
         let instance = PtyInstance {
             id: id.to_string(),
             pid,
             master: pair.master,
-            writer,
+            write_tx,
         };
 
         // 如果同 ID 的旧实例存在（React Strict Mode 双重挂载），先清理
         let mut instances = self.instances.lock().map_err(|e| e.to_string())?;
         if let Some(old) = instances.remove(id) {
             log::info!("清理同 ID 旧 PTY 实例: id={}", id);
-            drop(old.writer);
+            // drop sender 让写线程退出 recv 循环并释放真实 writer（产生 EOF）
+            drop(old.write_tx);
             drop(old.master);
             if old.pid > 0 {
                 unsafe { libc::kill(old.pid as i32, libc::SIGTERM); }
@@ -196,23 +210,45 @@ impl PtyManager {
     }
 
     /// 向 PTY 写入数据
+    ///
+    /// 只做 send：命令协程立即返回，实际写入交给专用写线程串行执行。
+    /// 这样无论 Tauri 把多少个 write_terminal 命令并发 spawn 到 tokio，
+    /// 字节进入 channel 的顺序就是最终落到 PTY 的顺序。
     pub fn write(&self, id: &str, data: &[u8]) -> Result<(), String> {
-        let mut instances = self.instances.lock().map_err(|e| e.to_string())?;
+        let instances = self.instances.lock().map_err(|e| e.to_string())?;
         let instance = instances
-            .get_mut(id)
+            .get(id)
             .ok_or_else(|| format!("终端 {} 不存在", id))?;
 
         instance
-            .writer
-            .write_all(data)
-            .map_err(|e| format!("写入 PTY 失败: {}", e))?;
-
-        instance
-            .writer
-            .flush()
-            .map_err(|e| format!("刷新 PTY 写入缓冲失败: {}", e))?;
+            .write_tx
+            .send(data.to_vec())
+            .map_err(|_| format!("终端 {} 写入通道已关闭", id))?;
 
         Ok(())
+    }
+
+    /// 写入线程主循环：串行消费 channel 中的字节块并写入真实 writer。
+    ///
+    /// 对照 node-pty 的 `_writeQueue.push` + `_processWriteQueue`：
+    /// 只要在入口处保证 FIFO，下游就不会再乱序。
+    fn drain_writes(
+        id: String,
+        mut writer: Box<dyn Write + Send>,
+        rx: mpsc::Receiver<Vec<u8>>,
+    ) {
+        while let Ok(chunk) = rx.recv() {
+            if let Err(e) = writer.write_all(&chunk) {
+                log::error!("PTY 写入失败 id={}: {}", id, e);
+                break;
+            }
+            if let Err(e) = writer.flush() {
+                log::error!("PTY flush 失败 id={}: {}", id, e);
+                break;
+            }
+        }
+        // 退出时 writer 被 drop，slave 端会收到 EOF
+        log::debug!("PTY 写入线程退出: id={}", id);
     }
 
     /// 调整 PTY 尺寸
@@ -241,8 +277,8 @@ impl PtyManager {
 
         if let Some(instance) = instances.remove(id) {
             let pid = instance.pid;
-            // 释放 writer 会向 slave 发送 EOF
-            drop(instance.writer);
+            // 释放 sender 让写线程退出并释放真正的 writer，slave 端会收到 EOF
+            drop(instance.write_tx);
             drop(instance.master);
 
             if pid > 0 {
@@ -282,7 +318,7 @@ impl PtyManager {
         for id in &ids {
             if let Some(instance) = instances.remove(id) {
                 let pid = instance.pid;
-                drop(instance.writer);
+                drop(instance.write_tx);
                 drop(instance.master);
                 if pid > 0 {
                     unsafe {
