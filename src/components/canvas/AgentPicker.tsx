@@ -1,13 +1,15 @@
 /**
  * Agent Picker - 创建新 Agent 的弹窗
- * 选择 agent 类型、项目
+ * 选择 agent 类型、项目，对 claude-code 可切换 bypass permission 模式
  */
-import { useState, useCallback, useEffect, useRef } from "react";
-import { X, Terminal, Code, Cpu, Settings } from "lucide-react";
+import { useState, useCallback, useEffect, useRef, type ComponentType } from "react";
+import { X, Terminal } from "lucide-react";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { useProjectStore } from "@/stores/projectStore";
+import { useSettingsStore } from "@/stores/settingsStore";
 import { getNextColor } from "@/lib/colors";
 import type { Agent, AgentType } from "@/types/agent";
+import { ClaudeLogo, CodexLogo, OpenCodeLogo } from "./AgentLogos";
 
 interface AgentPickerProps {
   onClose: () => void;
@@ -15,46 +17,62 @@ interface AgentPickerProps {
   initialType?: AgentType;
 }
 
-/** Agent 类型定义 */
-const AGENT_TYPES = [
+/** Agent 类型卡片配置 */
+interface AgentTypeSpec {
+  id: AgentType;
+  name: string;
+  description: string;
+  Icon: ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>;
+  color: string;
+}
+
+const AGENT_TYPES: readonly AgentTypeSpec[] = [
   {
     id: "claude-code",
     name: "Claude Code",
     description: "Anthropic 的 AI 编码助手",
-    icon: Terminal,
-    color: "#4a9eff",
+    Icon: ClaudeLogo,
+    color: "#d97757",
   },
   {
     id: "opencode",
     name: "OpenCode",
     description: "开源 AI 编码工具",
-    icon: Code,
+    Icon: OpenCodeLogo,
     color: "#22c55e",
   },
   {
     id: "codex",
     name: "Codex",
     description: "OpenAI 的代码模型",
-    icon: Cpu,
+    Icon: CodexLogo,
     color: "#a78bfa",
   },
   {
     id: "custom",
     name: "Custom",
-    description: "自定义 Agent 配置",
-    icon: Settings,
+    description: "自定义 / 默认 shell",
+    Icon: Terminal,
     color: "#ff8c42",
   },
-] as const;
+];
 
 export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
-  const [selectedType, setSelectedType] = useState<string>(initialType ?? "claude-code");
+  const [selectedType, setSelectedType] = useState<AgentType>(initialType ?? "claude-code");
   const [agentName, setAgentName] = useState("");
+  const [bypassPermissions, setBypassPermissions] = useState(false);
   const { agents, addAgent } = useCanvasStore();
   const { projects, activeProject } = useProjectStore();
-  const [selectedProjectId, setSelectedProjectId] = useState(
-    activeProject?.id ?? ""
-  );
+  const lastAgentProjectId = useSettingsStore((s) => s.lastAgentProjectId);
+  const setLastAgentProjectId = useSettingsStore((s) => s.setLastAgentProjectId);
+
+  // 初始项目优先级：上次记忆 → 当前激活项目 → 空
+  const [selectedProjectId, setSelectedProjectId] = useState(() => {
+    if (lastAgentProjectId && projects.some((p) => p.id === lastAgentProjectId)) {
+      return lastAgentProjectId;
+    }
+    return activeProject?.id ?? "";
+  });
   const overlayRef = useRef<HTMLDivElement>(null);
 
   // Esc 关闭
@@ -77,11 +95,19 @@ export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
       agentName.trim() ||
       `${type?.name ?? "Agent"} #${agents.length + 1}`;
 
+    // claude-code + bypass → 覆盖启动命令带上 --dangerously-skip-permissions
+    // agentType 仍是 "claude-code"（保留色盘/图标），但 agent.command 会被
+    // AgentCard.terminalCommand 优先读取
+    const command =
+      selectedType === "claude-code" && bypassPermissions
+        ? "claude --dangerously-skip-permissions"
+        : undefined;
+
     const agent: Agent = {
       id: crypto.randomUUID(),
       name,
       color,
-      agentType: selectedType as AgentType,
+      agentType: selectedType,
       terminalId: crypto.randomUUID(),
       status: "idle",
       position: {
@@ -90,17 +116,22 @@ export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
       },
       size: { width: 680, height: 480 },
       cwd: project?.path ?? "/tmp",
+      ...(command ? { command } : {}),
     };
 
     addAgent(agent);
+    // 记住这次选的项目，下次打开 picker 作为默认
+    setLastAgentProjectId(selectedProjectId || null);
     onClose();
   }, [
     agents,
     agentName,
     selectedType,
     selectedProjectId,
+    bypassPermissions,
     projects,
     addAgent,
+    setLastAgentProjectId,
     onClose,
   ]);
 
@@ -147,7 +178,7 @@ export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
             </label>
             <div className="grid grid-cols-2 gap-2">
               {AGENT_TYPES.map((type) => {
-                const Icon = type.icon;
+                const Icon = type.Icon;
                 const isSelected = selectedType === type.id;
                 return (
                   <button
@@ -160,7 +191,8 @@ export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
                     onClick={() => setSelectedType(type.id)}
                   >
                     <Icon
-                      className="w-5 h-5 flex-shrink-0"
+                      size={20}
+                      className="flex-shrink-0"
                       style={{ color: type.color }}
                     />
                     <div>
@@ -176,6 +208,40 @@ export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
               })}
             </div>
           </div>
+
+          {/* Claude Code 专属：bypass permission 开关 */}
+          {selectedType === "claude-code" && (
+            <label
+              className="flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-colors bg-white/5 hover:bg-white/[0.07]"
+            >
+              <button
+                type="button"
+                role="switch"
+                aria-checked={bypassPermissions}
+                onClick={() => setBypassPermissions((v) => !v)}
+                className={`relative flex-shrink-0 mt-0.5 w-8 h-[18px] rounded-full transition-colors ${
+                  bypassPermissions ? "bg-[#4a9eff]" : "bg-[#2a2d36]"
+                }`}
+              >
+                <span
+                  className="absolute top-[2px] left-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-transform"
+                  style={{
+                    transform: bypassPermissions
+                      ? "translateX(14px)"
+                      : "translateX(0)",
+                  }}
+                />
+              </button>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium text-white">
+                  Bypass Permissions
+                </div>
+                <div className="text-[10px] text-[#6b7280] mt-0.5 leading-relaxed">
+                  启动时追加 <code className="text-[#e4e6eb] bg-black/30 px-1 rounded">--dangerously-skip-permissions</code>，Claude Code 不再逐步询问。
+                </div>
+              </div>
+            </label>
+          )}
 
           {/* Agent 名称 */}
           <div>

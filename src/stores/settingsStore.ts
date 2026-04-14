@@ -16,6 +16,8 @@ interface SettingsState {
   theme: "dark";
   /** Diff 布局模式 */
   diffLayout: "split" | "unified";
+  /** AgentPicker 上次使用的项目 ID（跨会话记忆） */
+  lastAgentProjectId: string | null;
 
   /** 设置侧边栏宽度 */
   setSidebarWidth: (width: number) => void;
@@ -27,6 +29,8 @@ interface SettingsState {
   setTerminalFontSize: (size: number) => void;
   /** 设置 Diff 布局模式 */
   setDiffLayout: (layout: "split" | "unified") => void;
+  /** 记录 AgentPicker 最近一次选中的项目 */
+  setLastAgentProjectId: (id: string | null) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -39,12 +43,14 @@ export const useSettingsStore = create<SettingsState>()(
       terminalFontSize: 13,
       theme: "dark",
       diffLayout: "split",
+      lastAgentProjectId: null,
 
       setSidebarWidth: (width) => set({ sidebarWidth: width }),
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
       setEditorFontSize: (size) => set({ editorFontSize: size }),
       setTerminalFontSize: (size) => set({ terminalFontSize: size }),
       setDiffLayout: (layout) => set({ diffLayout: layout }),
+      setLastAgentProjectId: (id) => set({ lastAgentProjectId: id }),
     }),
     {
       name: "stargazer-settings",
@@ -56,6 +62,7 @@ export const useSettingsStore = create<SettingsState>()(
         editorFontSize: state.editorFontSize,
         terminalFontSize: state.terminalFontSize,
         diffLayout: state.diffLayout,
+        lastAgentProjectId: state.lastAgentProjectId,
       }),
       version: 1,
     },
