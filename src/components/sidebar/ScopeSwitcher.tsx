@@ -16,7 +16,9 @@ export function ScopeSwitcher() {
   const setViewMode = useProjectStore((s) => s.setViewMode);
   const setFlatMode = useProjectStore((s) => s.setFlatMode);
 
-  const showFlat = mode !== "files";
+  // tree/flat 切换只和 Changes 视图相关：Files 是完整文件树（始终 tree），
+  // History 只有 commit 列表（根本没有树/拍平区别）
+  const showFlat = mode === "changes";
 
   return (
     <div
