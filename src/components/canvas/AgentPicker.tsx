@@ -11,6 +11,8 @@ import type { Agent, AgentType } from "@/types/agent";
 
 interface AgentPickerProps {
   onClose: () => void;
+  /** 预设初始 Agent 类型，例如从命令面板"新建终端"带入 "custom" */
+  initialType?: AgentType;
 }
 
 /** Agent 类型定义 */
@@ -45,8 +47,8 @@ const AGENT_TYPES = [
   },
 ] as const;
 
-export function AgentPicker({ onClose }: AgentPickerProps) {
-  const [selectedType, setSelectedType] = useState<string>("claude-code");
+export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
+  const [selectedType, setSelectedType] = useState<string>(initialType ?? "claude-code");
   const [agentName, setAgentName] = useState("");
   const { agents, addAgent } = useCanvasStore();
   const { projects, activeProject } = useProjectStore();

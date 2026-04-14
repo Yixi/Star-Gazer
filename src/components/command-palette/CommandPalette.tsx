@@ -4,22 +4,21 @@
  * 快捷键：
  * - Cmd+K 呼出/关闭命令面板
  * - Cmd+P 快速打开文件
+ * - Cmd+O 直接触发"添加项目"
  *
  * 前缀过滤：
  * - > 命令
  * - # 文件
  * - @ agent
  *
- * 分组：Projects / Files / Agents / Canvas / Panel / View / Settings
+ * 选中 Agent/终端相关命令会通过 window CustomEvent 通知 Canvas 打开 AgentPicker。
  */
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Command } from "cmdk";
 import {
   Plus,
   FolderOpen,
-  Settings,
   Search,
-  GitBranch,
   Terminal,
   Eye,
   EyeOff,
@@ -43,6 +42,7 @@ export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<PaletteMode>("command");
   const [search, setSearch] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const projects = useProjectStore((s) => s.projects);
   const activeProject = useProjectStore((s) => s.activeProject);
@@ -59,7 +59,7 @@ export function CommandPalette() {
   const addProject = useProjectStore((s) => s.addProject);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
 
-  // Cmd+K 命令面板 / Cmd+P 文件搜索
+  // Cmd+K 命令面板 / Cmd+P 文件搜索 / Cmd+O 添加项目
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
@@ -72,7 +72,7 @@ export function CommandPalette() {
           setOpen(true);
         }
       }
-      if (e.key === "p" && (e.metaKey || e.ctrlKey)) {
+      if (e.key === "p" && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
         e.preventDefault();
         if (open && mode === "file") {
           setOpen(false);
@@ -82,9 +82,23 @@ export function CommandPalette() {
           setOpen(true);
         }
       }
+      if (e.key === "o" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        handleAddProject();
+      }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
+    // handleAddProject 稳定引用来自 useCallback，依赖 addProject/setActiveProject
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, mode]);
+
+  // 打开时把焦点强制落回输入框，避免被画布/侧边栏的 keydown 抢走
+  useEffect(() => {
+    if (!open) return;
+    // 等 cmdk 挂载完再 focus
+    const id = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(id);
   }, [open, mode]);
 
   // 前缀过滤检测
@@ -112,11 +126,11 @@ export function CommandPalette() {
     setSearch("");
   }, []);
 
-  // 收集所有文件（���平化文件树）
+  // 收集所有文件（扁平化文件树）
   const allFiles = flattenFileTree(fileTree);
 
   // 添加项目 - 持久化到后端
-  const handleAddProject = async () => {
+  const handleAddProject = useCallback(async () => {
     try {
       const { open: openDialog } = await import("@tauri-apps/plugin-dialog");
       const selected = await openDialog({
@@ -152,7 +166,29 @@ export function CommandPalette() {
       console.warn("Tauri dialog not available:", err);
     }
     handleClose();
-  };
+  }, [addProject, setActiveProject, handleClose]);
+
+  /** 通过 window 事件通知 Canvas 打开 AgentPicker，可选预设类型 */
+  const openAgentPicker = useCallback(
+    (initialType?: "claude-code" | "opencode" | "codex" | "custom") => {
+      window.dispatchEvent(
+        new CustomEvent("stargazer:open-agent-picker", {
+          detail: { initialType },
+        })
+      );
+      handleClose();
+    },
+    [handleClose]
+  );
+
+  /** 选中某个 agent 卡片：居中视图 + 关闭面板 */
+  const focusAgent = useCallback(
+    (id: string) => {
+      useCanvasStore.getState().selectAgent(id);
+      handleClose();
+    },
+    [handleClose]
+  );
 
   if (!open) return null;
 
@@ -167,6 +203,7 @@ export function CommandPalette() {
 
       {/* 命令面板 */}
       <Command
+        loop
         className="relative w-[540px] rounded-xl shadow-2xl overflow-hidden"
         style={{
           backgroundColor: "#1a1c23",
@@ -174,16 +211,6 @@ export function CommandPalette() {
         }}
         onKeyDown={(e: React.KeyboardEvent) => {
           if (e.key === "Escape") handleClose();
-        }}
-        filter={(value, searchValue, keywords) => {
-          const extendedValue = value + " " + (keywords?.join(" ") || "");
-          if (extendedValue.toLowerCase().includes(searchValue.toLowerCase())) {
-            if (extendedValue.toLowerCase().startsWith(searchValue.toLowerCase())) {
-              return 1;
-            }
-            return 0.5;
-          }
-          return 0;
         }}
       >
         {/* 搜索输入 */}
@@ -213,6 +240,8 @@ export function CommandPalette() {
           </span>
           <Search className="w-4 h-4 flex-shrink-0" style={{ color: "#6b7280" }} />
           <Command.Input
+            ref={inputRef}
+            autoFocus
             className="flex-1 h-11 bg-transparent text-sm outline-none"
             style={{ color: "#e4e6eb" }}
             placeholder={
@@ -220,7 +249,7 @@ export function CommandPalette() {
                 ? "输入命令..."
                 : mode === "file"
                   ? "搜索文件名..."
-                  : "搜�� Agent..."
+                  : "搜索 Agent..."
             }
             value={search}
             onValueChange={handleSearchChange}
@@ -274,13 +303,13 @@ export function CommandPalette() {
                   label="新建 Agent"
                   shortcut="⌘N"
                   keywords={["new", "agent", "create"]}
-                  onSelect={handleClose}
+                  onSelect={() => openAgentPicker()}
                 />
                 <CommandItem
                   icon={<Terminal className="w-4 h-4" />}
                   label="新建终端"
                   keywords={["terminal", "shell"]}
-                  onSelect={handleClose}
+                  onSelect={() => openAgentPicker("custom")}
                 />
                 {agents.map((a) => (
                   <CommandItem
@@ -288,7 +317,7 @@ export function CommandPalette() {
                     icon={<Bot className="w-4 h-4" />}
                     label={a.name}
                     keywords={["agent", a.color, a.status]}
-                    onSelect={handleClose}
+                    onSelect={() => focusAgent(a.id)}
                   />
                 ))}
               </Command.Group>
@@ -329,21 +358,6 @@ export function CommandPalette() {
                 />
               </Command.Group>
 
-              {/* 设置 */}
-              <Command.Group heading={<GroupHeading>设置</GroupHeading>}>
-                <CommandItem
-                  icon={<Settings className="w-4 h-4" />}
-                  label="打开设置"
-                  keywords={["settings", "preferences"]}
-                  onSelect={handleClose}
-                />
-                <CommandItem
-                  icon={<GitBranch className="w-4 h-4" />}
-                  label="切换分支"
-                  keywords={["git", "branch"]}
-                  onSelect={handleClose}
-                />
-              </Command.Group>
             </>
           )}
 
@@ -395,10 +409,7 @@ export function CommandPalette() {
                   label={a.name}
                   description={`${a.status} - ${a.color}`}
                   keywords={[a.color, a.status]}
-                  onSelect={() => {
-                    useCanvasStore.getState().selectAgent(a.id);
-                    handleClose();
-                  }}
+                  onSelect={() => focusAgent(a.id)}
                 />
               ))}
               {agents.length === 0 && (
@@ -473,7 +484,13 @@ function GroupHeading({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** 命令项 */
+/**
+ * 命令项
+ *
+ * cmdk 会给当前选中的 item 打上 `data-selected="true"`，我们用 Tailwind 的
+ * `data-[selected=true]:` 变体画出高亮 —— 这一块之前被漏了，直接导致方向键
+ * "看起来没响应"（其实选中索引一直在动）。
+ */
 function CommandItem({
   icon,
   label,
@@ -491,23 +508,25 @@ function CommandItem({
 }) {
   return (
     <Command.Item
-      className="flex items-center gap-2 px-2 py-2 rounded-md text-sm cursor-pointer transition-colors"
-      style={{ color: "#e4e6eb" }}
+      className="group flex items-center gap-2 px-2 py-2 rounded-md text-sm cursor-pointer transition-colors text-[#e4e6eb] data-[selected=true]:bg-[#2a2d36] data-[selected=true]:text-white hover:bg-[#242731]"
       keywords={keywords}
       onSelect={onSelect}
       value={label}
     >
-      <span style={{ color: "#8b92a3" }}>{icon}</span>
+      <span className="text-[#8b92a3] group-data-[selected=true]:text-white">
+        {icon}
+      </span>
       <span className="flex-1 truncate">{label}</span>
       {description && (
-        <span className="text-[10px] truncate max-w-[200px]" style={{ color: "#6b7280" }}>
+        <span
+          className="text-[10px] truncate max-w-[200px] text-[#6b7280] group-data-[selected=true]:text-[#b8bcc4]"
+        >
           {description}
         </span>
       )}
       {shortcut && (
         <kbd
-          className="text-[10px] px-1.5 py-0.5 rounded"
-          style={{ backgroundColor: "#2a2d36", color: "#8b92a3" }}
+          className="text-[10px] px-1.5 py-0.5 rounded bg-[#2a2d36] text-[#8b92a3] group-data-[selected=true]:bg-[#3a3d48] group-data-[selected=true]:text-[#e4e6eb]"
         >
           {shortcut}
         </kbd>

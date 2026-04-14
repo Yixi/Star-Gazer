@@ -32,6 +32,9 @@ export function Canvas() {
   const inertiaFrame = useRef<number>(0);
   const isSpaceHeld = useRef(false);
   const [showPicker, setShowPicker] = useState(false);
+  const [pickerInitialType, setPickerInitialType] = useState<
+    import("@/types/agent").AgentType | undefined
+  >(undefined);
 
   /** 停止惯性动画 */
   const stopInertia = useCallback(() => {
@@ -201,6 +204,17 @@ export function Canvas() {
     };
   }, []);
 
+  /** 监听命令面板派发的 "打开 AgentPicker" 事件，可选预设类型 */
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ initialType?: import("@/types/agent").AgentType }>).detail;
+      setPickerInitialType(detail?.initialType);
+      setShowPicker(true);
+    };
+    window.addEventListener("stargazer:open-agent-picker", handler);
+    return () => window.removeEventListener("stargazer:open-agent-picker", handler);
+  }, []);
+
   /** 阻止浏览器默认的缩放行为 */
   useEffect(() => {
     const el = canvasRef.current;
@@ -272,7 +286,15 @@ export function Canvas() {
       <FAB onClick={() => setShowPicker(true)} />
 
       {/* Agent Picker 弹窗 */}
-      {showPicker && <AgentPicker onClose={() => setShowPicker(false)} />}
+      {showPicker && (
+        <AgentPicker
+          initialType={pickerInitialType}
+          onClose={() => {
+            setShowPicker(false);
+            setPickerInitialType(undefined);
+          }}
+        />
+      )}
     </div>
   );
 }
