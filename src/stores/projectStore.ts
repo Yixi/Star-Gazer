@@ -441,13 +441,36 @@ export const useProjectStore = create<ProjectState>((set) => ({
     })),
 
   hydrateFromWorkspace: (ws) => {
+    // 防御性清洗 projectGroups：
+    // 过去有个 bug —— Rust 端 scan_git_repos 的 serde rename_all 没 cascade 到
+    // enum variant 内部字段，导致 parentPath / parentName 以 snake_case 发给
+    // 前端，前端读 undefined，坏组被写进 workspace 文件（只有 id 没有 path）。
+    // 这里过滤掉 path / name 缺失的坏组，并把孤儿成员的 groupId 剥掉使其变成
+    // 独立项目，避免 ProjectGroupItem.group.path.split 等处 crash。
+    const rawGroups = ws.projectGroups ?? [];
+    const validGroups = rawGroups.filter(
+      (g): g is (typeof g) & { path: string; name: string } =>
+        typeof g?.path === "string" &&
+        g.path.length > 0 &&
+        typeof g?.name === "string" &&
+        g.name.length > 0,
+    );
+    const validGroupIds = new Set(validGroups.map((g) => g.id));
+    const sanitizedProjects = ws.projects.map((p) => {
+      if (p.groupId && !validGroupIds.has(p.groupId)) {
+        const next = { ...p };
+        delete next.groupId;
+        return next;
+      }
+      return p;
+    });
+
     const activeId = ws.ui.activeProjectId;
     const active =
-      (activeId && ws.projects.find((p) => p.id === activeId)) || null;
+      (activeId && sanitizedProjects.find((p) => p.id === activeId)) || null;
     set({
-      projects: ws.projects,
-      // 老 workspace 文件无 projectGroups 字段 → 默认空数组，零感知兼容
-      projectGroups: ws.projectGroups ?? [],
+      projects: sanitizedProjects,
+      projectGroups: validGroups,
       activeProject: active,
       expandedProjectIds: ws.ui.expandedProjectIds,
       viewMode: ws.ui.viewMode,

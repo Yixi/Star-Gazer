@@ -137,8 +137,9 @@ export function Sidebar() {
         if (seen.has(p.groupId)) continue;
         seen.add(p.groupId);
         const group = projectGroups.find((g) => g.id === p.groupId);
-        if (!group) {
-          // 孤儿成员（groupId 指向已删的组）—— 当独立项目处理
+        // group 必须同时有 path + name 才算有效 —— 兜底老 workspace 文件里
+        // 出现过的"只有 id"的坏 group 数据
+        if (!group || !group.path || !group.name) {
           rows.push({ kind: "project", project: p });
           continue;
         }

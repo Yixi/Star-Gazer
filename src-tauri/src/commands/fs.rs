@@ -217,12 +217,20 @@ pub struct GitRepoEntry {
 }
 
 /// 扫描结果：三态枚举
+///
+/// **注意**：`#[serde(rename_all = "camelCase")]` 挂在 enum 上只重命名变体名
+/// （Single/Group/Empty → single/group/empty），不会自动应用到变体内部的
+/// struct 字段。所以每个 struct 变体必须自己再挂一次 rename_all，否则
+/// `parent_path` 会被序列化成 snake_case 发给前端，前端读 `scan.parentPath`
+/// 就是 undefined，最终写进 workspace 文件的是一个只有 id 的坏 group。
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum ScanResult {
     /// 给定目录本身就是一个 git 仓库
+    #[serde(rename_all = "camelCase")]
     Single { path: String, name: String },
     /// 给定目录不是 git 仓库，但其直接子目录里有若干 git 仓库
+    #[serde(rename_all = "camelCase")]
     Group {
         parent_path: String,
         parent_name: String,
