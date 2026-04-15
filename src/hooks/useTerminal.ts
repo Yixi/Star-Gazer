@@ -118,6 +118,42 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
+    // macOS 中文/日文输入法下 shift+ASCII 标点（@、#、$ 等）丢字符的 workaround。
+    //
+    // 成因：xterm.js CompositionHelper.keydown 看到 keyCode === 229（IME 激活
+    // 时所有键都被标成 229）后走 _handleAnyTextareaChanges 的 setTimeout diff
+    // 路径；但 macOS IME 对 shift+符号会先触发一个瞬时 compositionstart，导致
+    // setTimeout 跑时 _isComposing === true，整个分支被跳过、字符彻底丢失。
+    // 上游 issue: https://github.com/xtermjs/xterm.js/issues/5374（至今未修，
+    // VSCode 终端同样中招但选择了 upstream 标签不修）。
+    //
+    // 这里在 customKeyEventHandler 里提前拦截：只针对单字符 ASCII 可打印且
+    // 非字母的 shift 组合（比如 @#$%^&*()），直接写进 PTY 并吃掉事件。字母
+    // 走原路径不碰，因为 shift+letter 在 IME 下工作正常，不能干扰。
+    terminal.attachCustomKeyEventHandler((event) => {
+      if (event.type !== "keydown") return true;
+      if (
+        event.shiftKey &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.isComposing &&
+        event.key.length === 1
+      ) {
+        const code = event.key.charCodeAt(0);
+        const isAsciiPrintable = code >= 0x20 && code <= 0x7e;
+        const isLetter =
+          (code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a);
+        if (isAsciiPrintable && !isLetter) {
+          if (generationRef.current === myGeneration) {
+            ptyService.writeTerminal(terminalId, event.key);
+          }
+          return false;
+        }
+      }
+      return true;
+    });
+
     // 先注册事件监听，再创建 PTY，避免丢失 shell 初始输出（prompt 等）
     // 所有回调都检查 generation 防止 Strict Mode 下旧 PTY 事件污染
 
