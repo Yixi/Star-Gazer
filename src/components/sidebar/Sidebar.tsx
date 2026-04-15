@@ -490,16 +490,39 @@ export function Sidebar() {
  *
  * 这里挂 useProjectGitSync 是关键：每个展开的项目都有独立的 git 同步，
  * 切换 active 项目不会影响其他展开项目的状态实时性。
+ *
+ * 当 project 是 group member（有 groupId）时，整块内容（FileTree / ChangesView /
+ * HistoryView）套一层左缘 tree-guide 竖线，视觉上和父 group member 绑定。
+ * 只吃 10px 左侧 gutter，不做真正意义的缩进，避免压缩内部横向空间。
  */
 function ProjectBody({ project }: { project: Project }) {
   const mode = useProjectStore((s) => s.viewMode);
   useProjectGitSync(project);
-  return (
+  const content = (
     <>
       {mode === "files" && <FileTree project={project} />}
       {mode === "changes" && <ChangesView project={project} />}
       {mode === "history" && <HistoryView project={project} />}
     </>
+  );
+  if (!project.groupId) return content;
+  return (
+    <div className="relative" style={{ paddingLeft: 10 }}>
+      {/* tree guide rail —— 左缘 2px 蓝色竖线，视觉上把这块内容挂在父 group member 下 */}
+      <div
+        aria-hidden
+        className="absolute pointer-events-none"
+        style={{
+          left: 3,
+          top: 0,
+          bottom: 0,
+          width: 2,
+          borderRadius: 1,
+          background: "rgba(74, 158, 255, 0.32)",
+        }}
+      />
+      {content}
+    </div>
   );
 }
 
