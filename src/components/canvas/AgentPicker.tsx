@@ -10,6 +10,7 @@ import { useSettingsStore } from "@/stores/settingsStore";
 import { getNextColor } from "@/lib/colors";
 import type { Agent, AgentType } from "@/types/agent";
 import { ClaudeLogo, CodexLogo, OpenCodeLogo } from "./AgentLogos";
+import { ProjectTargetSelect } from "@/components/ui/ProjectTargetSelect";
 
 interface AgentPickerProps {
   onClose: () => void;
@@ -311,48 +312,17 @@ export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
             />
           </div>
 
-          {/* 项目 / 组选择
-             *
-             * 列表构造：独立项目在前，项目组在后（方便用户找"多仓库"入口）。
-             * 组成员**不**单独列出（要单独选中某个成员需要新建 agent 时把 group
-             * 里的成员作为独立项目处理，Phase 1 不支持；只能选组整体或独立项目）。
-             */}
+          {/* 项目 / 组选择 —— 用 Base UI Select 自定义渲染层级 */}
           <div>
             <label className="block text-xs text-[#8b92a3] font-medium mb-2 uppercase tracking-wider">
               项目
             </label>
-            <select
+            <ProjectTargetSelect
+              projects={projects}
+              projectGroups={projectGroups}
               value={selectedTargetKey}
-              onChange={(e) => setSelectedTargetKey(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg text-sm text-white outline-none focus:ring-1 focus:ring-[#4a9eff] transition-colors appearance-none"
-              style={{
-                background: "#0d0f14",
-                border: "1px solid #1f2128",
-              }}
-            >
-              <option value="">选择项目 / 项目组...</option>
-              {projects
-                .filter((p) => !p.groupId)
-                .map((p) => (
-                  <option key={`p-${p.id}`} value={`p-${p.id}`}>
-                    {p.name}
-                  </option>
-                ))}
-              {projectGroups.length > 0 && (
-                <optgroup label="项目组（多仓库）">
-                  {projectGroups.map((g) => {
-                    const memberCount = projects.filter(
-                      (p) => p.groupId === g.id,
-                    ).length;
-                    return (
-                      <option key={`g-${g.id}`} value={`g-${g.id}`}>
-                        {g.name} ({memberCount} 个仓库)
-                      </option>
-                    );
-                  })}
-                </optgroup>
-              )}
-            </select>
+              onChange={setSelectedTargetKey}
+            />
           </div>
 
         </div>
