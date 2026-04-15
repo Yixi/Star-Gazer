@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { useProjectStore } from "@/stores/projectStore";
 import { useCanvasStore } from "@/stores/canvasStore";
+import { AGENT_COLOR_HEX } from "@/constants/agentColors";
 import type { Project } from "@/types/project";
 
 interface ProjectItemProps {
@@ -51,25 +52,29 @@ export function ProjectItem({ project, isActive, isExpanded, depth = 0 }: Projec
   } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // 该项目下是否有运行中的 agent
+  // 该项目下第一个运行中 agent 的颜色 —— 圆点跟着这个 agent 的色盘走，
+  // 视觉上和 AgentCard header 上的圆点对齐，不再固定绿色。
   //
-  // 优先级：
-  // 1. agent.scope.kind === "project" 显式关联这个 project → 亮
-  // 2. agent.scope.kind === "group" 关联这个 project 所属的组 → 亮
+  // 匹配优先级：
+  // 1. agent.scope.kind === "project" 显式关联这个 project
+  // 2. agent.scope.kind === "group" 关联这个 project 所属的组
   // 3. 老 agent 没 scope 字段 → 降级到 cwd.startsWith(project.path)
-  const hasRunningAgent = agents.some((a) => {
-    if (a.status !== "running") return false;
-    if (a.scope?.kind === "project" && a.scope.projectId === project.id) return true;
-    if (
-      a.scope?.kind === "group" &&
-      project.groupId &&
-      a.scope.groupId === project.groupId
-    ) {
-      return true;
-    }
-    if (!a.scope && a.cwd.startsWith(project.path)) return true;
-    return false;
-  });
+  const runningAgentColorHex = (() => {
+    const match = agents.find((a) => {
+      if (a.status !== "running") return false;
+      if (a.scope?.kind === "project" && a.scope.projectId === project.id) return true;
+      if (
+        a.scope?.kind === "group" &&
+        project.groupId &&
+        a.scope.groupId === project.groupId
+      ) {
+        return true;
+      }
+      if (!a.scope && a.cwd.startsWith(project.path)) return true;
+      return false;
+    });
+    return match ? AGENT_COLOR_HEX[match.color] : null;
+  })();
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -212,13 +217,13 @@ export function ProjectItem({ project, isActive, isExpanded, depth = 0 }: Projec
         >
           {project.name}
         </span>
-        {/* 运行状态指示 */}
-        {hasRunningAgent && (
+        {/* 运行状态指示 —— 颜色跟第一个匹配 running agent 对齐 */}
+        {runningAgentColorHex && (
           <span
             className="w-2 h-2 rounded-full flex-shrink-0"
             style={{
-              backgroundColor: "#22c55e",
-              boxShadow: "0 0 6px rgba(34,197,94,0.6)",
+              backgroundColor: runningAgentColorHex,
+              boxShadow: `0 0 6px ${runningAgentColorHex}60`,
             }}
           />
         )}
