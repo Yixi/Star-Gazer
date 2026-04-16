@@ -8,7 +8,9 @@
  * - 关闭方式：× 按钮、Esc、Cmd+\、toggle 点击
  */
 import { useEffect, useRef, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { usePanelStore } from "@/stores/panelStore";
+import { gitFetch } from "@/services/git";
 import { TabBar } from "./TabBar";
 import { PanelToolbar } from "./PanelToolbar";
 import { FileEditor } from "./FileEditor";
@@ -19,13 +21,28 @@ import { CommitFilesView } from "./CommitFilesView";
 const DEFAULT_WIDTH = 800;
 
 export function SlidePanel() {
+  const { t } = useTranslation();
   const { isOpen, width, activeTabId, tabs, setWidth, closePanel } =
     usePanelStore();
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const isResizing = useRef(false);
+  const prevOpenRef = useRef(false);
 
   const togglePanel = usePanelStore((s) => s.togglePanel);
+
+  // 面板打开时 fetch 远程仓库，让 diff/ahead-behind 拿到最新数据
+  useEffect(() => {
+    if (isOpen && !prevOpenRef.current) {
+      const paths = new Set(
+        tabs.map((t) => t.projectPath).filter(Boolean) as string[],
+      );
+      for (const p of paths) {
+        gitFetch(p).catch(() => {});
+      }
+    }
+    prevOpenRef.current = isOpen;
+  }, [isOpen, tabs]);
 
   // 快捷键：Esc 关闭面板、Cmd+\ 切换面板开关
   useEffect(() => {
@@ -163,7 +180,7 @@ export function SlidePanel() {
               className="flex items-center justify-center h-full text-sm"
               style={{ color: "#6b7280" }}
             >
-              没有打开的文件
+              {t("panel.noOpenFiles")}
             </div>
           )}
         </div>

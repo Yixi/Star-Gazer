@@ -14,6 +14,7 @@
  * 选中 Agent/终端相关命令会通过 window CustomEvent 通知 Canvas 打开 AgentPicker。
  */
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Command } from "cmdk";
 import {
   Plus,
@@ -47,6 +48,7 @@ const EMPTY_FILE_TREE: FileNode[] = [];
 type PaletteMode = "command" | "file" | "agent";
 
 export function CommandPalette() {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<PaletteMode>("command");
   const [search, setSearch] = useState("");
@@ -160,7 +162,7 @@ export function CommandPalette() {
       const selected = await openDialog({
         directory: true,
         multiple: false,
-        title: "选择项目文件夹",
+        title: t("project.selectFolder"),
       });
       if (!selected || typeof selected !== "string") {
         handleClose();
@@ -234,7 +236,7 @@ export function CommandPalette() {
       const selected = await openDialog({
         multiple: false,
         filters: SGW_FILTERS,
-        title: "打开 Workspace 文件",
+        title: t("workspace.openDialogTitle"),
       });
       if (selected && typeof selected === "string") {
         await workspaceService.openWorkspaceInWindow(selected);
@@ -251,7 +253,7 @@ export function CommandPalette() {
       const selected = await save({
         defaultPath: "workspace.sgw",
         filters: SGW_FILTERS,
-        title: "新建 Workspace",
+        title: t("workspace.newDialogTitle"),
       });
       if (!selected) {
         handleClose();
@@ -348,7 +350,7 @@ export function CommandPalette() {
                     : "#a78bfa",
             }}
           >
-            {mode === "command" ? "命令" : mode === "file" ? "文件" : "Agent"}
+            {mode === "command" ? t("commandPalette.command") : mode === "file" ? t("commandPalette.file") : t("agent.title")}
           </span>
           <Search className="w-4 h-4 flex-shrink-0" style={{ color: "#6b7280" }} />
           <Command.Input
@@ -358,10 +360,10 @@ export function CommandPalette() {
             style={{ color: "#e4e6eb" }}
             placeholder={
               mode === "command"
-                ? "输入命令..."
+                ? t("commandPalette.searchCommand")
                 : mode === "file"
-                  ? "搜索文件名..."
-                  : "搜索 Agent..."
+                  ? t("commandPalette.searchFile")
+                  : t("commandPalette.searchAgent")
             }
             value={search}
             onValueChange={handleSearchChange}
@@ -380,7 +382,7 @@ export function CommandPalette() {
             className="py-8 text-center text-sm"
             style={{ color: "#6b7280" }}
           >
-            没有找到匹配结果
+            {t("commandPalette.noMatch")}
           </Command.Empty>
 
           {/* 命令模式 */}
@@ -390,14 +392,14 @@ export function CommandPalette() {
               <Command.Group heading={<GroupHeading>Workspace</GroupHeading>}>
                 <CommandItem
                   icon={<FolderOpen className="w-4 h-4" />}
-                  label="打开 Workspace 文件..."
+                  label={t("workspace.open")}
                   shortcut="⇧⌘O"
                   keywords={["open", "workspace", "sgw"]}
                   onSelect={handleOpenWorkspace}
                 />
                 <CommandItem
                   icon={<Plus className="w-4 h-4" />}
-                  label="新建 Workspace..."
+                  label={t("workspace.new") + "..."}
                   shortcut="⇧⌘N"
                   keywords={["new", "workspace", "create"]}
                   onSelect={handleNewWorkspace}
@@ -405,7 +407,7 @@ export function CommandPalette() {
                 {currentWorkspaceName && (
                   <CommandItem
                     icon={<Layers className="w-4 h-4" />}
-                    label={`当前 Workspace: ${currentWorkspaceName}`}
+                    label={`${t("workspace.current")}: ${currentWorkspaceName}`}
                     keywords={["current", "workspace"]}
                     onSelect={handleClose}
                   />
@@ -414,7 +416,7 @@ export function CommandPalette() {
                   <CommandItem
                     key={ws.path}
                     icon={<Layers className="w-4 h-4" />}
-                    label={`最近: ${ws.name}`}
+                    label={`${t("workspace.recent")}: ${ws.name}`}
                     description={ws.path}
                     keywords={["recent", "workspace", ws.name, ws.path]}
                     onSelect={() => handleOpenRecentWorkspace(ws)}
@@ -423,10 +425,10 @@ export function CommandPalette() {
               </Command.Group>
 
               {/* 项目 */}
-              <Command.Group heading={<GroupHeading>项目</GroupHeading>}>
+              <Command.Group heading={<GroupHeading>{t("project.title")}</GroupHeading>}>
                 <CommandItem
                   icon={<Plus className="w-4 h-4" />}
-                  label="添加项目"
+                  label={t("project.addProject")}
                   shortcut="⌘O"
                   onSelect={handleAddProject}
                 />
@@ -434,7 +436,7 @@ export function CommandPalette() {
                   <CommandItem
                     key={p.id}
                     icon={<FolderOpen className="w-4 h-4" />}
-                    label={`切换到 ${p.name}`}
+                    label={t("project.switchTo", { name: p.name })}
                     keywords={["project", "switch", p.path]}
                     onSelect={() => {
                       setActiveProject(p);
@@ -448,14 +450,14 @@ export function CommandPalette() {
               <Command.Group heading={<GroupHeading>Agent</GroupHeading>}>
                 <CommandItem
                   icon={<Plus className="w-4 h-4" />}
-                  label="新建 Agent"
+                  label={t("agent.newAgent")}
                   shortcut="⌘N"
                   keywords={["new", "agent", "create"]}
                   onSelect={() => openAgentPicker()}
                 />
                 <CommandItem
                   icon={<Terminal className="w-4 h-4" />}
-                  label="新建终端"
+                  label={t("agent.newTerminal")}
                   keywords={["terminal", "shell"]}
                   onSelect={() => openAgentPicker("custom")}
                 />
@@ -471,7 +473,7 @@ export function CommandPalette() {
               </Command.Group>
 
               {/* 视图 */}
-              <Command.Group heading={<GroupHeading>视图</GroupHeading>}>
+              <Command.Group heading={<GroupHeading>{t("commandPalette.view")}</GroupHeading>}>
                 <CommandItem
                   icon={
                     sidebarOpen ? (
@@ -480,7 +482,7 @@ export function CommandPalette() {
                       <Eye className="w-4 h-4" />
                     )
                   }
-                  label={sidebarOpen ? "折叠侧边栏" : "展开侧边栏"}
+                  label={sidebarOpen ? t("commandPalette.collapseSidebar") : t("commandPalette.expandSidebar")}
                   shortcut="⌘B"
                   keywords={["sidebar", "toggle"]}
                   onSelect={() => {
@@ -496,7 +498,7 @@ export function CommandPalette() {
                       <PanelRightOpen className="w-4 h-4" />
                     )
                   }
-                  label={panelIsOpen ? "关闭面板" : "打开面板"}
+                  label={panelIsOpen ? t("commandPalette.closePanel") : t("commandPalette.openPanel")}
                   shortcut="⌘\\"
                   keywords={["panel", "toggle"]}
                   onSelect={() => {
@@ -511,7 +513,7 @@ export function CommandPalette() {
 
           {/* 文件搜索模式 */}
           {mode === "file" && (
-            <Command.Group heading={<GroupHeading>文件</GroupHeading>}>
+            <Command.Group heading={<GroupHeading>{t("commandPalette.file")}</GroupHeading>}>
               {allFiles.map((file) => (
                 <CommandItem
                   key={file.path}
@@ -541,7 +543,7 @@ export function CommandPalette() {
                   className="py-4 text-center text-xs"
                   style={{ color: "#6b7280" }}
                 >
-                  请先添加项目
+                  {t("commandPalette.addProjectFirst")}
                 </div>
               )}
             </Command.Group>
@@ -565,7 +567,7 @@ export function CommandPalette() {
                   className="py-4 text-center text-xs"
                   style={{ color: "#6b7280" }}
                 >
-                  没有运行中的 Agent
+                  {t("agent.noRunningAgents")}
                 </div>
               )}
             </Command.Group>
@@ -585,13 +587,13 @@ export function CommandPalette() {
               <kbd className="px-1 py-0.5 rounded" style={{ backgroundColor: "#2a2d36" }}>
                 &gt;
               </kbd>{" "}
-              命令
+              {t("commandPalette.command")}
             </span>
             <span>
               <kbd className="px-1 py-0.5 rounded" style={{ backgroundColor: "#2a2d36" }}>
                 #
               </kbd>{" "}
-              文件
+              {t("commandPalette.file")}
             </span>
             <span>
               <kbd className="px-1 py-0.5 rounded" style={{ backgroundColor: "#2a2d36" }}>
@@ -604,15 +606,15 @@ export function CommandPalette() {
             <kbd className="px-1 py-0.5 rounded" style={{ backgroundColor: "#2a2d36" }}>
               ↑↓
             </kbd>{" "}
-            导航
+            {t("commandPalette.navigate")}
             <kbd className="px-1 py-0.5 rounded ml-1" style={{ backgroundColor: "#2a2d36" }}>
               ↵
             </kbd>{" "}
-            选择
+            {t("commandPalette.select")}
             <kbd className="px-1 py-0.5 rounded ml-1" style={{ backgroundColor: "#2a2d36" }}>
               Esc
             </kbd>{" "}
-            关闭
+            {t("common.close")}
           </div>
         </div>
       </Command>

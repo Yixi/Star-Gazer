@@ -8,6 +8,7 @@
  * - 从后端 git_diff 获取 unified diff 文本
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { parseDiff, Diff, Hunk, Decoration } from "react-diff-view";
 import type { FileData } from "react-diff-view";
 import { usePanelStore } from "@/stores/panelStore";
@@ -24,6 +25,7 @@ interface DiffViewProps {
 }
 
 export function DiffView({ filePath, tabId }: DiffViewProps) {
+  const { t } = useTranslation();
   // 从 tab 读取 diffSource，缺省为 working
   const tab = usePanelStore((s) => s.tabs.find((t) => t.id === tabId));
   const diffSource: DiffSource = tab?.diffSource ?? { kind: "working" };
@@ -111,7 +113,7 @@ export function DiffView({ filePath, tabId }: DiffViewProps) {
             return;
           }
           setDiffFiles([]);
-          setError("没有检测到差异");
+          setError(t("panel.noDiffDetected"));
           setIsLoading(false);
           return;
         }
@@ -160,7 +162,7 @@ export function DiffView({ filePath, tabId }: DiffViewProps) {
         className="flex items-center justify-center h-full text-sm"
         style={{ color: "#6b7280" }}
       >
-        加载 Diff...
+        {t("panel.loadingDiff")}
       </div>
     );
   }
@@ -182,7 +184,7 @@ export function DiffView({ filePath, tabId }: DiffViewProps) {
         className="flex items-center justify-center h-full text-sm"
         style={{ color: "#6b7280" }}
       >
-        没有差异
+        {t("panel.noDiff")}
       </div>
     );
   }

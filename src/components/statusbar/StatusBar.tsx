@@ -10,12 +10,16 @@
  * - 左侧: stargazer-app · main · +168 -28 across 7 files
  * - 右侧: 3 agents · 2 running · 1 waiting
  */
+import { useTranslation } from "react-i18next";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { useProjectStore } from "@/stores/projectStore";
+import { useSettingsStore } from "@/stores/settingsStore";
+import type { Language } from "@/stores/settingsStore";
 
 const Dot = () => <span style={{ color: 'var(--sg-text-disabled)' }}>·</span>;
 
 export function StatusBar() {
+  const { t } = useTranslation();
   const agents = useCanvasStore((s) => s.agents);
   const activeProject = useProjectStore((s) => s.activeProject);
   const gitBranch = useProjectStore((s) => s.gitBranch);
@@ -74,29 +78,53 @@ export function StatusBar() {
                 <span style={{ color: 'var(--sg-error)' }}>-{totalChanges.deletions}</span>
               )}
               {fileCount > 0 && (
-                <span> across {fileCount} files</span>
+                <span> {t("statusBar.acrossFiles", { count: fileCount })}</span>
               )}
             </span>
           </>
         )}
       </div>
 
-      {/* 右侧: Agent 统计 */}
+      {/* 右侧: Agent 统计 + 语言切换 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <span>{agents.length} agent{agents.length !== 1 ? "s" : ""}</span>
+        <span>{t("statusBar.agents", { count: agents.length })}</span>
         {activeAgents > 0 && (
           <>
             <Dot />
-            <span style={{ color: 'var(--sg-success)' }}>{activeAgents} running</span>
+            <span style={{ color: 'var(--sg-success)' }}>{activeAgents} {t("status.running")}</span>
           </>
         )}
         {waitingAgents > 0 && (
           <>
             <Dot />
-            <span style={{ color: 'var(--sg-warning)' }}>{waitingAgents} waiting</span>
+            <span style={{ color: 'var(--sg-warning)' }}>{waitingAgents} {t("status.waiting")}</span>
           </>
         )}
+        <Dot />
+        <LanguageToggle />
       </div>
     </footer>
+  );
+}
+
+/** 语言切换按钮 — 点击在中/英之间切换 */
+function LanguageToggle() {
+  const language = useSettingsStore((s) => s.language);
+  const setLanguage = useSettingsStore((s) => s.setLanguage);
+
+  const toggle = () => {
+    const next: Language = language === "zh" ? "en" : "zh";
+    setLanguage(next);
+  };
+
+  return (
+    <button
+      onClick={toggle}
+      className="transition-colors hover:text-white"
+      style={{ cursor: "pointer", background: "none", border: "none", padding: 0, font: "inherit", color: "inherit" }}
+      title={language === "zh" ? "Switch to English" : "切换到中文"}
+    >
+      {language === "zh" ? "EN" : "中"}
+    </button>
   );
 }

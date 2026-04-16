@@ -4,6 +4,7 @@
  */
 import { Component, type ReactNode, type ErrorInfo } from "react";
 import { AlertCircle, RotateCcw } from "lucide-react";
+import i18n from "@/lib/i18n";
 
 interface ErrorBoundaryProps {
   /** 子组件 */
@@ -31,7 +32,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error(
-      `[ErrorBoundary${this.props.name ? ` - ${this.props.name}` : ""}] 组件渲染错误:`,
+      `[ErrorBoundary${this.props.name ? ` - ${this.props.name}` : ""}] Component render error:`,
       error,
       errorInfo.componentStack
     );
@@ -54,7 +55,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         >
           <AlertCircle className="w-8 h-8" style={{ color: "#ef4444" }} />
           <p className="text-sm" style={{ color: "#e4e6eb" }}>
-            {this.props.name ? `${this.props.name} ` : ""}组件发生错误
+            {i18n.t("error.componentError", { name: this.props.name ? this.props.name + " " : "" })}
           </p>
           <p
             className="text-xs max-w-xs text-center truncate"
@@ -72,7 +73,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             }}
           >
             <RotateCcw className="w-3 h-3" />
-            重试
+            {i18n.t("error.retry")}
           </button>
         </div>
       );

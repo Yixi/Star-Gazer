@@ -19,6 +19,7 @@
  */
 import { useRef, useCallback, useMemo, useState, useEffect } from "react";
 import { X, Minus, Maximize2, Minimize2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { TerminalView } from "@/components/terminal/TerminalView";
 import { PulsingDot } from "@/components/ui/PulsingDot";
@@ -33,13 +34,13 @@ interface AgentCardProps {
 /** 状态对应的指示颜色 */
 const STATUS_INDICATOR: Record<
   Agent["status"],
-  { color: string; label: string; animate: boolean }
+  { color: string; key: string; animate: boolean }
 > = {
-  running: { color: "#22c55e", label: "运行中", animate: true },
-  idle: { color: "#6b7280", label: "空闲", animate: false },
-  stopped: { color: "#febc2e", label: "已停止", animate: false },
-  error: { color: "#ef4444", label: "错误", animate: true },
-  waiting: { color: "#febc2e", label: "等待审批", animate: true },
+  running: { color: "#22c55e", key: "status.running", animate: true },
+  idle: { color: "#6b7280", key: "status.idle", animate: false },
+  stopped: { color: "#febc2e", key: "status.stopped", animate: false },
+  error: { color: "#ef4444", key: "status.error", animate: true },
+  waiting: { color: "#febc2e", key: "status.waiting", animate: true },
 };
 
 /** 拖拽方向枚举 */
@@ -57,6 +58,7 @@ const HEADER_HEIGHT = 36;
 const RESIZE_EDGE = 8;
 
 export function AgentCard({ agent }: AgentCardProps) {
+  const { t } = useTranslation();
   const {
     selectedAgentId,
     selectAgent,
@@ -71,8 +73,6 @@ export function AgentCard({ agent }: AgentCardProps) {
     exitCardMaximize,
   } = useCanvasStore();
 
-  // 订阅本卡片的 zOrder（单独 selector，避免 cardZOrder 整个 map 变化时
-  // 所有卡片都 re-render — 每张卡只关心自己的那个值）
   const zOrder = useCanvasStore((s) => s.cardZOrder[agent.id] ?? 1);
 
   const cardRef = useRef<HTMLDivElement>(null);
@@ -85,18 +85,11 @@ export function AgentCard({ agent }: AgentCardProps) {
   const rafId = useRef<number>(0);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [hoverEdge, setHoverEdge] = useState<ResizeDirection>(null);
-  // 最大化前的 agent 位置/大小 + 画布 zoom/viewport 由 canvasStore 的
-  // maximizeSnapshot 集中保管，这里不再本地缓存，避免两套状态不一致。
 
-  /** 拖拽中状态（用于视觉反馈） */
   const [dragging, setDragging] = useState(false);
-  /** 入场动画控制 */
   const [hasEntered, setHasEntered] = useState(false);
-  /** 退场动画控制 */
   const [isExiting, setIsExiting] = useState(false);
-  /** 鼠标悬停 */
   const [isHovered, setIsHovered] = useState(false);
-  /** 标题编辑模式 */
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState(agent.name);
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -106,29 +99,24 @@ export function AgentCard({ agent }: AgentCardProps) {
   const statusInfo = STATUS_INDICATOR[agent.status];
   const colorHex = AGENT_COLOR_HEX[agent.color];
 
-  // 根据 agentType 解析实际启动命令
   const terminalCommand = useMemo(() => {
     if (agent.command) return agent.command;
     return AGENT_COMMANDS[agent.agentType] ?? null;
   }, [agent.agentType, agent.command]);
 
-  // 终端就绪回调 — PTY 创建成功后标记 agent 为 running
   const handleTerminalReady = useCallback(() => {
     updateAgentStatus(agent.id, "running");
   }, [agent.id, updateAgentStatus]);
 
-  // 终端退出回调 — 进程退出后更新 agent 状态
   const handleTerminalExit = useCallback((code: number) => {
     updateAgentStatus(agent.id, code === 0 ? "stopped" : "error");
   }, [agent.id, updateAgentStatus]);
 
-  /* 入场动画：组件挂载后播放 */
   useEffect(() => {
     const raf = requestAnimationFrame(() => setHasEntered(true));
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  /* 编辑模式启动时自动聚焦 */
   useEffect(() => {
     if (isEditingName && nameInputRef.current) {
       nameInputRef.current.focus();
@@ -136,7 +124,6 @@ export function AgentCard({ agent }: AgentCardProps) {
     }
   }, [isEditingName]);
 
-  /** 获取调整大小时的光标样式 */
   const getResizeCursor = (dir: ResizeDirection): string => {
     switch (dir) {
       case "n": case "s": return "ns-resize";
@@ -147,7 +134,6 @@ export function AgentCard({ agent }: AgentCardProps) {
     }
   };
 
-  /** 检测鼠标在卡片边缘的位置 */
   const detectEdge = useCallback(
     (e: React.MouseEvent): ResizeDirection => {
       if (displayMode !== "normal") return null;
@@ -177,7 +163,6 @@ export function AgentCard({ agent }: AgentCardProps) {
     [displayMode]
   );
 
-  /** 卡片头部拖拽 - requestAnimationFrame 优化 */
   const handleDragStart = useCallback(
     (e: React.MouseEvent) => {
       if (displayMode === "maximized") return;
@@ -218,7 +203,6 @@ export function AgentCard({ agent }: AgentCardProps) {
     [agent.id, agent.position, displayMode, isEditingName, selectAgent, updateAgentPosition]
   );
 
-  /** 调整大小 - requestAnimationFrame 优化 */
   const handleResizeStart = useCallback(
     (e: React.MouseEvent, dir: ResizeDirection) => {
       if (!dir || displayMode !== "normal") return;
@@ -275,7 +259,6 @@ export function AgentCard({ agent }: AgentCardProps) {
     [agent.id, agent.position, agent.size, displayMode, selectAgent, updateAgentPosition, updateAgentSize]
   );
 
-  /** 鼠标在卡片上移动时检测边缘 */
   const handleCardMouseMove = useCallback(
     (e: React.MouseEvent) => {
       if (isDragging.current || isResizing.current) return;
@@ -285,7 +268,6 @@ export function AgentCard({ agent }: AgentCardProps) {
     [detectEdge]
   );
 
-  /** 鼠标在卡片边缘按下时开始调整大小 */
   const handleCardMouseDown = useCallback(
     (e: React.MouseEvent) => {
       const edge = detectEdge(e);
@@ -296,7 +278,6 @@ export function AgentCard({ agent }: AgentCardProps) {
     [detectEdge, handleResizeStart]
   );
 
-  /** 双击头部切换最大化 */
   const handleHeaderDoubleClick = useCallback(() => {
     if (displayMode === "maximized") {
       exitCardMaximize();
@@ -305,14 +286,12 @@ export function AgentCard({ agent }: AgentCardProps) {
     }
   }, [agent.id, displayMode, enterCardMaximize, exitCardMaximize]);
 
-  /** 双击标题文本进入编辑模式 */
   const handleNameDoubleClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation(); // 阻止触发头部的双击最大化
+    e.stopPropagation();
     setEditName(agent.name);
     setIsEditingName(true);
   }, [agent.name]);
 
-  /** 确认重命名 */
   const confirmRename = useCallback(() => {
     const newName = editName.trim();
     if (newName && newName !== agent.name) {
@@ -325,13 +304,11 @@ export function AgentCard({ agent }: AgentCardProps) {
     setIsEditingName(false);
   }, [agent.id, agent.name, editName]);
 
-  /** 取消重命名 */
   const cancelRename = useCallback(() => {
     setIsEditingName(false);
     setEditName(agent.name);
   }, [agent.name]);
 
-  /** 最小化切换 */
   const handleMinimize = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -344,7 +321,6 @@ export function AgentCard({ agent }: AgentCardProps) {
     [agent.id, displayMode, setCardDisplayMode]
   );
 
-  /** 最大化切换 */
   const handleMaximize = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -353,32 +329,23 @@ export function AgentCard({ agent }: AgentCardProps) {
     [handleHeaderDoubleClick]
   );
 
-  /** 关闭卡片 */
   const handleClose = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
       if (agent.status === "running") {
         setShowCloseConfirm(true);
       } else {
-        // 触发退场动画，实际 removeAgent 在 animationend 时调用
         setIsExiting(true);
       }
     },
     [agent.status]
   );
 
-  /** 确认关闭 */
   const confirmClose = useCallback(() => {
     setShowCloseConfirm(false);
     setIsExiting(true);
   }, []);
 
-  /** 退场动画结束 → 真正从 store 移除
-   *
-   * 用 animationend 事件替代 setTimeout(200)，理由：
-   * 1. 与 CSS duration 严格同步，减慢/禁用动画时不会出现"卡片消失但动画没播完"
-   * 2. 尊重 prefers-reduced-motion（duration 变成 0.001ms 时立即触发）
-   */
   const handleAnimationEnd = useCallback(
     (e: React.AnimationEvent<HTMLDivElement>) => {
       if (isExiting && e.animationName === "sg-card-exit") {
@@ -388,14 +355,6 @@ export function AgentCard({ agent }: AgentCardProps) {
     [isExiting, agent.id, removeAgent],
   );
 
-  /** 计算卡片定位样式
-   *
-   * maximized 时用 `position: absolute; inset: 0` 贴满 canvas-layer。
-   * canvasStore.enterCardMaximize 会把 zoom/viewport 重置为 1/(0,0)，
-   * canvas-layer 变成 identity transform，子元素 inset:0 就能精确等于
-   * canvas 容器的尺寸。不用 fixed + 100vw/vh 是因为 transform 祖先会
-   * 劫持 fixed 的 containing block + zoom 会叠乘 viewport 单位。
-   */
   const getCardStyle = (): React.CSSProperties => {
     if (displayMode === "maximized") {
       return {
@@ -414,12 +373,10 @@ export function AgentCard({ agent }: AgentCardProps) {
       top: agent.position.y,
       width: agent.size.width,
       height: displayMode === "minimized" ? HEADER_HEIGHT : agent.size.height,
-      // 用 zIndex 做堆叠 — DOM 结构完全稳定，xterm 不会因为 DOM 移动而错乱
       zIndex: zOrder,
     };
   };
 
-  /* 动画和动态视觉样式 */
   const animationStyle: React.CSSProperties = {
     animation: !hasEntered
       ? undefined
@@ -453,16 +410,6 @@ export function AgentCard({ agent }: AgentCardProps) {
           cursor: hoverEdge ? getResizeCursor(hoverEdge) : undefined,
         }}
         onClick={() => selectAgent(agent.id)}
-        /**
-         * 点击卡片任意位置把它提到最顶层。
-         *
-         * 用 capture 阶段是因为：
-         * 1. header 的 handleDragStart 会 stopPropagation，bubble 的 onMouseDown
-         *    收不到 header 上的事件
-         * 2. capture 在 target 之前触发，无论后续是否 stopPropagation 都会跑
-         * 3. 终端区域的 mousedown 要原样传给 xterm 接收焦点，所以只在 capture
-         *    里做状态更新，不调 stopPropagation / preventDefault
-         */
         onMouseDownCapture={() => bringAgentToFront(agent.id)}
         onAnimationEnd={handleAnimationEnd}
         onMouseMove={handleCardMouseMove}
@@ -493,7 +440,6 @@ export function AgentCard({ agent }: AgentCardProps) {
           onDoubleClick={handleHeaderDoubleClick}
         >
           <div className="flex items-center gap-2 min-w-0">
-            {/* Agent 颜色指示圆点 */}
             <span
               className="w-2 h-2 rounded-full flex-shrink-0"
               style={{
@@ -501,7 +447,6 @@ export function AgentCard({ agent }: AgentCardProps) {
                 boxShadow: `0 0 6px ${colorHex}60`,
               }}
             />
-            {/* 卡片名称 - 双击可编辑 */}
             {isEditingName ? (
               <input
                 ref={nameInputRef}
@@ -530,7 +475,6 @@ export function AgentCard({ agent }: AgentCardProps) {
                 {agent.name}
               </span>
             )}
-            {/* 状态标签 */}
             <span
               className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full font-medium uppercase tracking-wide flex-shrink-0"
               style={{
@@ -545,9 +489,8 @@ export function AgentCard({ agent }: AgentCardProps) {
                   size={4}
                 />
               )}
-              {statusInfo.label}
+              {t(statusInfo.key)}
             </span>
-            {/* 项目名副标题 */}
             {agent.cwd && (
               <span
                 className="text-[10px] truncate max-w-[100px] flex-shrink-0"
@@ -563,7 +506,7 @@ export function AgentCard({ agent }: AgentCardProps) {
               className="p-1 rounded-md hover:bg-white/5 transition-colors"
               style={{ color: "var(--sg-text-hint)" }}
               onClick={handleMinimize}
-              title={displayMode === "minimized" ? "展开" : "最小化"}
+              title={displayMode === "minimized" ? t("card.expand") : t("card.minimize")}
             >
               {displayMode === "minimized" ? (
                 <Maximize2 className="w-3 h-3" />
@@ -575,7 +518,7 @@ export function AgentCard({ agent }: AgentCardProps) {
               className="p-1 rounded-md hover:bg-white/5 transition-colors"
               style={{ color: "var(--sg-text-hint)" }}
               onClick={handleMaximize}
-              title={displayMode === "maximized" ? "还原" : "最大化"}
+              title={displayMode === "maximized" ? t("card.restore") : t("card.maximize")}
             >
               {displayMode === "maximized" ? (
                 <Minimize2 className="w-3 h-3" />
@@ -587,17 +530,16 @@ export function AgentCard({ agent }: AgentCardProps) {
               className="p-1 rounded-md hover:bg-red-500/20 transition-colors"
               style={{ color: "var(--sg-text-hint)" }}
               onClick={handleClose}
-              title="关闭"
+              title={t("card.close")}
             >
               <X className="w-3 h-3" />
             </button>
           </div>
         </div>
 
-        {/* Resize 边框 - 透明覆盖层，z-index 高于 terminal 以确保接收鼠标事件 */}
+        {/* Resize 边框 */}
         {displayMode === "normal" && (
           <>
-            {/* 四边 */}
             <div className="absolute top-0 left-0 right-0 cursor-ns-resize" style={{ height: RESIZE_EDGE, zIndex: 10 }}
               onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, "n"); }} />
             <div className="absolute bottom-0 left-0 right-0 cursor-ns-resize" style={{ height: RESIZE_EDGE, zIndex: 10 }}
@@ -606,7 +548,6 @@ export function AgentCard({ agent }: AgentCardProps) {
               onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, "w"); }} />
             <div className="absolute top-0 right-0 bottom-0 cursor-ew-resize" style={{ width: RESIZE_EDGE, zIndex: 10 }}
               onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, "e"); }} />
-            {/* 四角 */}
             <div className="absolute top-0 left-0 cursor-nwse-resize" style={{ width: RESIZE_EDGE * 2, height: RESIZE_EDGE * 2, zIndex: 11 }}
               onMouseDown={(e) => { e.stopPropagation(); handleResizeStart(e, "nw"); }} />
             <div className="absolute top-0 right-0 cursor-nesw-resize" style={{ width: RESIZE_EDGE * 2, height: RESIZE_EDGE * 2, zIndex: 11 }}
@@ -618,7 +559,7 @@ export function AgentCard({ agent }: AgentCardProps) {
           </>
         )}
 
-        {/* 终端区域 - 非最小化时显示 */}
+        {/* 终端区域 */}
         {displayMode !== "minimized" && (
           <div
             className="flex flex-col"
@@ -640,7 +581,6 @@ export function AgentCard({ agent }: AgentCardProps) {
                 onExit={handleTerminalExit}
               />
             </div>
-            {/* Approval box - waiting 状态时显示 */}
             {agent.status === "waiting" && agent.approvalMessage && (
               <div
                 className="mx-2 mb-2 px-2.5 py-1.5 rounded"
@@ -686,7 +626,7 @@ export function AgentCard({ agent }: AgentCardProps) {
                 className="text-sm font-semibold"
                 style={{ color: "var(--sg-text-primary)" }}
               >
-                确认关闭
+                {t("card.confirmClose")}
               </h3>
             </div>
             <div className="p-5">
@@ -694,8 +634,7 @@ export function AgentCard({ agent }: AgentCardProps) {
                 className="text-xs leading-relaxed"
                 style={{ color: "var(--sg-text-tertiary)" }}
               >
-                Agent &quot;{agent.name}&quot;
-                正在运行中。关闭将终止其进程。确定要关闭吗？
+                {t("card.confirmCloseMessage", { name: agent.name })}
               </p>
             </div>
             <div
@@ -707,13 +646,13 @@ export function AgentCard({ agent }: AgentCardProps) {
                 style={{ color: "var(--sg-text-tertiary)" }}
                 onClick={() => setShowCloseConfirm(false)}
               >
-                取消
+                {t("card.cancel")}
               </button>
               <button
                 className="px-4 py-2 rounded-lg text-xs font-medium text-white bg-red-600 hover:bg-red-500 transition-colors"
                 onClick={confirmClose}
               >
-                确认关闭
+                {t("card.confirmCloseButton")}
               </button>
             </div>
           </div>

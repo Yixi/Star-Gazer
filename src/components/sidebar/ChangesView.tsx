@@ -9,6 +9,7 @@
  * 点击文件 → Panel 打开 working diff
  */
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useProjectStore } from "@/stores/projectStore";
 import { usePanelStore } from "@/stores/panelStore";
 import { ChangedFileRow } from "./ChangedFileRow";
@@ -38,6 +39,7 @@ interface TreeNode {
 }
 
 export function ChangesView({ project }: ChangesViewProps) {
+  const { t } = useTranslation();
   const gitStatus = useProjectStore((s) => s.gitStatusByProject[project.id]);
   const flat = useProjectStore((s) => s.flatMode);
   const openTab = usePanelStore((s) => s.openTab);
@@ -97,7 +99,7 @@ export function ChangesView({ project }: ChangesViewProps) {
         className="flex items-center justify-center text-xs"
         style={{ height: 60, color: "#6b7280" }}
       >
-        加载 git 状态...
+        {t("changesView.loadingGitStatus")}
       </div>
     );
   }
@@ -112,7 +114,7 @@ export function ChangesView({ project }: ChangesViewProps) {
           className="flex items-center justify-center text-xs"
           style={{ height: 48, color: "#6b7280" }}
         >
-          没有未提交的变更
+          {t("changesView.noUncommittedChanges")}
         </div>
       ) : (
         <>
@@ -126,7 +128,7 @@ export function ChangesView({ project }: ChangesViewProps) {
               fontFamily: "'SF Mono', Menlo, monospace",
             }}
           >
-            <span>{changes.length} changed</span>
+            <span>{t("changesView.changed", { count: changes.length })}</span>
             <span className="tabular-nums" style={{ gap: 4 }}>
               {totalAdd > 0 && <span style={{ color: "#22c55e" }}>+{totalAdd} </span>}
               {totalDel > 0 && <span style={{ color: "#ef4444" }}>-{totalDel}</span>}

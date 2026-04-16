@@ -3,6 +3,7 @@
  * 选择 agent 类型、项目，对 claude-code 可切换 bypass permission 模式
  */
 import { useState, useCallback, useEffect, useRef, type ComponentType } from "react";
+import { useTranslation } from "react-i18next";
 import { X, Terminal } from "lucide-react";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { useProjectStore } from "@/stores/projectStore";
@@ -31,34 +32,35 @@ const AGENT_TYPES: readonly AgentTypeSpec[] = [
   {
     id: "claude-code",
     name: "Claude Code",
-    description: "Anthropic 的 AI 编码助手",
+    description: "agent.claudeCodeDesc",
     Icon: ClaudeLogo,
     color: "#d97757",
   },
   {
     id: "opencode",
     name: "OpenCode",
-    description: "开源 AI 编码工具",
+    description: "agent.openCodeDesc",
     Icon: OpenCodeLogo,
     color: "#22c55e",
   },
   {
     id: "codex",
     name: "Codex",
-    description: "OpenAI 的代码模型",
+    description: "agent.codexDesc",
     Icon: CodexLogo,
     color: "#a78bfa",
   },
   {
     id: "custom",
     name: "Custom",
-    description: "自定义 / 默认 shell",
+    description: "agent.customDesc",
     Icon: Terminal,
     color: "#ff8c42",
   },
 ];
 
 export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
+  const { t } = useTranslation();
   const [selectedType, setSelectedType] = useState<AgentType>(initialType ?? "claude-code");
   const [agentName, setAgentName] = useState("");
   const [bypassPermissions, setBypassPermissions] = useState(false);
@@ -208,7 +210,7 @@ export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
           className="flex items-center justify-between px-5 py-4"
           style={{ background: "#1a1d26", borderBottom: "1px solid #1f2128" }}
         >
-          <h2 className="text-sm font-semibold text-white">创建新 Agent</h2>
+          <h2 className="text-sm font-semibold text-white">{t("agent.createNew")}</h2>
           <button
             className="p-1 rounded-md hover:bg-white/10 text-[#6b7280] hover:text-white transition-colors"
             onClick={onClose}
@@ -222,7 +224,7 @@ export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
           {/* Agent 类型选择 */}
           <div>
             <label className="block text-xs text-[#8b92a3] font-medium mb-2 uppercase tracking-wider">
-              Agent 类型
+              {t("agent.agentType")}
             </label>
             <div className="grid grid-cols-2 gap-2">
               {AGENT_TYPES.map((type) => {
@@ -248,7 +250,7 @@ export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
                         {type.name}
                       </div>
                       <div className="text-[10px] text-[#6b7280] mt-0.5">
-                        {type.description}
+                        {t(type.description)}
                       </div>
                     </div>
                   </button>
@@ -294,7 +296,7 @@ export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
           {/* Agent 名称 */}
           <div>
             <label className="block text-xs text-[#8b92a3] font-medium mb-2 uppercase tracking-wider">
-              名称（可选）
+              {t("agent.nameOptional")}
             </label>
             <input
               type="text"
@@ -315,7 +317,7 @@ export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
           {/* 项目 / 组选择 —— 用 Base UI Select 自定义渲染层级 */}
           <div>
             <label className="block text-xs text-[#8b92a3] font-medium mb-2 uppercase tracking-wider">
-              项目
+              {t("project.title")}
             </label>
             <ProjectTargetSelect
               projects={projects}
@@ -336,7 +338,7 @@ export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
             className="px-4 py-2 rounded-lg text-xs text-[#8b92a3] hover:text-white hover:bg-white/10 transition-colors"
             onClick={onClose}
           >
-            取消
+            {t("common.cancel")}
           </button>
           <button
             className="px-4 py-2 rounded-lg text-xs font-medium text-white transition-colors"
@@ -345,7 +347,7 @@ export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
             }}
             onClick={handleCreate}
           >
-            创建 Agent
+            {t("agent.create")}
           </button>
         </div>
       </div>

@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Folders, FolderGit2, Check } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface ImportGroupDialogProps {
   parentPath: string;
@@ -32,6 +33,7 @@ export function ImportGroupDialog({
   onImportParentOnly,
   onClose,
 }: ImportGroupDialogProps) {
+  const { t } = useTranslation();
   // 默认全选
   const [checked, setChecked] = useState<Set<string>>(
     () => new Set(members.map((m) => m.path)),
@@ -112,7 +114,7 @@ export function ImportGroupDialog({
               className="font-semibold truncate"
               style={{ color: "#e4e6eb", fontSize: 14 }}
             >
-              发现多个 Git 仓库
+              {t("importGroup.title")}
             </div>
             <div
               className="truncate"
@@ -125,7 +127,7 @@ export function ImportGroupDialog({
           <button
             className="p-1 rounded hover:bg-white/5"
             onClick={onClose}
-            aria-label="关闭"
+            aria-label={t("common.close")}
             style={{ color: "#8b92a3" }}
           >
             <X className="w-4 h-4" />
@@ -137,10 +139,17 @@ export function ImportGroupDialog({
           className="px-5 pt-4 pb-2 leading-relaxed"
           style={{ color: "#b8bcc4", fontSize: 12 }}
         >
-          在 <span style={{ color: "#e4e6eb", fontWeight: 600 }}>{parentName}</span>{" "}
-          下发现 <span style={{ color: "#4a9eff" }}>{members.length}</span> 个 git
-          仓库。勾选要加入项目组的仓库，创建后新建 agent 可以直接选中这个组，PTY
-          在父目录启动。
+          {t("importGroup.description", { parent: parentName, count: members.length })
+            .split(/<bold>|<\/bold>|<accent>|<\/accent>/)
+            .map((part, i) =>
+              i === 1 ? (
+                <span key={i} style={{ color: "#e4e6eb", fontWeight: 600 }}>{part}</span>
+              ) : i === 3 ? (
+                <span key={i} style={{ color: "#4a9eff" }}>{part}</span>
+              ) : (
+                <span key={i}>{part}</span>
+              ),
+            )}
         </div>
 
         {/* 全选 / 反选 */}
@@ -152,14 +161,14 @@ export function ImportGroupDialog({
           >
             <CheckBox checked={allSelected} indeterminate={someSelected} />
             <span>
-              {allSelected ? "取消全选" : someSelected ? "全选剩余" : "全选"}
+              {allSelected ? t("importGroup.deselectAll") : someSelected ? t("importGroup.selectRemaining") : t("importGroup.selectAll")}
             </span>
           </button>
           <span
             className="ml-auto tabular-nums"
             style={{ color: "#6b7280", fontSize: 11 }}
           >
-            已选 {checked.size} / {members.length}
+            {t("importGroup.selected", { checked: checked.size, total: members.length })}
           </span>
         </div>
 
@@ -220,15 +229,15 @@ export function ImportGroupDialog({
             style={{ color: "#8b92a3" }}
             onClick={onClose}
           >
-            取消
+            {t("common.cancel")}
           </button>
           <button
             className="px-3 py-1.5 rounded text-xs hover:bg-white/10"
             style={{ color: "#b8bcc4", border: "1px solid #2a2d36" }}
             onClick={onImportParentOnly}
-            title="把父目录作为一个独立项目添加，忽略子仓库"
+            title={t("project.addParentOnlyTooltip")}
           >
-            只添加父目录
+            {t("project.addParentOnly")}
           </button>
           <button
             className="px-3 py-1.5 rounded text-xs font-medium disabled:opacity-40"
@@ -239,7 +248,7 @@ export function ImportGroupDialog({
             disabled={selectedMembers.length === 0}
             onClick={() => onImportGroup(selectedMembers)}
           >
-            添加 {selectedMembers.length} 个仓库为组
+            {t("project.addReposAsGroup", { count: selectedMembers.length })}
           </button>
         </div>
       </div>

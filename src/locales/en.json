@@ -1,0 +1,157 @@
+{
+  "workspace": {
+    "title": "Star Gazer Workspace",
+    "noWorkspace": "No Workspace",
+    "switchOrOpen": "Switch / Open Workspace",
+    "new": "New Workspace",
+    "open": "Open Workspace File...",
+    "openDialogTitle": "Open Workspace File",
+    "newDialogTitle": "New Workspace",
+    "selectOrStart": "Select a workspace to get started",
+    "openNewOrRecent": "Open, create, or select a recent workspace",
+    "recentlyOpened": "Recently Opened",
+    "noRecent": "No recently used workspaces yet",
+    "close": "Close",
+    "removeFromRecent": "Remove from recent",
+    "current": "Current Workspace",
+    "recent": "Recent"
+  },
+  "project": {
+    "title": "Project",
+    "addProject": "Add Project",
+    "selectFolder": "Select Project Folder",
+    "switchTo": "Switch to {{name}}",
+    "addParentOnly": "Add Parent Only",
+    "addParentOnlyTooltip": "Add parent directory as a standalone project, ignoring sub-repos",
+    "addReposAsGroup": "Add {{count}} repos as group"
+  },
+  "importGroup": {
+    "title": "Multiple Git Repos Found",
+    "description": "Found <accent>{{count}}</accent> git repos under <bold>{{parent}}</bold>. Select repos to add as a project group — new agents can target this group, with PTY starting in the parent directory.",
+    "deselectAll": "Deselect All",
+    "selectRemaining": "Select Rest",
+    "selectAll": "Select All",
+    "selected": "{{checked}} / {{total}} selected"
+  },
+  "agent": {
+    "title": "Agent",
+    "createNew": "Create New Agent",
+    "newAgent": "New Agent",
+    "newTerminal": "New Terminal",
+    "agentType": "Agent Type",
+    "nameOptional": "Name (optional)",
+    "create": "Create Agent",
+    "noRunningAgents": "No running agents",
+    "claudeCodeDesc": "Anthropic's AI coding assistant",
+    "openCodeDesc": "Open-source AI coding tool",
+    "codexDesc": "OpenAI's code model",
+    "customDesc": "Custom / default shell",
+    "bypassPermissions": "Bypass Permissions",
+    "bypassPermissionsDesc": "Append <code>--dangerously-skip-permissions</code> on launch — Claude Code won't ask for approval."
+  },
+  "status": {
+    "running": "Running",
+    "idle": "Idle",
+    "stopped": "Stopped",
+    "error": "Error",
+    "waiting": "Waiting"
+  },
+  "canvas": {
+    "ready": "Canvas Ready",
+    "createFirstAgent": "Click <kbd>+</kbd> or press <kbd>Cmd+N</kbd> to create your first agent",
+    "zoomOut": "Zoom Out",
+    "zoomIn": "Zoom In",
+    "resetZoom": "Click to reset to 100%",
+    "resetView": "Reset View",
+    "relayout": "Relayout",
+    "relayoutTooltip": "Relayout cards into a non-overlapping grid"
+  },
+  "card": {
+    "minimize": "Minimize",
+    "expand": "Expand",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close",
+    "confirmClose": "Confirm Close",
+    "confirmCloseMessage": "Agent \"{{name}}\" is currently running. Closing will terminate its process. Are you sure?",
+    "cancel": "Cancel",
+    "confirmCloseButton": "Confirm Close"
+  },
+  "sidebar": {
+    "files": "Files — Full file tree",
+    "changes": "Changes — Uncommitted changes only",
+    "history": "History — Browse commit history",
+    "treeLayout": "Tree — Directory tree layout",
+    "flatLayout": "Flat — Flat list layout"
+  },
+  "changesView": {
+    "loadingGitStatus": "Loading git status...",
+    "noUncommittedChanges": "No uncommitted changes",
+    "changed": "{{count}} changed"
+  },
+  "git": {
+    "syncTooltip": "Sync (pull + push)",
+    "syncWithCounts": "Sync (pull {{behind}} ↓ / push {{ahead}} ↑)",
+    "fetchTooltip": "Fetch remote (update ahead/behind display)",
+    "behindTooltip": "{{count}} commits behind upstream",
+    "aheadTooltip": "{{count}} local commits not pushed",
+    "commitPlaceholder": "Message (⌘⏎ to commit on \"{{branch}}\")"
+  },
+  "panel": {
+    "noOpenFiles": "No open files",
+    "previewMode": "Preview mode",
+    "sourceMode": "Source mode",
+    "splitView": "Split view",
+    "unifiedView": "Unified view",
+    "copyPath": "Copy file path",
+    "loadingDiff": "Loading Diff...",
+    "noDiffDetected": "No differences detected",
+    "noDiff": "No differences"
+  },
+  "commandPalette": {
+    "command": "Command",
+    "file": "File",
+    "searchCommand": "Search commands...",
+    "searchFile": "Search files...",
+    "searchAgent": "Search agents...",
+    "noMatch": "No matching results",
+    "addProjectFirst": "Add a project first",
+    "collapseSidebar": "Collapse Sidebar",
+    "expandSidebar": "Expand Sidebar",
+    "closePanel": "Close Panel",
+    "openPanel": "Open Panel",
+    "view": "View",
+    "navigate": "Navigate",
+    "select": "Select"
+  },
+  "statusBar": {
+    "acrossFiles": "across {{count}} files",
+    "agents_one": "{{count}} agent",
+    "agents_other": "{{count}} agents"
+  },
+  "titleBar": {
+    "focusMode": "Focus Mode",
+    "diff": "(diff)"
+  },
+  "error": {
+    "componentError": "{{name}} component error",
+    "retry": "Retry",
+    "operationFailed": "Operation failed"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "confirm": "Confirm"
+  },
+  "time": {
+    "justNow": "just now",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago"
+  },
+  "language": {
+    "label": "Language",
+    "zh": "中文",
+    "en": "English"
+  }
+}

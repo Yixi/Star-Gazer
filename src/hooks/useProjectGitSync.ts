@@ -25,11 +25,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { useGitStatus } from "./useGitStatus";
 import { useFileWatcher } from "./useFileWatcher";
 import { useProjectStore } from "@/stores/projectStore";
+import { gitFetch } from "@/services/git";
 import type { Project, FileNode } from "@/types/project";
 import type { FileChangeEvent } from "@/services/watcher";
 
 /** Git 状态轮询间隔（毫秒） */
 const POLL_INTERVAL_MS = 2000;
+
+/** Git fetch 远程仓库间隔（毫秒）—— 网络操作，不宜太频繁 */
+const FETCH_INTERVAL_MS = 120_000;
 
 /** 后端 DirEntry 类型 */
 interface DirEntry {
@@ -95,4 +99,23 @@ export function useProjectGitSync(project: Project) {
     }, POLL_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [refresh]);
+
+  // 定期 fetch 远程仓库，保持 ahead/behind 计数准确
+  useEffect(() => {
+    let mounted = true;
+    const doFetch = async () => {
+      try {
+        await gitFetch(project.path);
+        if (mounted) refresh();
+      } catch {
+        // 离线、无 remote 等场景静默忽略
+      }
+    };
+    doFetch();
+    const timer = window.setInterval(doFetch, FETCH_INTERVAL_MS);
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+    };
+  }, [project.path, refresh]);
 }

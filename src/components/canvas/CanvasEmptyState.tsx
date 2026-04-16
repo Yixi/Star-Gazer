@@ -8,8 +8,10 @@
  * - 不阻碍交互（pointer-events-none）
  */
 import { Sparkles } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export function CanvasEmptyState() {
+  const { t } = useTranslation();
   return (
     <div
       className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
@@ -57,36 +59,32 @@ export function CanvasEmptyState() {
             className="text-base font-medium"
             style={{ color: "var(--sg-text-secondary, #b8bcc4)" }}
           >
-            画布就绪
+            {t("canvas.ready")}
           </p>
           {/* 操作提示 */}
           <p
             className="text-sm mt-1.5"
             style={{ color: "var(--sg-text-hint, #6b7280)" }}
           >
-            点击{" "}
-            <kbd
-              className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-medium"
-              style={{
-                background: "var(--sg-bg-card-header, #1a1d26)",
-                border: "1px solid var(--sg-border-divider, #2a2f3b)",
-                color: "var(--sg-text-secondary, #b8bcc4)",
-              }}
-            >
-              +
-            </kbd>{" "}
-            或按{" "}
-            <kbd
-              className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-medium"
-              style={{
-                background: "var(--sg-bg-card-header, #1a1d26)",
-                border: "1px solid var(--sg-border-divider, #2a2f3b)",
-                color: "var(--sg-text-secondary, #b8bcc4)",
-              }}
-            >
-              Cmd+N
-            </kbd>{" "}
-            创建你的第一个 Agent
+            {t("canvas.createFirstAgent")
+              .split(/<kbd>|<\/kbd>/)
+              .map((part, i) =>
+                i % 2 === 1 ? (
+                  <kbd
+                    key={i}
+                    className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-medium"
+                    style={{
+                      background: "var(--sg-bg-card-header, #1a1d26)",
+                      border: "1px solid var(--sg-border-divider, #2a2f3b)",
+                      color: "var(--sg-text-secondary, #b8bcc4)",
+                    }}
+                  >
+                    {part}
+                  </kbd>
+                ) : (
+                  <span key={i}>{part}</span>
+                ),
+              )}
           </p>
         </div>
       </div>

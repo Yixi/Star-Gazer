@@ -10,12 +10,14 @@
  * - 整个标题栏可拖拽移动窗口（data-tauri-drag-region）
  */
 import { useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { usePanelStore } from "@/stores/panelStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 
 export function TitleBar() {
+  const { t } = useTranslation();
   /** 拖拽窗口 — Overlay 模式下需要程序化调用 startDragging */
   const handleDragStart = useCallback(async (e: React.MouseEvent) => {
     // 只处理左键，且目标不是按钮等交互元素
@@ -41,7 +43,7 @@ export function TitleBar() {
   const agentSummary = agents.length > 0
     ? `${agents.length} agent${agents.length > 1 ? "s" : ""}`
     : "";
-  const filePart = activeTab ? ` \u00B7 ${activeTab.title}${activeTab.type === "diff" ? " (diff)" : ""}` : "";
+  const filePart = activeTab ? ` \u00B7 ${activeTab.title}${activeTab.type === "diff" ? ` ${t("titleBar.diff")}` : ""}` : "";
   const wsPart = workspaceName ? ` \u00B7 ${workspaceName}` : "";
   const title = `Star Gazer${wsPart}${agentSummary ? ` \u2014 ${agentSummary}` : ""}${filePart}`;
 
@@ -96,7 +98,7 @@ export function TitleBar() {
             }
             usePanelStore.getState().closePanel();
           }}
-          title="Focus 模式"
+          title={t("titleBar.focusMode")}
         >
           Focus
         </button>
@@ -127,7 +129,7 @@ export function TitleBar() {
               }}
             />
             <span style={{ fontSize: 10 }}>
-              {runningCount} 运行中
+              {runningCount} {t("status.running")}
             </span>
           </span>
         )}

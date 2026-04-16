@@ -4,6 +4,7 @@
  * 左：面包屑路径 `project / folder / file.ts`
  * 右：Diff 统计 `+24 -8`、模式切换 diff/file、布局切换 split/unified
  */
+import { useTranslation } from "react-i18next";
 import { Columns2, AlignJustify, Copy, Eye, FileCode } from "lucide-react";
 import { usePanelStore } from "@/stores/panelStore";
 import { useProjectStore } from "@/stores/projectStore";
@@ -15,6 +16,7 @@ interface PanelToolbarProps {
 }
 
 export function PanelToolbar({ tab }: PanelToolbarProps) {
+  const { t } = useTranslation();
   const setTabType = usePanelStore((s) => s.setTabType);
   const diffStats = usePanelStore((s) => s.diffStats);
   const activeProject = useProjectStore((s) => s.activeProject);
@@ -188,7 +190,7 @@ export function PanelToolbar({ tab }: PanelToolbarProps) {
                 color: tab.type === "markdown" ? "#e4e6eb" : "#6b7280",
               }}
               onClick={() => setTabType(tab.id, "markdown")}
-              title="预览模式"
+              title={t("panel.previewMode")}
             >
               <Eye className="w-3 h-3" />
               <span className="uppercase">Preview</span>
@@ -205,7 +207,7 @@ export function PanelToolbar({ tab }: PanelToolbarProps) {
                 color: tab.type === "file" ? "#e4e6eb" : "#6b7280",
               }}
               onClick={() => setTabType(tab.id, "file")}
-              title="源码模式"
+              title={t("panel.sourceMode")}
             >
               <FileCode className="w-3 h-3" />
               <span className="uppercase">Source</span>
@@ -234,7 +236,7 @@ export function PanelToolbar({ tab }: PanelToolbarProps) {
                 color: diffLayout === "split" ? "#e4e6eb" : "#6b7280",
               }}
               onClick={() => setDiffLayout("split")}
-              title="Split 视图"
+              title={t("panel.splitView")}
             >
               <Columns2 className="w-3 h-3" />
             </button>
@@ -248,7 +250,7 @@ export function PanelToolbar({ tab }: PanelToolbarProps) {
                 color: diffLayout === "unified" ? "#e4e6eb" : "#6b7280",
               }}
               onClick={() => setDiffLayout("unified")}
-              title="Unified 视图"
+              title={t("panel.unifiedView")}
             >
               <AlignJustify className="w-3 h-3" />
             </button>
@@ -260,7 +262,7 @@ export function PanelToolbar({ tab }: PanelToolbarProps) {
           className="p-1 rounded hover:bg-white/5 transition-colors"
           style={{ color: "#8b92a3" }}
           onClick={handleCopyPath}
-          title="复制文件路径"
+          title={t("panel.copyPath")}
         >
           <Copy className="w-3 h-3" />
         </button>

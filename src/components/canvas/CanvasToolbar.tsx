@@ -3,6 +3,7 @@
  * 参考 Mockup 样式：半透明背景 + 模糊效果
  */
 import { ZoomIn, ZoomOut, Maximize2, LayoutGrid } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useCanvasStore } from "@/stores/canvasStore";
 
 interface CanvasToolbarProps {
@@ -11,6 +12,7 @@ interface CanvasToolbarProps {
 }
 
 export function CanvasToolbar({ onRelayout }: CanvasToolbarProps) {
+  const { t } = useTranslation();
   const { zoom, setZoom, setViewport, agents } = useCanvasStore();
 
   const handleZoomIn = () => setZoom(zoom + 0.1);
@@ -43,21 +45,21 @@ export function CanvasToolbar({ onRelayout }: CanvasToolbarProps) {
         <button
           className="p-1 rounded hover:bg-white/10 hover:text-white transition-colors"
           onClick={handleZoomOut}
-          title="缩小"
+          title={t("canvas.zoomOut")}
         >
           <ZoomOut className="w-3.5 h-3.5" />
         </button>
         <button
           className="hover:text-white min-w-[36px] text-center px-1 rounded hover:bg-white/10 transition-colors"
           onClick={handleZoomReset}
-          title="点击重置为 100%"
+          title={t("canvas.resetZoom")}
         >
           {Math.round(zoom * 100)}%
         </button>
         <button
           className="p-1 rounded hover:bg-white/10 hover:text-white transition-colors"
           onClick={handleZoomIn}
-          title="放大"
+          title={t("canvas.zoomIn")}
         >
           <ZoomIn className="w-3.5 h-3.5" />
         </button>
@@ -65,7 +67,7 @@ export function CanvasToolbar({ onRelayout }: CanvasToolbarProps) {
         <button
           className="p-1 rounded hover:bg-white/10 hover:text-white transition-colors"
           onClick={handleResetView}
-          title="重置视图"
+          title={t("canvas.resetView")}
         >
           <Maximize2 className="w-3.5 h-3.5" />
         </button>
@@ -76,10 +78,10 @@ export function CanvasToolbar({ onRelayout }: CanvasToolbarProps) {
         style={pillStyle}
         onClick={onRelayout}
         disabled={agents.length === 0}
-        title="重排卡片为不重叠的网格"
+        title={t("canvas.relayoutTooltip")}
       >
         <LayoutGrid className="w-3.5 h-3.5" />
-        重排
+        {t("canvas.relayout")}
       </button>
     </div>
   );

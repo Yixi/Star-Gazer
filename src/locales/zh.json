@@ -1,0 +1,157 @@
+{
+  "workspace": {
+    "title": "Star Gazer Workspace",
+    "noWorkspace": "无 Workspace",
+    "switchOrOpen": "切换 / 打开 Workspace",
+    "new": "新建 Workspace",
+    "open": "打开 Workspace 文件...",
+    "openDialogTitle": "打开 Workspace 文件",
+    "newDialogTitle": "新建 Workspace",
+    "selectOrStart": "选择一个 Workspace 开始",
+    "openNewOrRecent": "打开、新建或选择最近的 Workspace",
+    "recentlyOpened": "最近打开",
+    "noRecent": "还没有最近使用过的 Workspace",
+    "close": "关闭",
+    "removeFromRecent": "从 recent 移除",
+    "current": "当前 Workspace",
+    "recent": "最近"
+  },
+  "project": {
+    "title": "项目",
+    "addProject": "添加项目",
+    "selectFolder": "选择项目文件夹",
+    "switchTo": "切换到 {{name}}",
+    "addParentOnly": "只添加父目录",
+    "addParentOnlyTooltip": "把父目录作为一个独立项目添加，忽略子仓库",
+    "addReposAsGroup": "添加 {{count}} 个仓库为组"
+  },
+  "importGroup": {
+    "title": "发现多个 Git 仓库",
+    "description": "在 <bold>{{parent}}</bold> 下发现 <accent>{{count}}</accent> 个 git 仓库。勾选要加入项目组的仓库，创建后新建 agent 可以直接选中这个组，PTY 在父目录启动。",
+    "deselectAll": "取消全选",
+    "selectRemaining": "全选剩余",
+    "selectAll": "全选",
+    "selected": "已选 {{checked}} / {{total}}"
+  },
+  "agent": {
+    "title": "Agent",
+    "createNew": "创建新 Agent",
+    "newAgent": "新建 Agent",
+    "newTerminal": "新建终端",
+    "agentType": "Agent 类型",
+    "nameOptional": "名称（可选）",
+    "create": "创建 Agent",
+    "noRunningAgents": "没有运行中的 Agent",
+    "claudeCodeDesc": "Anthropic 的 AI 编码助手",
+    "openCodeDesc": "开源 AI 编码工具",
+    "codexDesc": "OpenAI 的代码模型",
+    "customDesc": "自定义 / 默认 shell",
+    "bypassPermissions": "Bypass Permissions",
+    "bypassPermissionsDesc": "启动时追加 <code>--dangerously-skip-permissions</code>，Claude Code 不再逐步询问。"
+  },
+  "status": {
+    "running": "运行中",
+    "idle": "空闲",
+    "stopped": "已停止",
+    "error": "错误",
+    "waiting": "等待审批"
+  },
+  "canvas": {
+    "ready": "画布就绪",
+    "createFirstAgent": "点击 <kbd>+</kbd> 或按 <kbd>Cmd+N</kbd> 创建你的第一个 Agent",
+    "zoomOut": "缩小",
+    "zoomIn": "放大",
+    "resetZoom": "点击重置为 100%",
+    "resetView": "重置视图",
+    "relayout": "重排",
+    "relayoutTooltip": "重排卡片为不重叠的网格"
+  },
+  "card": {
+    "minimize": "最小化",
+    "expand": "展开",
+    "maximize": "最大化",
+    "restore": "还原",
+    "close": "关闭",
+    "confirmClose": "确认关闭",
+    "confirmCloseMessage": "Agent \"{{name}}\" 正在运行中。关闭将终止其进程。确定要关闭吗？",
+    "cancel": "取消",
+    "confirmCloseButton": "确认关闭"
+  },
+  "sidebar": {
+    "files": "Files — 完整文件树",
+    "changes": "Changes — 仅显示未提交的变更",
+    "history": "History — 浏览 commit 历史",
+    "treeLayout": "Tree — 按目录树展示",
+    "flatLayout": "Flat — 拍平列表"
+  },
+  "changesView": {
+    "loadingGitStatus": "加载 git 状态...",
+    "noUncommittedChanges": "没有未提交的变更",
+    "changed": "{{count}} changed"
+  },
+  "git": {
+    "syncTooltip": "同步（pull + push）",
+    "syncWithCounts": "同步 (pull {{behind}} ↓ / push {{ahead}} ↑)",
+    "fetchTooltip": "Fetch 远端（更新 ahead/behind 显示）",
+    "behindTooltip": "{{count}} 个 commit 落后于上游",
+    "aheadTooltip": "{{count}} 个本地 commit 未推送",
+    "commitPlaceholder": "Message (⌘⏎ to commit on \"{{branch}}\")"
+  },
+  "panel": {
+    "noOpenFiles": "没有打开的文件",
+    "previewMode": "预览模式",
+    "sourceMode": "源码模式",
+    "splitView": "Split 视图",
+    "unifiedView": "Unified 视图",
+    "copyPath": "复制文件路径",
+    "loadingDiff": "加载 Diff...",
+    "noDiffDetected": "没有检测到差异",
+    "noDiff": "没有差异"
+  },
+  "commandPalette": {
+    "command": "命令",
+    "file": "文件",
+    "searchCommand": "输入命令...",
+    "searchFile": "搜索文件名...",
+    "searchAgent": "搜索 Agent...",
+    "noMatch": "没有找到匹配结果",
+    "addProjectFirst": "请先添加项目",
+    "collapseSidebar": "折叠侧边栏",
+    "expandSidebar": "展开侧边栏",
+    "closePanel": "关闭面板",
+    "openPanel": "打开面板",
+    "view": "视图",
+    "navigate": "导航",
+    "select": "选择"
+  },
+  "statusBar": {
+    "acrossFiles": "涉及 {{count}} 个文件",
+    "agents_one": "{{count}} agent",
+    "agents_other": "{{count}} agents"
+  },
+  "titleBar": {
+    "focusMode": "Focus 模式",
+    "diff": "(diff)"
+  },
+  "error": {
+    "componentError": "{{name}}组件发生错误",
+    "retry": "重试",
+    "operationFailed": "操作失败"
+  },
+  "common": {
+    "cancel": "取消",
+    "close": "关闭",
+    "confirm": "确认"
+  },
+  "time": {
+    "justNow": "刚刚",
+    "minutesAgo": "{{count}}分钟前",
+    "hoursAgo": "{{count}}小时前",
+    "daysAgo": "{{count}}天前"
+  },
+  "language": {
+    "label": "语言",
+    "zh": "中文",
+    "en": "English"
+  }
+}

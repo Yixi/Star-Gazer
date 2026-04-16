@@ -8,9 +8,11 @@
  * 渲染位置：Sidebar 顶部（PROJECTS 标题栏下方），每次只有一份
  */
 import { Files, GitCompare, History, LayoutList, FolderTree } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useProjectStore } from "@/stores/projectStore";
 
 export function ScopeSwitcher() {
+  const { t } = useTranslation();
   const mode = useProjectStore((s) => s.viewMode);
   const flat = useProjectStore((s) => s.flatMode);
   const setViewMode = useProjectStore((s) => s.setViewMode);
@@ -37,19 +39,19 @@ export function ScopeSwitcher() {
           icon={<Files className="w-3 h-3" />}
           active={mode === "files"}
           onClick={() => setViewMode("files")}
-          title="Files — 完整文件树"
+          title={t("sidebar.files")}
         />
         <ScopeButton
           icon={<GitCompare className="w-3 h-3" />}
           active={mode === "changes"}
           onClick={() => setViewMode("changes")}
-          title="Changes — 仅显示未提交的变更"
+          title={t("sidebar.changes")}
         />
         <ScopeButton
           icon={<History className="w-3 h-3" />}
           active={mode === "history"}
           onClick={() => setViewMode("history")}
-          title="History — 浏览 commit 历史"
+          title={t("sidebar.history")}
         />
       </div>
 
@@ -60,14 +62,14 @@ export function ScopeSwitcher() {
             icon={<FolderTree className="w-3 h-3" />}
             active={!flat}
             onClick={() => setFlatMode(false)}
-            title="Tree — 按目录树展示"
+            title={t("sidebar.treeLayout")}
             small
           />
           <ScopeButton
             icon={<LayoutList className="w-3 h-3" />}
             active={flat}
             onClick={() => setFlatMode(true)}
-            title="Flat — 拍平列表"
+            title={t("sidebar.flatLayout")}
             small
           />
         </div>

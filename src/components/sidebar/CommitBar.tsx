@@ -16,6 +16,7 @@
  * - 任何操作完成后立即拉一次 gitStatus 写回 store，避免 2s 轮询的延迟感
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   GitBranch,
   RefreshCw,
@@ -48,6 +49,7 @@ type Primary =
   | { kind: "idle" };
 
 export function CommitBar({ project }: CommitBarProps) {
+  const { t } = useTranslation();
   const status = useProjectStore((s) => s.gitStatusByProject[project.id]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState<BusyKind>(null);
@@ -104,7 +106,7 @@ export function CommitBar({ project }: CommitBarProps) {
         }
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
-        setError(msg.trim() || "操作失败");
+        setError(msg.trim() || t("error.operationFailed"));
       } finally {
         setBusy(null);
       }
@@ -173,7 +175,7 @@ export function CommitBar({ project }: CommitBarProps) {
             <span
               className="flex items-center tabular-nums"
               style={{ color: "#8b92a3", marginLeft: 2 }}
-              title={`${behind} 个 commit 落后于上游`}
+              title={t("git.behindTooltip", { count: behind })}
             >
               <ArrowDown className="w-2.5 h-2.5" />
               {behind}
@@ -183,7 +185,7 @@ export function CommitBar({ project }: CommitBarProps) {
             <span
               className="flex items-center tabular-nums"
               style={{ color: "#8b92a3" }}
-              title={`${ahead} 个本地 commit 未推送`}
+              title={t("git.aheadTooltip", { count: ahead })}
             >
               <ArrowUp className="w-2.5 h-2.5" />
               {ahead}
@@ -195,8 +197,8 @@ export function CommitBar({ project }: CommitBarProps) {
           <IconButton
             title={
               ahead > 0 || behind > 0
-                ? `同步 (pull ${behind} ↓ / push ${ahead} ↑)`
-                : "同步（pull + push）"
+                ? t("git.syncWithCounts", { behind, ahead })
+                : t("git.syncTooltip")
             }
             onClick={handleSync}
             disabled={busy !== null}
@@ -205,7 +207,7 @@ export function CommitBar({ project }: CommitBarProps) {
             <RefreshCw className="w-3 h-3" />
           </IconButton>
           <IconButton
-            title="Fetch 远端（更新 ahead/behind 显示）"
+            title={t("git.fetchTooltip")}
             onClick={handleFetch}
             disabled={busy !== null}
             spinning={busy === "fetch"}
@@ -220,7 +222,7 @@ export function CommitBar({ project }: CommitBarProps) {
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={`Message (⌘⏎ to commit on "${branch}")`}
+        placeholder={t("git.commitPlaceholder", { branch })}
         rows={1}
         spellCheck={false}
         style={{

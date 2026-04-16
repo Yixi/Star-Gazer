@@ -1,5 +1,8 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import i18n from "@/lib/i18n";
+
+export type Language = "zh" | "en";
 
 interface SettingsState {
   /** 侧边栏宽度 */
@@ -18,6 +21,8 @@ interface SettingsState {
   diffLayout: "split" | "unified";
   /** AgentPicker 上次使用的项目 ID（跨会话记忆） */
   lastAgentProjectId: string | null;
+  /** 界面语言 */
+  language: Language;
 
   /** 设置侧边栏宽度 */
   setSidebarWidth: (width: number) => void;
@@ -31,6 +36,8 @@ interface SettingsState {
   setDiffLayout: (layout: "split" | "unified") => void;
   /** 记录 AgentPicker 最近一次选中的项目 */
   setLastAgentProjectId: (id: string | null) => void;
+  /** 切换界面语言 */
+  setLanguage: (lang: Language) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -44,6 +51,7 @@ export const useSettingsStore = create<SettingsState>()(
       theme: "dark",
       diffLayout: "split",
       lastAgentProjectId: null,
+      language: "zh",
 
       setSidebarWidth: (width) => set({ sidebarWidth: width }),
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
@@ -51,6 +59,10 @@ export const useSettingsStore = create<SettingsState>()(
       setTerminalFontSize: (size) => set({ terminalFontSize: size }),
       setDiffLayout: (layout) => set({ diffLayout: layout }),
       setLastAgentProjectId: (id) => set({ lastAgentProjectId: id }),
+      setLanguage: (lang) => {
+        i18n.changeLanguage(lang);
+        set({ language: lang });
+      },
     }),
     {
       name: "stargazer-settings",
@@ -63,6 +75,7 @@ export const useSettingsStore = create<SettingsState>()(
         terminalFontSize: state.terminalFontSize,
         diffLayout: state.diffLayout,
         lastAgentProjectId: state.lastAgentProjectId,
+        language: state.language,
       }),
       version: 1,
     },

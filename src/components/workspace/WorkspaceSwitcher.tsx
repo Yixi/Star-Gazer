@@ -5,6 +5,7 @@
  * 折叠模式只显示一个 Layers 图标按钮。
  */
 import { useState, useCallback, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Layers, ChevronDown } from "lucide-react";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { WorkspacePicker } from "./WorkspacePicker";
@@ -14,6 +15,7 @@ interface WorkspaceSwitcherProps {
 }
 
 export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
+  const { t } = useTranslation();
   const currentName = useWorkspaceStore((s) => s.currentName);
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -28,7 +30,7 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
       window.removeEventListener("stargazer:open-workspace-picker", handler);
   }, []);
 
-  const displayName = currentName ?? "No Workspace";
+  const displayName = currentName ?? t("workspace.noWorkspace");
 
   if (collapsed) {
     return (
@@ -58,7 +60,7 @@ export function WorkspaceSwitcher({ collapsed }: WorkspaceSwitcherProps) {
           fontSize: 11,
         }}
         onClick={openPicker}
-        title="切换 / 打开 Workspace"
+        title={t("workspace.switchOrOpen")}
       >
         <Layers
           className="w-3.5 h-3.5 flex-shrink-0"

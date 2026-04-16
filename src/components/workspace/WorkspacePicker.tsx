@@ -8,6 +8,8 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { X, Plus, FolderOpen, Layers, Trash2 } from "lucide-react";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import * as workspaceService from "@/services/workspace";
@@ -24,6 +26,7 @@ const SGW_FILTERS = [
 ];
 
 export function WorkspacePicker({ closable = true, onClose }: WorkspacePickerProps) {
+  const { t } = useTranslation();
   const recent = useWorkspaceStore((s) => s.recent);
   const setRecent = useWorkspaceStore((s) => s.setRecent);
   const [busy, setBusy] = useState(false);
@@ -61,7 +64,7 @@ export function WorkspacePicker({ closable = true, onClose }: WorkspacePickerPro
     try {
       const { save } = await import("@tauri-apps/plugin-dialog");
       const selected = await save({
-        title: "新建 Workspace",
+        title: t("workspace.newDialogTitle"),
         defaultPath: "workspace.sgw",
         filters: SGW_FILTERS,
       });
@@ -86,7 +89,7 @@ export function WorkspacePicker({ closable = true, onClose }: WorkspacePickerPro
     try {
       const { open } = await import("@tauri-apps/plugin-dialog");
       const selected = await open({
-        title: "打开 Workspace 文件",
+        title: t("workspace.openDialogTitle"),
         multiple: false,
         filters: SGW_FILTERS,
       });
@@ -167,19 +170,19 @@ export function WorkspacePicker({ closable = true, onClose }: WorkspacePickerPro
               className="font-semibold"
               style={{ color: "#e4e6eb", fontSize: 14 }}
             >
-              Star Gazer Workspace
+              {t("workspace.title")}
             </div>
             <div style={{ color: "#6b7280", fontSize: 11, marginTop: 2 }}>
               {closable
-                ? "打开、新建或选择最近的 Workspace"
-                : "选择一个 Workspace 开始"}
+                ? t("workspace.openNewOrRecent")
+                : t("workspace.selectOrStart")}
             </div>
           </div>
           {closable && (
             <button
               className="p-1 rounded hover:bg-white/5"
               onClick={onClose}
-              aria-label="关闭"
+              aria-label={t("workspace.close")}
               style={{ color: "#8b92a3" }}
             >
               <X className="w-4 h-4" />
@@ -203,7 +206,7 @@ export function WorkspacePicker({ closable = true, onClose }: WorkspacePickerPro
             disabled={busy}
           >
             <Plus className="w-4 h-4" />
-            新建 Workspace
+            {t("workspace.new")}
           </button>
           <button
             className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-md transition-colors"
@@ -220,7 +223,7 @@ export function WorkspacePicker({ closable = true, onClose }: WorkspacePickerPro
             disabled={busy}
           >
             <FolderOpen className="w-4 h-4" />
-            打开 Workspace 文件...
+            {t("workspace.open")}
           </button>
         </div>
 
@@ -229,7 +232,7 @@ export function WorkspacePicker({ closable = true, onClose }: WorkspacePickerPro
           className="px-5 pt-1 pb-2 text-[10px] uppercase tracking-wider"
           style={{ color: "#6b7280" }}
         >
-          最近打开
+          {t("workspace.recentlyOpened")}
         </div>
         <div
           className="px-3 pb-4 overflow-y-auto"
@@ -240,7 +243,7 @@ export function WorkspacePicker({ closable = true, onClose }: WorkspacePickerPro
               className="text-xs text-center py-6"
               style={{ color: "#6b7280" }}
             >
-              还没有最近使用过的 Workspace
+              {t("workspace.noRecent")}
             </div>
           ) : (
             recent.map((r) => (
@@ -268,6 +271,7 @@ function RecentRow({
   onOpen: () => void;
   onRemove: (e: React.MouseEvent) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <button
       className="group w-full flex items-center gap-3 px-2 py-2 rounded-md text-left hover:bg-white/5 transition-colors"
@@ -292,7 +296,7 @@ function RecentRow({
         className="flex-shrink-0 tabular-nums"
         style={{ color: "#6b7280", fontSize: 10 }}
       >
-        {formatRelative(entry.lastOpened)}
+        {formatRelative(entry.lastOpened, t)}
       </span>
       <span
         role="button"
@@ -300,7 +304,7 @@ function RecentRow({
         className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-white/10 transition-opacity"
         style={{ color: "#8b92a3", cursor: "pointer" }}
         onClick={onRemove}
-        aria-label="从 recent 移除"
+        aria-label={t("workspace.removeFromRecent")}
       >
         <Trash2 className="w-3.5 h-3.5" />
       </span>
@@ -308,11 +312,11 @@ function RecentRow({
   );
 }
 
-function formatRelative(ts: number): string {
+function formatRelative(ts: number, t: TFunction): string {
   const diff = Date.now() - ts;
-  if (diff < 60_000) return "just now";
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`;
-  if (diff < 30 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d`;
+  if (diff < 60_000) return t("time.justNow");
+  if (diff < 3_600_000) return t("time.minutesAgo", { count: Math.floor(diff / 60_000) });
+  if (diff < 86_400_000) return t("time.hoursAgo", { count: Math.floor(diff / 3_600_000) });
+  if (diff < 30 * 86_400_000) return t("time.daysAgo", { count: Math.floor(diff / 86_400_000) });
   return new Date(ts).toLocaleDateString();
 }
