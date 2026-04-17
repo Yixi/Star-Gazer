@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1c2340"/>
+      <stop offset="0.55" stop-color="#11162a"/>
+      <stop offset="1" stop-color="#07090f"/>
+    </linearGradient>
+    <radialGradient id="highlight" cx="220" cy="200" r="620" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4a5a8a" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#4a5a8a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="centerFill" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.35" stop-color="#dbe8ff"/>
+      <stop offset="1" stop-color="#4a9eff"/>
+    </radialGradient>
+    <radialGradient id="centerGlow" cx="512" cy="512" r="320" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4a9eff" stop-opacity="0.55"/>
+      <stop offset="0.5" stop-color="#4a9eff" stop-opacity="0.15"/>
+      <stop offset="1" stop-color="#4a9eff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="dotGlowOrange" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffb480"/>
+      <stop offset="1" stop-color="#ff8c42"/>
+    </radialGradient>
+    <radialGradient id="dotGlowPurple" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#c8b6ff"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </radialGradient>
+    <radialGradient id="dotGlowGreen" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#5ce38a"/>
+      <stop offset="1" stop-color="#22c55e"/>
+    </radialGradient>
+    <clipPath id="squircle">
+      <rect x="0" y="0" width="1024" height="1024" rx="224" ry="224"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#squircle)">
+    <rect width="1024" height="1024" fill="url(#bg)"/>
+    <rect width="1024" height="1024" fill="url(#highlight)"/>
+
+    <circle cx="512" cy="512" r="320" fill="url(#centerGlow)"/>
+
+    <g stroke="#9ab3e0" stroke-width="1.6" stroke-opacity="0.22" fill="none" stroke-linecap="round">
+      <line x1="512" y1="512" x2="790" y2="320"/>
+      <line x1="512" y1="512" x2="280" y2="700"/>
+      <line x1="512" y1="512" x2="740" y2="740"/>
+    </g>
+
+    <path
+      d="M 512 332 Q 530 494 692 512 Q 530 530 512 692 Q 494 530 332 512 Q 494 494 512 332 Z"
+      fill="url(#centerFill)"/>
+
+    <circle cx="790" cy="320" r="38" fill="url(#dotGlowOrange)"/>
+    <circle cx="280" cy="700" r="36" fill="url(#dotGlowPurple)"/>
+    <circle cx="740" cy="740" r="30" fill="url(#dotGlowGreen)"/>
+  </g>
+</svg>
