@@ -13,21 +13,10 @@ on:
 
 jobs:
   build:
-    name: Build ${{ matrix.arch }}
+    name: Build aarch64 (Apple Silicon)
+    runs-on: macos-14
     permissions:
       contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-14
-            arch: aarch64
-            target: aarch64-apple-darwin
-          - runner: macos-13
-            arch: x64
-            target: x86_64-apple-darwin
-
-    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout
@@ -45,13 +34,13 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: aarch64-apple-darwin
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
           workspaces: ./src-tauri -> target
-          key: ${{ matrix.target }}
+          key: aarch64-apple-darwin
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
@@ -75,4 +64,4 @@ jobs:
             See the assets below to download this version.
           releaseDraft: true
           prerelease: false
-          args: --target ${{ matrix.target }}
+          args: --target aarch64-apple-darwin
