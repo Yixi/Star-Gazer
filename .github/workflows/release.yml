@@ -49,6 +49,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_SIGNING_IDENTITY: "-"
         with:
           tagName: ${{ github.event.inputs.tag || github.ref_name }}
           releaseName: "Star Gazer ${{ github.event.inputs.tag || github.ref_name }}"
