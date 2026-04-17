@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.0.1). Must already exist."
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            arch: aarch64
+            target: aarch64-apple-darwin
+          - runner: macos-13
+            arch: x64
+            target: x86_64-apple-darwin
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+          key: ${{ matrix.target }}
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build & publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: "Star Gazer ${{ github.event.inputs.tag || github.ref_name }}"
+          releaseBody: |
+            Star Gazer ${{ github.event.inputs.tag || github.ref_name }}
+
+            macOS builds are **unsigned**. If Gatekeeper blocks the app on first launch, run:
+
+            ```bash
+            xattr -dr com.apple.quarantine /Applications/Star\ Gazer.app
+            ```
+
+            See the assets below to download this version.
+          releaseDraft: true
+          prerelease: false
+          args: --target ${{ matrix.target }}
