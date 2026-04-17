@@ -63,11 +63,7 @@ Star Gazer is built around one observation: **as AI writes more code, the develo
 
 Prebuilt `.dmg` builds will be published on the [GitHub Releases](https://github.com/Yixi/Star-Gazer/releases) page.
 
-Current builds are **unsigned**. If Gatekeeper blocks the app on first launch, run:
-
-```bash
-xattr -dr com.apple.quarantine /Applications/Star\ Gazer.app
-```
+Current builds are **ad-hoc signed** but **not notarized**. On first launch macOS will refuse to open the app; open it once from **System Settings → Privacy & Security**, scroll to the `"Star Gazer" was blocked` notice and click **Open Anyway**. You only need to do this once.
 
 ### Building from Source
 

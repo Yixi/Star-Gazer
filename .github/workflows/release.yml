@@ -56,13 +56,9 @@ jobs:
           releaseBody: |
             Star Gazer ${{ github.event.inputs.tag || github.ref_name }}
 
-            macOS builds are **unsigned**. If Gatekeeper blocks the app on first launch, run:
-
-            ```bash
-            xattr -dr com.apple.quarantine /Applications/Star\ Gazer.app
-            ```
+            macOS builds are ad-hoc signed but **not notarized**. On first launch macOS will refuse to open the app — open **System Settings → Privacy & Security**, scroll to the `"Star Gazer" was blocked` notice and click **Open Anyway**. You only need to do this once.
 
             See the assets below to download this version.
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: --target aarch64-apple-darwin

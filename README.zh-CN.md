@@ -63,11 +63,7 @@ Star Gazer 基于一个判断：**当 AI 写掉越来越多的代码，开发者
 
 预编译的 `.dmg` 安装包将在 [GitHub Releases](https://github.com/Yixi/Star-Gazer/releases) 页面发布。
 
-当前发布版本暂未进行 Apple Developer ID 签名。若首次打开被 Gatekeeper 拦截，请在终端执行：
-
-```bash
-xattr -dr com.apple.quarantine /Applications/Star\ Gazer.app
-```
+当前发布版本只做了 ad-hoc 签名，未经过 Apple 公证。首次打开时 macOS 会拒绝运行，请前往**系统设置 → 隐私与安全性**，翻到底部找到 `已阻止"Star Gazer"...` 的提示，点击**仍要打开**即可。此操作只需做一次。
 
 ### 源码编译
 
