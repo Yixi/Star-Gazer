@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
 /// 终端输出事件 payload
@@ -170,6 +171,17 @@ impl PtyManager {
     }
 
     /// 读取 PTY 输出并发送到前端
+    ///
+    /// 合批策略（参考 VSCode TerminalDataBufferer）：shell 狂输出时多次 read
+    /// 合成一个 emit，把 IPC 事件频率从"每 4KB 一次"降到"每 5ms / 16KB 一次"。
+    /// 低流量（打字 echo）场景下最多多 5ms 延迟，肉眼不可察；高流量（大文件
+    /// cat、日志刷屏）场景事件数降 3-4 倍，WKWebView postMessage 开销 + JS
+    /// listener + xterm.write + DOM reflow 的主线程占用显著下降，间接缓解
+    /// "打字快吞字"（主线程越空闲，input 事件派发越及时）。
+    ///
+    /// 实现：read 阻塞在读线程，合批在独立 flusher 线程。flusher 用
+    /// `recv_timeout` 做时间/大小双触发 —— 空 buffer 时长阻塞不耗 CPU，有
+    /// 累积就最多等 5ms 就 flush。
     fn read_output(
         app: AppHandle,
         mut reader: Box<dyn Read + Send>,
@@ -179,24 +191,67 @@ impl PtyManager {
         window_terminals: Arc<Mutex<HashMap<String, HashSet<String>>>>,
         window_label: String,
     ) {
+        const FLUSH_INTERVAL: Duration = Duration::from_millis(5);
+        const FLUSH_SIZE: usize = 16 * 1024;
+
+        let (tx, rx) = mpsc::channel::<Vec<u8>>();
+
+        // flusher 线程：累积字节 + 时间/大小双触发 emit
+        let app_flush = app.clone();
+        let terminal_id_flush = terminal_id.clone();
+        let window_label_flush = window_label.clone();
+        let flusher = std::thread::spawn(move || {
+            let mut pending: Vec<u8> = Vec::with_capacity(FLUSH_SIZE * 2);
+            let flush_one = |buf: Vec<u8>| {
+                let payload = TerminalOutputPayload {
+                    terminal_id: terminal_id_flush.clone(),
+                    data: buf,
+                };
+                if let Err(e) =
+                    app_flush.emit_to(window_label_flush.as_str(), "terminal-output", &payload)
+                {
+                    log::error!("发送终端输出事件失败: {}", e);
+                }
+            };
+            loop {
+                // 空 buffer 长阻塞；有累积就最多等 FLUSH_INTERVAL
+                let recv_result = if pending.is_empty() {
+                    rx.recv().map_err(|_| mpsc::RecvTimeoutError::Disconnected)
+                } else {
+                    rx.recv_timeout(FLUSH_INTERVAL)
+                };
+                match recv_result {
+                    Ok(data) => {
+                        pending.extend_from_slice(&data);
+                        if pending.len() >= FLUSH_SIZE {
+                            flush_one(std::mem::take(&mut pending));
+                        }
+                    }
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        // 超时 → flush 累积
+                        if !pending.is_empty() {
+                            flush_one(std::mem::take(&mut pending));
+                        }
+                    }
+                    Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        // channel 关闭 → flush 残余后退出
+                        if !pending.is_empty() {
+                            flush_one(std::mem::take(&mut pending));
+                        }
+                        break;
+                    }
+                }
+            }
+        });
+
+        // read 循环：字节送 channel，flusher 负责 emit
         let mut buf = [0u8; 4096];
         loop {
             match reader.read(&mut buf) {
-                Ok(0) => {
-                    // EOF - 进程已退出
-                    break;
-                }
+                Ok(0) => break, // EOF
                 Ok(n) => {
-                    let data = buf[..n].to_vec();
-                    let payload = TerminalOutputPayload {
-                        terminal_id: terminal_id.clone(),
-                        data,
-                    };
-                    if let Err(e) =
-                        app.emit_to(window_label.as_str(), "terminal-output", &payload)
-                    {
-                        log::error!("发送终端输出事件失败: {}", e);
-                        break;
+                    if tx.send(buf[..n].to_vec()).is_err() {
+                        break; // flusher 已退出
                     }
                 }
                 Err(e) => {
@@ -205,6 +260,9 @@ impl PtyManager {
                 }
             }
         }
+        // 关 channel 让 flusher 排空残余后退出
+        drop(tx);
+        let _ = flusher.join();
 
         // 获取退出码
         let exit_code = match child.wait() {
