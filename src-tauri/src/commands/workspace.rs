@@ -134,6 +134,7 @@ pub async fn open_workspace_in_window(
         .inner_size(1440.0, 900.0)
         .min_inner_size(1024.0, 640.0)
         .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true)
         .resizable(true)
         .center()
         .build()

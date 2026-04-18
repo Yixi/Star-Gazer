@@ -19,6 +19,7 @@
         "minHeight": 640,
         "decorations": true,
         "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
         "resizable": true,
         "center": true
       }
