@@ -16,8 +16,10 @@
 import { useEffect, useRef, useCallback } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebglAddon } from "@xterm/addon-webgl";
 import * as ptyService from "@/services/pty";
 import { useTerminalStore } from "@/stores/terminalStore";
+import { useCanvasStore } from "@/stores/canvasStore";
 
 interface UseTerminalOptions {
   terminalId: string;
@@ -59,10 +61,19 @@ const TERMINAL_THEME = {
   brightWhite: "#e4e6eb",
 };
 
+/** zoom 判 1 的浮点容差（Cmd+滚轮会产生 1.0000001 之类的浮点值） */
+const ZOOM_EPS = 0.01;
+/** zoom 变化到实际切换 renderer 的防抖时间，避免连续缩放时频繁闪烁 */
+const RENDERER_SWITCH_DEBOUNCE_MS = 250;
+
 export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, onReady, onExit }: UseTerminalOptions) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const webglAddonRef = useRef<WebglAddon | null>(null);
+  /** WebGL 初始化/运行时失败后永久回落 DOM，不再尝试 */
+  const webglFailedRef = useRef(false);
+  const switchTimerRef = useRef<number | null>(null);
   const initPendingRef = useRef(false);
   // 存储事件取消监听函数，清理时调用避免内存泄漏
   const unlistenersRef = useRef<Array<() => void>>([]);
@@ -74,6 +85,57 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
   const onExitRef = useRef(onExit);
   onReadyRef.current = onReady;
   onExitRef.current = onExit;
+
+  /**
+   * 根据 Canvas zoom 切换 xterm renderer：zoom === 1 时 WebGL，否则 DOM。
+   *
+   * 动机：画布用 CSS `zoom` 整体位图化缩放，WebGL canvas 的 backing store
+   * 固定分辨率会被拉伸模糊。VSCode 终端不存在这个问题是因为它的终端外层
+   * 永远不会被 CSS transform/zoom，架构上就没这张画布。我们保留画布缩放用
+   * 于"多卡全景"，代价是缩放状态下必须回退 DOM —— 和 VSCode 的 WebGL→DOM
+   * 帧率降级是同一思路的离散版。
+   *
+   * WebGL 开回来的价值：脏区增量渲染 + GPU 合成，输出密集时主线程空闲，
+   * input 事件派发不被 DOM reflow 挤压，间接缓解"打字快吞字"的主观感。
+   */
+  const applyRenderer = useCallback(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    const zoom = useCanvasStore.getState().zoom;
+    const shouldUseWebgl = Math.abs(zoom - 1) < ZOOM_EPS && !webglFailedRef.current;
+    const hasWebgl = webglAddonRef.current !== null;
+    if (shouldUseWebgl === hasWebgl) return;
+
+    if (shouldUseWebgl) {
+      try {
+        const addon = new WebglAddon();
+        // GPU 驱动崩溃 / tab 长期后台被回收 → 永久回落 DOM。
+        // guard `webglAddonRef.current === addon` 防止"用户缩放时我们已主动
+        // dispose、之后异步 context-loss 回调再次 dispose"的双 dispose 竞态
+        addon.onContextLoss(() => {
+          if (webglAddonRef.current !== addon) return;
+          addon.dispose();
+          webglAddonRef.current = null;
+          webglFailedRef.current = true;
+        });
+        terminal.loadAddon(addon);
+        webglAddonRef.current = addon;
+      } catch (err) {
+        webglFailedRef.current = true;
+        console.warn("[terminal] WebGL 启动失败，回落 DOM 渲染", err);
+      }
+    } else {
+      webglAddonRef.current?.dispose();
+      webglAddonRef.current = null;
+    }
+
+    // 切 renderer 后 cell 尺寸计算链重建，fit 一次确保 cols/rows 正确
+    try {
+      fitAddonRef.current?.fit();
+    } catch {
+      /* fit 偶发失败忽略 */
+    }
+  }, []);
 
   /** 初始化终端 */
   const init = useCallback(async () => {
@@ -106,10 +168,6 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
 
     terminal.open(containerRef.current);
 
-    // 使用默认 DOM 渲染器（不加载 WebGL）
-    // DOM 渲染器天然支持 CSS zoom，画布缩放时文字保持清晰
-    // WebGL 使用固定分辨率 canvas，CSS zoom 会导致像素拉伸模糊
-
     // 延迟 fit 以确保容器尺寸已确定
     requestAnimationFrame(() => {
       fitAddon.fit();
@@ -117,6 +175,9 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
+
+    // 根据当前 Canvas zoom 决定初始 renderer（WebGL or DOM）
+    applyRenderer();
 
     // macOS 中文/日文输入法下 shift+ASCII 标点（@、#、$ 等）丢字符的 workaround。
     //
@@ -221,7 +282,28 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
       terminal.writeln(`\x1b[90m错误详情: ${err}\x1b[0m`);
       return;
     }
-  }, [terminalId, cwd, agentId, command, fontSize]);
+  }, [terminalId, cwd, agentId, command, fontSize, applyRenderer]);
+
+  /** 订阅 Canvas zoom 变化，防抖切换 renderer */
+  useEffect(() => {
+    const unsubscribe = useCanvasStore.subscribe((state, prev) => {
+      if (state.zoom === prev.zoom) return;
+      if (switchTimerRef.current !== null) {
+        window.clearTimeout(switchTimerRef.current);
+      }
+      switchTimerRef.current = window.setTimeout(() => {
+        switchTimerRef.current = null;
+        applyRenderer();
+      }, RENDERER_SWITCH_DEBOUNCE_MS);
+    });
+    return () => {
+      unsubscribe();
+      if (switchTimerRef.current !== null) {
+        window.clearTimeout(switchTimerRef.current);
+        switchTimerRef.current = null;
+      }
+    };
+  }, [applyRenderer]);
 
   /** 调整尺寸 */
   const fit = useCallback(() => {
@@ -246,6 +328,11 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
         unlisten();
       }
       unlistenersRef.current = [];
+      // 显式 dispose WebGL addon —— terminal.dispose() 也会清，但主动做一次
+      // 确保 GL context 立即释放，避免 WKWebView 在快速切卡片时把 context
+      // 堆到上限（Safari 系默认 WebGL context 数量有限）
+      webglAddonRef.current?.dispose();
+      webglAddonRef.current = null;
       // 销毁 xterm 实例
       terminalRef.current?.dispose();
       terminalRef.current = null;
