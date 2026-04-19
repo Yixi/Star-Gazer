@@ -179,18 +179,26 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
     // 根据当前 Canvas zoom 决定初始 renderer（WebGL or DOM）
     applyRenderer();
 
-    // macOS 中文/日文输入法下 shift+ASCII 标点（@、#、$ 等）丢字符的 workaround。
+    // macOS 中文/日文输入法下 shift+ASCII 吞字的 workaround。
     //
     // 成因：xterm.js CompositionHelper.keydown 看到 keyCode === 229（IME 激活
     // 时所有键都被标成 229）后走 _handleAnyTextareaChanges 的 setTimeout diff
-    // 路径；但 macOS IME 对 shift+符号会先触发一个瞬时 compositionstart，导致
+    // 路径；但 macOS IME 对 shift 组合会先触发一个瞬时 compositionstart，导致
     // setTimeout 跑时 _isComposing === true，整个分支被跳过、字符彻底丢失。
     // 上游 issue: https://github.com/xtermjs/xterm.js/issues/5374（至今未修，
     // VSCode 终端同样中招但选择了 upstream 标签不修）。
     //
-    // 这里在 customKeyEventHandler 里提前拦截：只针对单字符 ASCII 可打印且
-    // 非字母的 shift 组合（比如 @#$%^&*()），直接写进 PTY 并吃掉事件。字母
-    // 走原路径不碰，因为 shift+letter 在 IME 下工作正常，不能干扰。
+    // 这里在 customKeyEventHandler 里提前拦截：IME 激活 + 无 meta/ctrl/alt +
+    // 非 composition 中 + 带 shift 的单字符 ASCII 可打印（含字母），直接写
+    // PTY 并吃掉事件，绕开 xterm 的 keyCode=229 路径。
+    //
+    // 为什么只拦 shift 组合、不拦无 shift 的字母：后者（event.key 是 "a"）
+    // 无法在 keydown 时与中文拼音 composition 的首字母区分（两者都是
+    // keyCode=229 + isComposing=false），贸然拦截会让拼音首字母泄露到 PTY
+    // 再被 compositionend 的中文字符追加，破坏中文输入。shift 组合不会进入
+    // IME composition 缓冲区（IME 层会把 shift+letter 作为英文直出或吞掉），
+    // 所以拦截是安全的。这覆盖了：shift+符号（@#$%）、shift+字母（切英文
+    // 模式后连按 shift+ABC）。纯模式切换后连续小写字母的场景暂未覆盖。
     terminal.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown") return true;
       if (
@@ -202,10 +210,7 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
         event.key.length === 1
       ) {
         const code = event.key.charCodeAt(0);
-        const isAsciiPrintable = code >= 0x20 && code <= 0x7e;
-        const isLetter =
-          (code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a);
-        if (isAsciiPrintable && !isLetter) {
+        if (code >= 0x20 && code <= 0x7e) {
           if (generationRef.current === myGeneration) {
             ptyService.writeTerminal(terminalId, event.key);
           }
