@@ -559,44 +559,50 @@ export function AgentCard({ agent }: AgentCardProps) {
           </>
         )}
 
-        {/* 终端区域 */}
-        {displayMode !== "minimized" && (
-          <div
-            className="flex flex-col"
-            style={{
-              height:
-                displayMode === "maximized"
-                  ? `calc(100% - ${HEADER_HEIGHT}px)`
-                  : agent.size.height - HEADER_HEIGHT,
-              background: "var(--sg-bg-code)",
-            }}
-          >
-            <div className="flex-1 min-h-0">
-              <TerminalView
-                terminalId={agent.terminalId}
-                cwd={agent.cwd}
-                agentId={agent.id}
-                command={terminalCommand}
-                onReady={handleTerminalReady}
-                onExit={handleTerminalExit}
-              />
-            </div>
-            {agent.status === "waiting" && agent.approvalMessage && (
-              <div
-                className="mx-2 mb-2 px-2.5 py-1.5 rounded"
-                style={{
-                  background: "rgba(254, 188, 46, 0.1)",
-                  border: "1px solid rgba(254, 188, 46, 0.35)",
-                  color: "#febc2e",
-                  fontSize: "10px",
-                  fontFamily: "'SF Mono', monospace",
-                }}
-              >
-                {agent.approvalMessage}
-              </div>
-            )}
+        {/*
+         * 终端区域
+         *
+         * 最小化时用 display:none 隐藏，**不要**用 `{!minimized && ...}` 条件渲染：
+         * 后者会 unmount TerminalView，useTerminal 的 cleanup 会调 closeTerminal
+         * 发 SIGTERM/SIGKILL 杀掉 PTY 里跑的程序，展开时只能重开。
+         * display:none 保持挂载，ResizeObserver 在 0 尺寸时由 fit() 的 guard 跳过。
+         */}
+        <div
+          className="flex flex-col"
+          style={{
+            display: displayMode === "minimized" ? "none" : "flex",
+            height:
+              displayMode === "maximized"
+                ? `calc(100% - ${HEADER_HEIGHT}px)`
+                : agent.size.height - HEADER_HEIGHT,
+            background: "var(--sg-bg-code)",
+          }}
+        >
+          <div className="flex-1 min-h-0">
+            <TerminalView
+              terminalId={agent.terminalId}
+              cwd={agent.cwd}
+              agentId={agent.id}
+              command={terminalCommand}
+              onReady={handleTerminalReady}
+              onExit={handleTerminalExit}
+            />
           </div>
-        )}
+          {agent.status === "waiting" && agent.approvalMessage && (
+            <div
+              className="mx-2 mb-2 px-2.5 py-1.5 rounded"
+              style={{
+                background: "rgba(254, 188, 46, 0.1)",
+                border: "1px solid rgba(254, 188, 46, 0.35)",
+                color: "#febc2e",
+                fontSize: "10px",
+                fontFamily: "'SF Mono', monospace",
+              }}
+            >
+              {agent.approvalMessage}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 关闭确认对话框 */}

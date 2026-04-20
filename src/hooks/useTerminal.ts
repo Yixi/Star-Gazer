@@ -312,14 +312,21 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
 
   /** 调整尺寸 */
   const fit = useCallback(() => {
-    if (fitAddonRef.current && terminalRef.current) {
-      try {
-        fitAddonRef.current.fit();
-        const { cols, rows } = terminalRef.current;
+    if (!fitAddonRef.current || !terminalRef.current) return;
+    // 容器不可见（父级 display:none，如 AgentCard 最小化）时 client 尺寸为 0，
+    // fitAddon.fit() 会把 cols/rows 算成 0 进而把 PTY resize 成 0x0，部分 TUI
+    // 程序（vim、top）在 0x0 下会直接退出。跳过即可，恢复可见后 ResizeObserver
+    // 会再次回调，拿到真实尺寸。
+    const el = containerRef.current;
+    if (!el || el.clientWidth === 0 || el.clientHeight === 0) return;
+    try {
+      fitAddonRef.current.fit();
+      const { cols, rows } = terminalRef.current;
+      if (cols > 0 && rows > 0) {
         ptyService.resizeTerminal(terminalId, cols, rows);
-      } catch {
-        // fit 可能在终端未完全初始化时失败，忽略
       }
+    } catch {
+      // fit 可能在终端未完全初始化时失败，忽略
     }
   }, [terminalId]);
 
