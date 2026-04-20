@@ -253,10 +253,70 @@ const SCAN_BLACKLIST: &[&str] = &[
     "__pycache__",
 ];
 
+/// 最大下钻深度：只扫到 parent/child/grandchild，再深不找
+const SCAN_MAX_DEPTH: usize = 2;
+
+/// 递归扫描一个目录，把找到的 git 仓库推进 `out`
+///
+/// - `rel_prefix`：相对于顶层 parent 的路径前缀（用斜杠拼），用来在成员名里
+///   体现层级，比如顶层 parent 是 `workspace`，扫到 `workspace/apps/web/.git`
+///   时 entry.name = `apps/web`，让导入弹窗里一眼看出层级。
+/// - `depth`：当前已经下钻的层数（0 = 顶层 parent 自身的子目录）
+fn scan_dir_for_repos<'a>(
+    dir: &'a Path,
+    rel_prefix: &'a str,
+    depth: usize,
+    out: &'a mut Vec<GitRepoEntry>,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
+    Box::pin(async move {
+        let mut rd = match tokio::fs::read_dir(dir).await {
+            Ok(r) => r,
+            Err(_) => return,
+        };
+        while let Ok(Some(entry)) = rd.next_entry().await {
+            let file_name = entry.file_name();
+            let name = file_name.to_string_lossy().to_string();
+            if name.starts_with('.') {
+                continue; // 隐藏目录 / . / ..
+            }
+            if SCAN_BLACKLIST.iter().any(|b| *b == name) {
+                continue;
+            }
+            let metadata = match entry.metadata().await {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
+            if !metadata.is_dir() {
+                continue;
+            }
+            let child_path = entry.path();
+            let display_name = if rel_prefix.is_empty() {
+                name.clone()
+            } else {
+                format!("{}/{}", rel_prefix, name)
+            };
+            if child_path.join(".git").exists() {
+                out.push(GitRepoEntry {
+                    name: display_name,
+                    path: child_path.to_string_lossy().to_string(),
+                });
+                // 仓库里面不再下钻（避免跳进 submodule / nested .git）
+                continue;
+            }
+            if depth + 1 < SCAN_MAX_DEPTH {
+                scan_dir_for_repos(&child_path, &display_name, depth + 1, out).await;
+            }
+        }
+    })
+}
+
 /// 扫描给定路径，判断它是单个 git 仓库还是一个装有若干 git 仓库的父目录
 ///
 /// **不走路径沙箱** —— 这个命令只读目录项和 `.git` 是否存在，无副作用，
 /// 且被调用时目标路径通常还没被加进 workspace 的允许列表里。
+///
+/// 最多下钻 2 层：parent → child → grandchild。child 自身是 git 仓库就
+/// 加进 members 并停止下钻；child 不是 git 仓库才会再看 grandchild。
 #[tauri::command]
 pub async fn scan_git_repos(path: String) -> Result<ScanResult, String> {
     let canonical = match Path::new(&path).canonicalize() {
@@ -279,36 +339,9 @@ pub async fn scan_git_repos(path: String) -> Result<ScanResult, String> {
         });
     }
 
-    // 2) 否则只扫一层子目录
+    // 2) 否则最多下钻 2 层找 git 仓库
     let mut members: Vec<GitRepoEntry> = Vec::new();
-    let mut dir = tokio::fs::read_dir(&canonical)
-        .await
-        .map_err(|e| format!("读取目录失败: {}", e))?;
-    while let Some(entry) = dir.next_entry().await.map_err(|e| e.to_string())? {
-        let file_name = entry.file_name();
-        let name = file_name.to_string_lossy().to_string();
-        if name.starts_with('.') {
-            continue; // 隐藏目录 / . / ..
-        }
-        if SCAN_BLACKLIST.iter().any(|b| *b == name) {
-            continue;
-        }
-        let metadata = match entry.metadata().await {
-            Ok(m) => m,
-            Err(_) => continue,
-        };
-        if !metadata.is_dir() {
-            continue;
-        }
-        let child_path = entry.path();
-        if !child_path.join(".git").exists() {
-            continue;
-        }
-        members.push(GitRepoEntry {
-            name,
-            path: child_path.to_string_lossy().to_string(),
-        });
-    }
+    scan_dir_for_repos(&canonical, "", 0, &mut members).await;
 
     if members.is_empty() {
         return Ok(ScanResult::Empty);
