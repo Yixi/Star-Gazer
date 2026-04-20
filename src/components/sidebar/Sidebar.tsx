@@ -117,6 +117,13 @@ export function Sidebar() {
   const reorderSidebarEntries = useProjectStore(
     (s) => s.reorderSidebarEntries,
   );
+  const createGroupFromProjects = useProjectStore(
+    (s) => s.createGroupFromProjects,
+  );
+  const moveProjectIntoGroup = useProjectStore((s) => s.moveProjectIntoGroup);
+  const detachProjectToTopLevel = useProjectStore(
+    (s) => s.detachProjectToTopLevel,
+  );
   const activeProjectExpanded = activeProject
     ? !!expandedProjectIds[activeProject.id]
     : false;
@@ -162,14 +169,43 @@ export function Sidebar() {
   );
   const registerFlipRef = useFlipReorder(rowKeys);
 
-  // 拖拽排序：key = group.id 或 project.id（不带前缀，由 store 逻辑处理）
+  // ========================================
+  // 拖拽排序 / 分组
+  // ========================================
+  //
+  // 三区识别（顶层 project / group header 行）：
+  //   top 25%   → "before"（行前插入）
+  //   mid 50%   → "into"（合入/加入组）
+  //   bot 25%   → "after"（行后插入）
+  //
+  // 成员行（组内）只有 2 区：top 50% = before，bottom 50% = after；
+  // 拖拽源是 group 时也只给 2 区（组不允许嵌套到另一个组里）。
+  //
+  // 拖拽组合 → 调用哪个 store action：
+  //   project → top-level project, into  → createGroupFromProjects
+  //   project → group header,       into  → moveProjectIntoGroup（append）
+  //   project → member,             b/a   → moveProjectIntoGroup（refMember）
+  //   组内成员 → 顶层 project/group,  b/a   → detachProjectToTopLevel
+  //   独立 project → 顶层 project/group, b/a → reorderSidebarEntries
+  //   group → 顶层 project/group,     b/a   → reorderSidebarEntries
+  type DropKind = "project-top" | "group" | "member";
+  type DropZone = "before" | "into" | "after";
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{
     id: string;
-    position: "before" | "after";
+    zone: DropZone;
+    kind: DropKind;
   } | null>(null);
 
-  const handleProjectDragStart = useCallback(
+  const draggingIsGroup = useMemo(
+    () =>
+      draggingId
+        ? projectGroups.some((g) => g.id === draggingId)
+        : false,
+    [draggingId, projectGroups],
+  );
+
+  const handleRowDragStart = useCallback(
     (e: React.DragEvent, id: string) => {
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setData("application/x-stargazer-project", id);
@@ -178,38 +214,116 @@ export function Sidebar() {
     [],
   );
 
-  const handleProjectDragOver = useCallback(
-    (e: React.DragEvent, id: string) => {
-      if (!draggingId || draggingId === id) return;
+  const handleRowDragOver = useCallback(
+    (e: React.DragEvent, targetId: string, kind: DropKind) => {
+      if (!draggingId || draggingId === targetId) return;
+
+      // 组不允许被当成"合入/嵌套"的源：
+      // - 拖组到组/项目的 into 区 → 无效
+      // - 拖组到 member 行（任何区）→ 无效（组不能变成另一个组的成员）
+      if (draggingIsGroup && kind === "member") return;
+
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const ratio = (e.clientY - rect.top) / rect.height;
+
+      let zone: DropZone;
+      // member 行 + 拖组，都走 2 区
+      const twoZone = kind === "member" || draggingIsGroup;
+      if (twoZone) {
+        zone = ratio < 0.5 ? "before" : "after";
+      } else {
+        if (ratio < 0.25) zone = "before";
+        else if (ratio > 0.75) zone = "after";
+        else zone = "into";
+      }
+
+      // 拖组到自己的 into 永不合法（虽然 id 相等已经提前返回）
       e.preventDefault();
       e.dataTransfer.dropEffect = "move";
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      const position: "before" | "after" =
-        e.clientY - rect.top < rect.height / 2 ? "before" : "after";
       setDropTarget((prev) => {
-        if (prev && prev.id === id && prev.position === position) return prev;
-        return { id, position };
+        if (
+          prev &&
+          prev.id === targetId &&
+          prev.zone === zone &&
+          prev.kind === kind
+        ) {
+          return prev;
+        }
+        return { id: targetId, zone, kind };
       });
     },
-    [draggingId],
+    [draggingId, draggingIsGroup],
   );
 
-  const handleProjectDragEnd = useCallback(() => {
+  const handleRowDragEnd = useCallback(() => {
     setDraggingId(null);
     setDropTarget(null);
   }, []);
 
-  const handleProjectDrop = useCallback(
-    (e: React.DragEvent, id: string) => {
+  const handleRowDrop = useCallback(
+    (e: React.DragEvent, targetId: string, kind: DropKind) => {
       e.preventDefault();
+      e.stopPropagation();
       const fromId = draggingId;
-      const pos = dropTarget?.position ?? "before";
+      const zone = dropTarget?.zone ?? "before";
+      const resolvedKind = dropTarget?.kind ?? kind;
       setDraggingId(null);
       setDropTarget(null);
-      if (!fromId || fromId === id) return;
-      reorderSidebarEntries(fromId, id, pos);
+      if (!fromId || fromId === targetId) return;
+
+      const fromIsGroup = projectGroups.some((g) => g.id === fromId);
+
+      // into 区：合成组 / 加入组
+      if (zone === "into") {
+        if (fromIsGroup) return; // 组不允许合并/嵌套
+        if (resolvedKind === "group") {
+          void moveProjectIntoGroup(fromId, targetId);
+          return;
+        }
+        if (resolvedKind === "project-top") {
+          // 顺序：被拖的放后面（点哪个就把另一个拖过来是更自然的心智）
+          void createGroupFromProjects([targetId, fromId]);
+          return;
+        }
+        return;
+      }
+
+      // before / after 区
+      if (resolvedKind === "member") {
+        if (fromIsGroup) return;
+        const memberProject = projects.find((p) => p.id === targetId);
+        if (!memberProject?.groupId) return;
+        moveProjectIntoGroup(fromId, memberProject.groupId, {
+          refMemberId: targetId,
+          position: zone,
+        });
+        return;
+      }
+
+      // 目标是顶层 project / group
+      if (fromIsGroup) {
+        reorderSidebarEntries(fromId, targetId, zone);
+        return;
+      }
+      const fromProject = projects.find((p) => p.id === fromId);
+      if (!fromProject) return;
+      if (fromProject.groupId) {
+        // 从组里拖出来 → 变独立项目
+        detachProjectToTopLevel(fromId, { refKey: targetId, position: zone });
+        return;
+      }
+      reorderSidebarEntries(fromId, targetId, zone);
     },
-    [draggingId, dropTarget, reorderSidebarEntries],
+    [
+      draggingId,
+      dropTarget,
+      projects,
+      projectGroups,
+      reorderSidebarEntries,
+      createGroupFromProjects,
+      moveProjectIntoGroup,
+      detachProjectToTopLevel,
+    ],
   );
 
   return (
@@ -351,8 +465,8 @@ export function Sidebar() {
                       const isActive = activeProject?.id === project.id;
                       const isExpanded = !!expandedProjectIds[project.id];
                       const isDragging = draggingId === project.id;
-                      const indicator =
-                        dropTarget?.id === project.id ? dropTarget.position : null;
+                      const target =
+                        dropTarget?.id === project.id ? dropTarget : null;
                       return (
                         <div
                           key={`p-${project.id}`}
@@ -365,36 +479,29 @@ export function Sidebar() {
                               : undefined,
                           }}
                         >
-                          <div
-                            draggable
-                            onDragStart={(e) =>
-                              handleProjectDragStart(e, project.id)
-                            }
-                            onDragOver={(e) =>
-                              handleProjectDragOver(e, project.id)
-                            }
-                            onDragEnd={handleProjectDragEnd}
-                            onDrop={(e) => handleProjectDrop(e, project.id)}
-                          >
+                          <div className="relative">
                             <ProjectItem
                               project={project}
                               isActive={isActive}
                               isExpanded={isExpanded}
-                            />
-                          </div>
-                          {isExpanded && <ProjectBody project={project} />}
-                          {indicator && (
-                            <div
-                              className="absolute left-0 right-0 pointer-events-none"
-                              style={{
-                                [indicator === "before" ? "top" : "bottom"]: -1,
-                                height: 2,
-                                background: "#4a9eff",
-                                boxShadow: "0 0 6px rgba(74,158,255,0.7)",
-                                zIndex: 10,
+                              dragProps={{
+                                draggable: true,
+                                onDragStart: (e) =>
+                                  handleRowDragStart(e, project.id),
+                                onDragOver: (e) =>
+                                  handleRowDragOver(
+                                    e,
+                                    project.id,
+                                    "project-top",
+                                  ),
+                                onDragEnd: handleRowDragEnd,
+                                onDrop: (e) =>
+                                  handleRowDrop(e, project.id, "project-top"),
                               }}
                             />
-                          )}
+                            {target && <DropIndicator zone={target.zone} />}
+                          </div>
+                          {isExpanded && <ProjectBody project={project} />}
                         </div>
                       );
                     }
@@ -403,8 +510,8 @@ export function Sidebar() {
                     const group = row.group;
                     const groupExpanded = !!expandedProjectIds[group.id];
                     const isDragging = draggingId === group.id;
-                    const indicator =
-                      dropTarget?.id === group.id ? dropTarget.position : null;
+                    const groupTarget =
+                      dropTarget?.id === group.id ? dropTarget : null;
                     return (
                       <div
                         key={`g-${group.id}`}
@@ -417,17 +524,7 @@ export function Sidebar() {
                             : undefined,
                         }}
                       >
-                        <div
-                          draggable
-                          onDragStart={(e) =>
-                            handleProjectDragStart(e, group.id)
-                          }
-                          onDragOver={(e) =>
-                            handleProjectDragOver(e, group.id)
-                          }
-                          onDragEnd={handleProjectDragEnd}
-                          onDrop={(e) => handleProjectDrop(e, group.id)}
-                        >
+                        <div className="relative">
                           <ProjectGroupItem
                             group={group}
                             members={row.members}
@@ -435,7 +532,20 @@ export function Sidebar() {
                             onToggleExpanded={() =>
                               toggleProjectExpanded(group.id)
                             }
+                            dragProps={{
+                              draggable: true,
+                              onDragStart: (e) =>
+                                handleRowDragStart(e, group.id),
+                              onDragOver: (e) =>
+                                handleRowDragOver(e, group.id, "group"),
+                              onDragEnd: handleRowDragEnd,
+                              onDrop: (e) =>
+                                handleRowDrop(e, group.id, "group"),
+                            }}
                           />
+                          {groupTarget && (
+                            <DropIndicator zone={groupTarget.zone} />
+                          )}
                         </div>
                         {/* 组展开 → 成员（ProjectItem，depth=1） */}
                         {groupExpanded &&
@@ -444,35 +554,51 @@ export function Sidebar() {
                               activeProject?.id === member.id;
                             const memberExpanded =
                               !!expandedProjectIds[member.id];
+                            const memberDragging = draggingId === member.id;
+                            const memberTarget =
+                              dropTarget?.id === member.id ? dropTarget : null;
                             return (
                               <div
                                 key={member.id}
                                 className="flex flex-col flex-shrink-0"
+                                style={{
+                                  opacity: memberDragging ? 0.4 : 1,
+                                  willChange: memberDragging
+                                    ? "transform, opacity"
+                                    : undefined,
+                                }}
                               >
-                                <ProjectItem
-                                  project={member}
-                                  isActive={memberActive}
-                                  isExpanded={memberExpanded}
-                                  depth={1}
-                                />
+                                <div className="relative">
+                                  <ProjectItem
+                                    project={member}
+                                    isActive={memberActive}
+                                    isExpanded={memberExpanded}
+                                    depth={1}
+                                    dragProps={{
+                                      draggable: true,
+                                      onDragStart: (e) =>
+                                        handleRowDragStart(e, member.id),
+                                      onDragOver: (e) =>
+                                        handleRowDragOver(
+                                          e,
+                                          member.id,
+                                          "member",
+                                        ),
+                                      onDragEnd: handleRowDragEnd,
+                                      onDrop: (e) =>
+                                        handleRowDrop(e, member.id, "member"),
+                                    }}
+                                  />
+                                  {memberTarget && (
+                                    <DropIndicator zone={memberTarget.zone} />
+                                  )}
+                                </div>
                                 {memberExpanded && (
                                   <ProjectBody project={member} />
                                 )}
                               </div>
                             );
                           })}
-                        {indicator && (
-                          <div
-                            className="absolute left-0 right-0 pointer-events-none"
-                            style={{
-                              [indicator === "before" ? "top" : "bottom"]: -1,
-                              height: 2,
-                              background: "#4a9eff",
-                              boxShadow: "0 0 6px rgba(74,158,255,0.7)",
-                              zIndex: 10,
-                            }}
-                          />
-                        )}
                       </div>
                     );
                   })}
@@ -530,6 +656,40 @@ function ProjectBody({ project }: { project: Project }) {
 function HiddenProjectGitSync({ project }: { project: Project }) {
   useProjectGitSync(project);
   return null;
+}
+
+/**
+ * 拖拽落点指示器
+ * - before / after：蓝色横线（2px 全宽）
+ * - into：蓝色内嵌外框 + 半透明填色（合入组 / 合成组）
+ */
+function DropIndicator({ zone }: { zone: "before" | "into" | "after" }) {
+  if (zone === "into") {
+    return (
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          border: "1.5px solid #4a9eff",
+          borderRadius: 3,
+          background: "rgba(74,158,255,0.10)",
+          boxShadow: "0 0 0 1px rgba(74,158,255,0.25) inset",
+          zIndex: 10,
+        }}
+      />
+    );
+  }
+  return (
+    <div
+      className="absolute left-0 right-0 pointer-events-none"
+      style={{
+        [zone === "before" ? "top" : "bottom"]: -1,
+        height: 2,
+        background: "#4a9eff",
+        boxShadow: "0 0 6px rgba(74,158,255,0.7)",
+        zIndex: 10,
+      }}
+    />
+  );
 }
 
 /** 折叠模式下的项目图标 */

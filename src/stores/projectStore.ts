@@ -27,6 +27,64 @@ function pushProjectPathsToBackend(
   });
 }
 
+/**
+ * 取一组路径的公共父目录。用在拖拽合组时给新 group 算 path
+ * （agent 关联该组时 PTY 在这里启动）。
+ *
+ * 实现：先把每条 path 取 parent，再按 "/" 切片找最长公共前缀；
+ * 无公共前缀时退化到第一条 path 的 parent。
+ */
+function deriveGroupPath(paths: string[]): string {
+  if (paths.length === 0) return "";
+  const parents = paths.map((p) => {
+    const i = p.lastIndexOf("/");
+    return i >= 0 ? p.substring(0, i) : p;
+  });
+  const parts = parents.map((p) => p.split("/"));
+  const minLen = Math.min(...parts.map((s) => s.length));
+  const common: string[] = [];
+  for (let i = 0; i < minLen; i++) {
+    const seg = parts[0][i];
+    if (parts.every((s) => s[i] === seg)) common.push(seg);
+    else break;
+  }
+  const joined = common.join("/");
+  // joined 可能是空字符串（完全没共同前缀）或仅 "/"（只有 root），
+  // 这两种情况都退化到第一个成员的 parent
+  if (!joined || joined === "/") return parents[0];
+  return joined;
+}
+
+/** 从一组路径推导组名：取公共父目录 basename，兜底 "新分组" */
+function deriveGroupName(paths: string[]): string {
+  const parent = deriveGroupPath(paths);
+  const seg = parent.split("/").filter(Boolean).pop();
+  return seg && seg.length > 0 ? seg : "新分组";
+}
+
+/**
+ * 在 projects 数组里找一个合适的位置把新成员追加到 `groupId` 组的末尾。
+ * 返回的 index 是 "插入位置"（splice idx），保证插入后组成员保持相邻。
+ *
+ * 若组当前没成员（极端情况），回退到数组末尾。
+ */
+function findGroupInsertEnd(projects: Project[], groupId: string): number {
+  let lastIdx = -1;
+  for (let i = 0; i < projects.length; i++) {
+    if (projects[i].groupId === groupId) lastIdx = i;
+  }
+  return lastIdx < 0 ? projects.length : lastIdx + 1;
+}
+
+/** 移除没有任何成员的孤儿组 */
+function pruneEmptyGroups(
+  groups: ProjectGroup[],
+  projects: Project[],
+): ProjectGroup[] {
+  const used = new Set(projects.map((p) => p.groupId).filter(Boolean));
+  return groups.filter((g) => used.has(g.id));
+}
+
 /** 文件 Git diff 统计 */
 export interface FileDiffStat {
   additions: number;
@@ -104,6 +162,36 @@ interface ProjectState {
     fromKey: string,
     toKey: string,
     position: "before" | "after",
+  ) => void;
+  /**
+   * 把一组现有项目合并成一个新分组。
+   * - `memberIds` 至少 2 项；第一个作为锚点，新组插在它原来的位置
+   * - 成员若原本就在其他组里，会自动脱离（老组空了会自动清理）
+   * - 组的 path 取成员路径的公共父目录，用作 agent PTY cwd
+   * - 组的 name 若未给，取公共父目录 basename（兜底 "新分组"）
+   */
+  createGroupFromProjects: (
+    memberIds: string[],
+    name?: string,
+  ) => Promise<void>;
+  /**
+   * 把一个项目移动到指定组。
+   * - `refMemberId` 给了就落在该成员前/后；否则追加到组末尾
+   * - 若项目原来就在别的组里，会自动脱离（老组空了自动清理）
+   */
+  moveProjectIntoGroup: (
+    projectId: string,
+    groupId: string,
+    opts?: { refMemberId?: string; position?: "before" | "after" },
+  ) => void;
+  /**
+   * 把一个组成员拖出来变独立项目。
+   * - `refKey` 可以是顶层 project.id 或 group.id；未给则追加到末尾
+   * - 项目脱离后老组若空了会自动清理
+   */
+  detachProjectToTopLevel: (
+    projectId: string,
+    opts?: { refKey?: string; position?: "before" | "after" },
   ) => void;
   /** 设置当前项目（git/文件监听的目标） */
   setActiveProject: (project: Project | null) => void;
@@ -276,6 +364,155 @@ export const useProjectStore = create<ProjectState>((set) => ({
       arr.splice(toIdx, 0, moved);
       pushProjectPathsToBackend(arr, state.projectGroups);
       return { projects: arr };
+    }),
+
+  createGroupFromProjects: async (memberIds, name) => {
+    if (memberIds.length < 2) return;
+    const state = useProjectStore.getState();
+    const idSet = new Set(memberIds);
+    // 按 memberIds 给定顺序找出对应的 Project，过滤掉无效 id
+    const members = memberIds
+      .map((id) => state.projects.find((p) => p.id === id))
+      .filter((p): p is Project => !!p);
+    if (members.length < 2) return;
+
+    const newGroup: ProjectGroup = {
+      id: `group-${
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      }`,
+      name: (name ?? "").trim() || deriveGroupName(members.map((m) => m.path)),
+      path: deriveGroupPath(members.map((m) => m.path)),
+    };
+
+    // 以 memberIds[0] 在 projects 数组里的位置为锚点
+    const anchorIdx = state.projects.findIndex((p) => p.id === members[0].id);
+    const removedBefore = state.projects
+      .slice(0, anchorIdx)
+      .filter((p) => idSet.has(p.id)).length;
+    const insertIdx = anchorIdx - removedBefore;
+
+    const stripped = state.projects.filter((p) => !idSet.has(p.id));
+    const rebuilt: Project[] = members.map((m) => ({
+      ...m,
+      groupId: newGroup.id,
+    }));
+    stripped.splice(insertIdx, 0, ...rebuilt);
+
+    // 如果成员原本分属的老组现在没成员了，清掉
+    const nextGroups = pruneEmptyGroups(
+      [...state.projectGroups, newGroup],
+      stripped,
+    );
+
+    // 先 await 沙箱同步（新 group.path 可能没被加进 allow-list），再 setState
+    try {
+      await syncWorkspaceProjectPaths([
+        ...stripped.map((p) => p.path),
+        ...nextGroups.map((g) => g.path),
+      ]);
+    } catch (err) {
+      console.warn(
+        "syncWorkspaceProjectPaths failed during createGroupFromProjects:",
+        err,
+      );
+    }
+
+    useProjectStore.setState({
+      projects: stripped,
+      projectGroups: nextGroups,
+      expandedProjectIds: {
+        ...state.expandedProjectIds,
+        [newGroup.id]: true,
+      },
+    });
+  },
+
+  moveProjectIntoGroup: (projectId, groupId, opts) =>
+    set((state) => {
+      const target = state.projects.find((p) => p.id === projectId);
+      if (!target) return state;
+      if (target.groupId === groupId && !opts?.refMemberId) return state;
+      const group = state.projectGroups.find((g) => g.id === groupId);
+      if (!group) return state;
+
+      // 从数组里摘出目标
+      const stripped = state.projects.filter((p) => p.id !== projectId);
+      const moved: Project = { ...target, groupId };
+
+      let insertIdx: number;
+      if (opts?.refMemberId) {
+        const refIdx = stripped.findIndex((p) => p.id === opts.refMemberId);
+        if (refIdx < 0) {
+          // ref 找不到，退化为追加
+          insertIdx = findGroupInsertEnd(stripped, groupId);
+        } else {
+          insertIdx = opts.position === "before" ? refIdx : refIdx + 1;
+        }
+      } else {
+        insertIdx = findGroupInsertEnd(stripped, groupId);
+      }
+      stripped.splice(insertIdx, 0, moved);
+
+      const nextGroups = pruneEmptyGroups(state.projectGroups, stripped);
+      pushProjectPathsToBackend(stripped, nextGroups);
+      // 确保目标组展开，方便用户看到结果
+      return {
+        projects: stripped,
+        projectGroups: nextGroups,
+        expandedProjectIds: {
+          ...state.expandedProjectIds,
+          [groupId]: true,
+        },
+      };
+    }),
+
+  detachProjectToTopLevel: (projectId, opts) =>
+    set((state) => {
+      const target = state.projects.find((p) => p.id === projectId);
+      if (!target) return state;
+      if (!target.groupId && !opts?.refKey) return state;
+
+      const stripped = state.projects.filter((p) => p.id !== projectId);
+      const detached: Project = { ...target };
+      delete detached.groupId;
+
+      let insertIdx: number;
+      if (opts?.refKey) {
+        const position = opts.position ?? "before";
+        const refGroup = state.projectGroups.find(
+          (g) => g.id === opts.refKey,
+        );
+        if (refGroup) {
+          // refKey 是组 id：before → 组首成员之前；after → 组末成员之后
+          const groupIndices = stripped
+            .map((p, i) => ({ p, i }))
+            .filter((x) => x.p.groupId === refGroup.id)
+            .map((x) => x.i);
+          if (groupIndices.length === 0) {
+            insertIdx = stripped.length;
+          } else if (position === "before") {
+            insertIdx = groupIndices[0];
+          } else {
+            insertIdx = groupIndices[groupIndices.length - 1] + 1;
+          }
+        } else {
+          const refIdx = stripped.findIndex((p) => p.id === opts.refKey);
+          if (refIdx < 0) {
+            insertIdx = stripped.length;
+          } else {
+            insertIdx = position === "before" ? refIdx : refIdx + 1;
+          }
+        }
+      } else {
+        insertIdx = stripped.length;
+      }
+      stripped.splice(insertIdx, 0, detached);
+
+      const nextGroups = pruneEmptyGroups(state.projectGroups, stripped);
+      pushProjectPathsToBackend(stripped, nextGroups);
+      return { projects: stripped, projectGroups: nextGroups };
     }),
 
   reorderSidebarEntries: (fromKey, toKey, position) =>

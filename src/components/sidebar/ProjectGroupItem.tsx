@@ -27,6 +27,14 @@ interface ProjectGroupItemProps {
   members: Project[];
   isExpanded: boolean;
   onToggleExpanded: () => void;
+  /** 透传到内部 <button> 的 drag props（见 ProjectItem 同名 prop 的说明） */
+  dragProps?: {
+    draggable?: boolean;
+    onDragStart?: (e: React.DragEvent) => void;
+    onDragOver?: (e: React.DragEvent) => void;
+    onDragEnd?: (e: React.DragEvent) => void;
+    onDrop?: (e: React.DragEvent) => void;
+  };
 }
 
 /** 防御性取显示名：group.name 为空时降级到 path 的 basename */
@@ -41,6 +49,7 @@ export function ProjectGroupItem({
   members,
   isExpanded,
   onToggleExpanded,
+  dragProps,
 }: ProjectGroupItemProps) {
   const removeProjectGroup = useProjectStore((s) => s.removeProjectGroup);
   const renameProjectGroup = useProjectStore((s) => s.renameProjectGroup);
@@ -163,6 +172,7 @@ export function ProjectGroupItem({
           onToggleExpanded();
         }}
         onContextMenu={handleContextMenu}
+        {...(dragProps ?? {})}
       >
         {/* caret */}
         {isExpanded ? (

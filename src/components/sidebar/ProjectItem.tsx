@@ -38,9 +38,29 @@ interface ProjectItemProps {
   isExpanded: boolean;
   /** 缩进层级（组成员为 1，独立项目为 0） */
   depth?: number;
+  /**
+   * 拖拽相关 props —— 直接挂到内部 <button> 上。
+   *
+   * 注意：必须挂在 button 本身，不能套一层 draggable 的 wrapper div。
+   * WKWebView（Tauri）下，button 的 mousedown 会压制外层 div 的 drag，
+   * 导致拖不起来。Chromium 行为和 WebKit 不一致，踩过坑。
+   */
+  dragProps?: {
+    draggable?: boolean;
+    onDragStart?: (e: React.DragEvent) => void;
+    onDragOver?: (e: React.DragEvent) => void;
+    onDragEnd?: (e: React.DragEvent) => void;
+    onDrop?: (e: React.DragEvent) => void;
+  };
 }
 
-export function ProjectItem({ project, isActive, isExpanded, depth = 0 }: ProjectItemProps) {
+export function ProjectItem({
+  project,
+  isActive,
+  isExpanded,
+  depth = 0,
+  dragProps,
+}: ProjectItemProps) {
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
   const toggleProjectExpanded = useProjectStore((s) => s.toggleProjectExpanded);
   const removeProject = useProjectStore((s) => s.removeProject);
@@ -181,6 +201,7 @@ export function ProjectItem({ project, isActive, isExpanded, depth = 0 }: Projec
           setActiveProject(project);
         }}
         onContextMenu={handleContextMenu}
+        {...(dragProps ?? {})}
       >
         {/* 左侧高亮竖条 — active 状态 */}
         {isActive && (
