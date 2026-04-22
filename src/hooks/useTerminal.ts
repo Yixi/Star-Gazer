@@ -179,45 +179,74 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
     // 根据当前 Canvas zoom 决定初始 renderer（WebGL or DOM）
     applyRenderer();
 
-    // macOS 中文/日文输入法下 shift+ASCII 吞字的 workaround。
+    // macOS 中文/日文输入法下 keyCode=229 吞字/重复的 workaround。
     //
-    // 成因：xterm.js CompositionHelper.keydown 看到 keyCode === 229（IME 激活
-    // 时所有键都被标成 229）后走 _handleAnyTextareaChanges 的 setTimeout diff
-    // 路径；但 macOS IME 对 shift 组合会先触发一个瞬时 compositionstart，导致
-    // setTimeout 跑时 _isComposing === true，整个分支被跳过、字符彻底丢失。
-    // 上游 issue: https://github.com/xtermjs/xterm.js/issues/5374（至今未修，
-    // VSCode 终端同样中招但选择了 upstream 标签不修）。
+    // 背景问题 1（吞字）：xterm.js CompositionHelper.keydown 看到 keyCode===229
+    // 后走 _handleAnyTextareaChanges 的 setTimeout+!_isComposing diff 路径；但
+    // macOS IME 对某些组合会触发瞬时 compositionstart，导致 setTimeout 跑时
+    // _isComposing===true、整个分支被跳过，字符彻底丢失（上游 issue #5374 未修，
+    // VSCode 同样中招）。覆盖场景：shift+符号、shift+字母、以及中文 IME 切到
+    // 英文模式后快速连打小写字母。
     //
-    // 这里在 customKeyEventHandler 里提前拦截：IME 激活 + 无 meta/ctrl/alt +
-    // 非 composition 中 + 带 shift 的单字符 ASCII 可打印（含字母），直接写
-    // PTY 并吃掉事件，绕开 xterm 的 keyCode=229 路径。
+    // 背景问题 2（重复）：之前版本无条件拦截所有 shift+ASCII，但纯英文 IME 下
+    // keyCode 是真实值（65 等），xterm 的 _keyPress 会再次调用
+    // customKeyEventHandler，因我们只处理 keydown 会返回 true → _keyPress 继续
+    // 执行 triggerDataEvent，导致同一字符被写入 PTY 两次。
     //
-    // 为什么只拦 shift 组合、不拦无 shift 的字母：后者（event.key 是 "a"）
-    // 无法在 keydown 时与中文拼音 composition 的首字母区分（两者都是
-    // keyCode=229 + isComposing=false），贸然拦截会让拼音首字母泄露到 PTY
-    // 再被 compositionend 的中文字符追加，破坏中文输入。shift 组合不会进入
-    // IME composition 缓冲区（IME 层会把 shift+letter 作为英文直出或吞掉），
-    // 所以拦截是安全的。这覆盖了：shift+符号（@#$%）、shift+字母（切英文
-    // 模式后连按 shift+ABC）。纯模式切换后连续小写字母的场景暂未覆盖。
+    // Workaround 设计：
+    // - **只在 keyCode===229 时拦截**（IME 激活态才有吞字问题；纯英文 IME 走
+    //   xterm 原路径、_keyPress 正常触发一次，不重复）。
+    // - 拦截范围扩展到所有无 ctrl/meta/alt 的单字符 ASCII 可打印键（不再限定
+    //   shift），以覆盖 ABC 英文模式下小写字母吞字。
+    // - 自己监听 compositionstart/end 维护 `imeComposing` 标记；拦截时用
+    //   setTimeout(0) 延迟发送，给同 task 内的 compositionstart 取消 pending
+    //   的机会 —— 拼音首字母（'n' 等）会被 compositionstart 取消送交 IME，
+    //   ABC 英文模式则不触发 compositionstart、延迟到期后正常送达 PTY。
+    let imeComposing = false;
+    const pendingTimers = new Set<number>();
+    const cancelAllPending = () => {
+      for (const t of pendingTimers) window.clearTimeout(t);
+      pendingTimers.clear();
+    };
+    const ta = terminal.textarea;
+    const onCompositionStart = () => {
+      imeComposing = true;
+      // 拼音/日文组字启动：同 task 内丢弃我们刚刚排队的 ASCII 发送，让 IME 接管
+      cancelAllPending();
+    };
+    const onCompositionEnd = () => {
+      imeComposing = false;
+    };
+    if (ta) {
+      ta.addEventListener("compositionstart", onCompositionStart);
+      ta.addEventListener("compositionend", onCompositionEnd);
+      unlistenersRef.current.push(() => {
+        ta.removeEventListener("compositionstart", onCompositionStart);
+        ta.removeEventListener("compositionend", onCompositionEnd);
+        cancelAllPending();
+      });
+    }
+
     terminal.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown") return true;
-      if (
-        event.shiftKey &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        !event.isComposing &&
-        event.key.length === 1
-      ) {
-        const code = event.key.charCodeAt(0);
-        if (code >= 0x20 && code <= 0x7e) {
-          if (generationRef.current === myGeneration) {
-            ptyService.writeTerminal(terminalId, event.key);
-          }
-          return false;
-        }
-      }
-      return true;
+      if (event.keyCode !== 229) return true;
+      if (event.metaKey || event.ctrlKey || event.altKey) return true;
+      if (event.isComposing || imeComposing) return true;
+      if (event.key.length !== 1) return true;
+      const code = event.key.charCodeAt(0);
+      if (code < 0x20 || code > 0x7e) return true;
+
+      const key = event.key;
+      const timer = window.setTimeout(() => {
+        pendingTimers.delete(timer);
+        if (imeComposing) return; // compositionstart 已在同 task 内取消
+        if (generationRef.current !== myGeneration) return;
+        ptyService.writeTerminal(terminalId, key);
+        // 清空隐藏 textarea，防止 default action 累积的字符污染后续 composition
+        if (ta) ta.value = "";
+      }, 0);
+      pendingTimers.add(timer);
+      return false;
     });
 
     // 先注册事件监听，再创建 PTY，避免丢失 shell 初始输出（prompt 等）
