@@ -179,29 +179,37 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
     // 根据当前 Canvas zoom 决定初始 renderer（WebGL or DOM）
     applyRenderer();
 
-    // macOS 中文/日文输入法下 keyCode=229 吞字/重复的 workaround。
+    // IME（中/日/韩输入法）workaround —— 针对 xterm.js 的三条上游 bug，
+    // #5374 / #1939 至今未修，VSCode 终端同样中招但标 upstream 不修。
     //
-    // 背景问题 1（吞字）：xterm.js CompositionHelper.keydown 看到 keyCode===229
-    // 后走 _handleAnyTextareaChanges 的 setTimeout+!_isComposing diff 路径；但
-    // macOS IME 对某些组合会触发瞬时 compositionstart，导致 setTimeout 跑时
-    // _isComposing===true、整个分支被跳过，字符彻底丢失（上游 issue #5374 未修，
-    // VSCode 同样中招）。覆盖场景：shift+符号、shift+字母、以及中文 IME 切到
-    // 英文模式后快速连打小写字母。
+    // 【bug A：提交键泄露到 PTY，"你 好 " / "，,"】
+    // xterm.js CompositionHelper.keydown 在 _isComposing=true 时，若 keyCode
+    // 不是 229/CapsLock/修饰键，会走 _finalizeComposition(false) 同步提交组字，
+    // 再 return true 让 _keyDown 继续把该按键当普通键 triggerDataEvent 一次。
+    // 中文拼音空格选字 space.keyCode=32，连写变成 "你 好 "；中文 IME 标点
+    // 触发的瞬时 composition 也会借此路径额外发一次 ","。WebKit/Chromium 皆有。
     //
-    // 背景问题 2（重复）：之前版本无条件拦截所有 shift+ASCII，但纯英文 IME 下
-    // keyCode 是真实值（65 等），xterm 的 _keyPress 会再次调用
-    // customKeyEventHandler，因我们只处理 keydown 会返回 true → _keyPress 继续
-    // 执行 triggerDataEvent，导致同一字符被写入 PTY 两次。
+    // 【bug B：shift+符号丢字】
+    // 中文/日文 IME 下 shift+@#$ 等会触发瞬时 compositionstart，
+    // _handleAnyTextareaChanges 的 setTimeout 跑时 _isComposing=true、整条
+    // diff 分支被跳过、字符丢失。
     //
-    // Workaround 设计：
-    // - **只在 keyCode===229 时拦截**（IME 激活态才有吞字问题；纯英文 IME 走
-    //   xterm 原路径、_keyPress 正常触发一次，不重复）。
-    // - 拦截范围扩展到所有无 ctrl/meta/alt 的单字符 ASCII 可打印键（不再限定
-    //   shift），以覆盖 ABC 英文模式下小写字母吞字。
-    // - 自己监听 compositionstart/end 维护 `imeComposing` 标记；拦截时用
-    //   setTimeout(0) 延迟发送，给同 task 内的 compositionstart 取消 pending
-    //   的机会 —— 拼音首字母（'n' 等）会被 compositionstart 取消送交 IME，
-    //   ABC 英文模式则不触发 compositionstart、延迟到期后正常送达 PTY。
+    // 【bug C：ABC 英文模式吞字 / 英文 IME shift+字符重复】
+    // 中文 IME 切 ABC 模式 keyCode=229 但无 composition，快打踩 xterm
+    // setTimeout+!_isComposing 竞态丢字；纯英文 IME 下无条件拦 shift+ASCII
+    // 又会让 xterm _keyPress 再 triggerDataEvent 一次造成重复。
+    //
+    // 修复策略：
+    // 1) 自挂 compositionstart/end 到 textarea，维护 imeComposing 标记。
+    // 2) 组字期间（event.isComposing || imeComposing）**所有** keydown 返回 false，
+    //    xterm _keyDown 直接短路，提交键不会被 triggerDataEvent。提交文本由
+    //    compositionend → _finalizeComposition 从 textarea.value 读出来发 ——
+    //    这条路 xterm 处理得对，覆盖 bug A。
+    // 3) 非组字态 + keyCode===229 + 单字符 ASCII 可打印 + 无 ctrl/meta/alt：
+    //    setTimeout(0) 排队发送；同 task 内若 compositionstart 触发则
+    //    cancelAllPending 把 pending 交回 IME（拼音首字母走这条路），否则
+    //    延迟到期送出（ABC 模式 / shift+@#$）。只在 keyCode===229 时拦，
+    //    纯英文 IME 走 xterm 原路径避免 bug C 重复。
     let imeComposing = false;
     const pendingTimers = new Set<number>();
     const cancelAllPending = () => {
@@ -211,7 +219,7 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
     const ta = terminal.textarea;
     const onCompositionStart = () => {
       imeComposing = true;
-      // 拼音/日文组字启动：同 task 内丢弃我们刚刚排队的 ASCII 发送，让 IME 接管
+      // 组字启动：丢弃排队中的 ASCII 发送，让 IME 接管
       cancelAllPending();
     };
     const onCompositionEnd = () => {
@@ -229,24 +237,37 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
 
     terminal.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown") return true;
-      if (event.keyCode !== 229) return true;
-      if (event.metaKey || event.ctrlKey || event.altKey) return true;
-      if (event.isComposing || imeComposing) return true;
-      if (event.key.length !== 1) return true;
-      const code = event.key.charCodeAt(0);
-      if (code < 0x20 || code > 0x7e) return true;
 
-      const key = event.key;
-      const timer = window.setTimeout(() => {
-        pendingTimers.delete(timer);
-        if (imeComposing) return; // compositionstart 已在同 task 内取消
-        if (generationRef.current !== myGeneration) return;
-        ptyService.writeTerminal(terminalId, key);
-        // 清空隐藏 textarea，防止 default action 累积的字符污染后续 composition
-        if (ta) ta.value = "";
-      }, 0);
-      pendingTimers.add(timer);
-      return false;
+      // bug A：组字中（含提交键本身）完全拒绝让 xterm 分发。
+      // event.isComposing 覆盖 WebKit "keydown 仍处于组字中" 的常见路径；
+      // imeComposing 覆盖 "compositionend 先于 keydown 触发" 的罕见路径。
+      // 提交文本由 compositionend → _finalizeComposition 独立发出。
+      if (event.isComposing || imeComposing) return false;
+
+      // bug B + C：非组字态 + keyCode===229 + 单字符 ASCII 可打印 + 无修饰键。
+      if (
+        event.keyCode === 229 &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        event.key.length === 1
+      ) {
+        const code = event.key.charCodeAt(0);
+        if (code >= 0x20 && code <= 0x7e) {
+          const key = event.key;
+          const timer = window.setTimeout(() => {
+            pendingTimers.delete(timer);
+            if (imeComposing) return; // 同 task compositionstart 已取消
+            if (generationRef.current !== myGeneration) return;
+            ptyService.writeTerminal(terminalId, key);
+            // 清空隐藏 textarea，防止 default action 累积污染后续 composition
+            if (ta) ta.value = "";
+          }, 0);
+          pendingTimers.add(timer);
+          return false;
+        }
+      }
+      return true;
     });
 
     // 先注册事件监听，再创建 PTY，避免丢失 shell 初始输出（prompt 等）
