@@ -18,6 +18,7 @@
  * - Hover 时触发关联高亮
  */
 import { useRef, useCallback, useMemo, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X, Minus, Maximize2, Minimize2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useCanvasStore } from "@/stores/canvasStore";
@@ -605,65 +606,67 @@ export function AgentCard({ agent }: AgentCardProps) {
         </div>
       </div>
 
-      {/* 关闭确认对话框 */}
-      {showCloseConfirm && (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.6)" }}
-          onClick={() => setShowCloseConfirm(false)}
-        >
+      {/* 关闭确认对话框 — Portal 到 body，避免被卡片的 transform/z-index stacking context 遮挡 */}
+      {showCloseConfirm &&
+        createPortal(
           <div
-            className="w-[340px] rounded-xl overflow-hidden"
-            style={{
-              background: "var(--sg-bg-card)",
-              border: "1px solid var(--sg-border-secondary)",
-              boxShadow: "var(--sg-shadow-2xl)",
-            }}
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-[1000] flex items-center justify-center"
+            style={{ background: "rgba(0,0,0,0.6)" }}
+            onClick={() => setShowCloseConfirm(false)}
           >
             <div
-              className="px-5 py-4"
+              className="w-[340px] rounded-xl overflow-hidden"
               style={{
-                background: "var(--sg-bg-card-header)",
-                borderBottom: "1px solid var(--sg-border-secondary)",
+                background: "var(--sg-bg-card)",
+                border: "1px solid var(--sg-border-secondary)",
+                boxShadow: "var(--sg-shadow-2xl)",
               }}
+              onClick={(e) => e.stopPropagation()}
             >
-              <h3
-                className="text-sm font-semibold"
-                style={{ color: "var(--sg-text-primary)" }}
+              <div
+                className="px-5 py-4"
+                style={{
+                  background: "var(--sg-bg-card-header)",
+                  borderBottom: "1px solid var(--sg-border-secondary)",
+                }}
               >
-                {t("card.confirmClose")}
-              </h3>
+                <h3
+                  className="text-sm font-semibold"
+                  style={{ color: "var(--sg-text-primary)" }}
+                >
+                  {t("card.confirmClose")}
+                </h3>
+              </div>
+              <div className="p-5">
+                <p
+                  className="text-xs leading-relaxed"
+                  style={{ color: "var(--sg-text-tertiary)" }}
+                >
+                  {t("card.confirmCloseMessage", { name: agent.name })}
+                </p>
+              </div>
+              <div
+                className="flex items-center justify-end gap-3 px-5 py-4"
+                style={{ borderTop: "1px solid var(--sg-border-secondary)" }}
+              >
+                <button
+                  className="px-4 py-2 rounded-lg text-xs hover:bg-white/10 transition-colors"
+                  style={{ color: "var(--sg-text-tertiary)" }}
+                  onClick={() => setShowCloseConfirm(false)}
+                >
+                  {t("card.cancel")}
+                </button>
+                <button
+                  className="px-4 py-2 rounded-lg text-xs font-medium text-white bg-red-600 hover:bg-red-500 transition-colors"
+                  onClick={confirmClose}
+                >
+                  {t("card.confirmCloseButton")}
+                </button>
+              </div>
             </div>
-            <div className="p-5">
-              <p
-                className="text-xs leading-relaxed"
-                style={{ color: "var(--sg-text-tertiary)" }}
-              >
-                {t("card.confirmCloseMessage", { name: agent.name })}
-              </p>
-            </div>
-            <div
-              className="flex items-center justify-end gap-3 px-5 py-4"
-              style={{ borderTop: "1px solid var(--sg-border-secondary)" }}
-            >
-              <button
-                className="px-4 py-2 rounded-lg text-xs hover:bg-white/10 transition-colors"
-                style={{ color: "var(--sg-text-tertiary)" }}
-                onClick={() => setShowCloseConfirm(false)}
-              >
-                {t("card.cancel")}
-              </button>
-              <button
-                className="px-4 py-2 rounded-lg text-xs font-medium text-white bg-red-600 hover:bg-red-500 transition-colors"
-                onClick={confirmClose}
-              >
-                {t("card.confirmCloseButton")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </>
   );
 }
