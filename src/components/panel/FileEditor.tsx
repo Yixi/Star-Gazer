@@ -1,16 +1,15 @@
 /**
- * 文件编辑器 - 使用 CodeMirror 6
+ * 文件编辑器 - 使用 Monaco Editor
  *
  * 功能：
- * - 根据文件扩展名自动加载语言支持
- * - 文件保存 Cmd+S
+ * - 按文件扩展名/文件名自动识别语言（Monaco 内置 80+ 语言高亮）
+ * - Cmd+S 保存
  * - 未保存 dirty 标记
+ *
+ * 仅使用 Monaco 的 Tokenizer 做语法高亮，LSP/诊断/补全等语言服务全部关闭。
  */
 import { useEffect, useRef, useCallback } from "react";
-import { EditorState, type Extension } from "@codemirror/state";
-import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from "@codemirror/view";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { oneDark } from "@codemirror/theme-one-dark";
+import type * as MonacoNs from "monaco-editor";
 import { usePanelStore } from "@/stores/panelStore";
 
 interface FileEditorProps {
@@ -18,95 +17,16 @@ interface FileEditorProps {
   tabId: string;
 }
 
-/** 文件扩展名到语言加载器的映射 */
-async function getLanguageExtension(filePath: string): Promise<Extension | null> {
-  const ext = filePath.split(".").pop()?.toLowerCase();
-  switch (ext) {
-    case "js":
-    case "jsx":
-    case "mjs":
-    case "cjs":
-      return import("@codemirror/lang-javascript").then((m) =>
-        m.javascript({ jsx: ext === "jsx" })
-      );
-    case "ts":
-    case "tsx":
-    case "mts":
-    case "cts":
-      return import("@codemirror/lang-javascript").then((m) =>
-        m.javascript({ jsx: ext === "tsx", typescript: true })
-      );
-    case "py":
-      return import("@codemirror/lang-python").then((m) => m.python());
-    case "rs":
-      return import("@codemirror/lang-rust").then((m) => m.rust());
-    case "json":
-      return import("@codemirror/lang-json").then((m) => m.json());
-    case "md":
-    case "mdx":
-      return import("@codemirror/lang-markdown").then((m) => m.markdown());
-    case "html":
-    case "htm":
-    case "vue":
-    case "svelte":
-      return import("@codemirror/lang-html").then((m) => m.html());
-    case "css":
-    case "scss":
-    case "less":
-      return import("@codemirror/lang-css").then((m) => m.css());
-    default:
-      return null;
-  }
-}
-
-/** CodeMirror 自定义暗色主题 (与 diff 视图保持一致) */
-const starGazerTheme = EditorView.theme({
-  "&": {
-    backgroundColor: "#0d0f14",
-    color: "#b8bcc4",
-    fontSize: "13px",
-    fontFamily: "'SF Mono', Menlo, 'Geist Mono', 'Fira Code', monospace",
-    height: "100%",
-  },
-  ".cm-scroller": {
-    overflow: "auto",
-  },
-  ".cm-gutters": {
-    backgroundColor: "#0d0f14",
-    color: "#4a5263",
-    border: "none",
-    borderRight: "1px solid #1a1c23",
-  },
-  ".cm-activeLineGutter": {
-    backgroundColor: "rgba(74, 158, 255, 0.05)",
-  },
-  ".cm-activeLine": {
-    backgroundColor: "rgba(74, 158, 255, 0.04)",
-  },
-  ".cm-cursor": {
-    borderLeft: "2px solid #4a9eff",
-  },
-  ".cm-selectionBackground": {
-    backgroundColor: "rgba(74, 158, 255, 0.2) !important",
-  },
-  "&.cm-focused .cm-selectionBackground": {
-    backgroundColor: "rgba(74, 158, 255, 0.25) !important",
-  },
-  ".cm-line": {
-    padding: "0 4px",
-  },
-});
-
 export function FileEditor({ filePath, tabId }: FileEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const viewRef = useRef<EditorView | null>(null);
+  const editorRef = useRef<MonacoNs.editor.IStandaloneCodeEditor | null>(null);
+  const modelRef = useRef<MonacoNs.editor.ITextModel | null>(null);
   const contentRef = useRef<string>("");
   const markDirty = usePanelStore((s) => s.markDirty);
 
-  // 保存文件
   const handleSave = useCallback(async () => {
-    if (!viewRef.current) return;
-    const content = viewRef.current.state.doc.toString();
+    if (!editorRef.current) return;
+    const content = editorRef.current.getValue();
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("write_file", { path: filePath, content });
@@ -120,84 +40,77 @@ export function FileEditor({ filePath, tabId }: FileEditorProps) {
   useEffect(() => {
     if (!containerRef.current) return;
     let destroyed = false;
+    let contentDisposable: MonacoNs.IDisposable | null = null;
 
     const setup = async () => {
-      // 从后端读取文件内容
-      let content = `// 正在加载 ${filePath}...`;
+      const [{ setupMonaco, detectLanguage }, { invoke }] = await Promise.all([
+        import("@/lib/monaco"),
+        import("@tauri-apps/api/core"),
+      ]);
+      if (destroyed) return;
+
+      const monaco = setupMonaco();
+
+      let content = "";
       try {
-        const { invoke } = await import("@tauri-apps/api/core");
         content = await invoke<string>("read_file", { path: filePath });
       } catch (err) {
         console.warn("Failed to read file, using placeholder:", err);
         content = `// 无法读取文件 ${filePath}\n// ${err}`;
       }
+      if (destroyed || !containerRef.current) return;
 
-      if (destroyed) return;
       contentRef.current = content;
+      const languageId = detectLanguage(filePath);
+      const model = monaco.editor.createModel(content, languageId);
 
-      // 加载语言支持
-      const langExt = await getLanguageExtension(filePath);
-      if (destroyed) return;
-
-      const extensions: Extension[] = [
-        lineNumbers(),
-        highlightActiveLine(),
-        highlightActiveLineGutter(),
-        history(),
-        keymap.of([
-          ...defaultKeymap,
-          ...historyKeymap,
-          {
-            key: "Mod-s",
-            run: () => {
-              handleSave();
-              return true;
-            },
-          },
-        ]),
-        oneDark,
-        starGazerTheme,
-        // 不启用 lineWrapping — 代码文件不换行，超出宽度时用横向滚动条
-        // 监听文档变更标记 dirty
-        EditorView.updateListener.of((update) => {
-          if (update.docChanged) {
-            const currentContent = update.state.doc.toString();
-            const isDirty = currentContent !== contentRef.current;
-            markDirty(tabId, isDirty);
-          }
-        }),
-      ];
-
-      if (langExt) {
-        extensions.push(langExt);
-      }
-
-      const state = EditorState.create({
-        doc: content,
-        extensions,
+      const editor = monaco.editor.create(containerRef.current, {
+        model,
+        theme: "vs-dark",
+        fontSize: 13,
+        fontFamily:
+          "'SF Mono', Menlo, 'Geist Mono', 'Fira Code', monospace",
+        automaticLayout: true,
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        smoothScrolling: true,
+        renderLineHighlight: "line",
+        tabSize: 2,
+        wordWrap: "off",
+        // 只要高亮 — 关掉所有提示/补全/hover
+        quickSuggestions: false,
+        suggestOnTriggerCharacters: false,
+        wordBasedSuggestions: "off",
+        parameterHints: { enabled: false },
+        hover: { enabled: false },
+        snippetSuggestions: "none",
+        occurrencesHighlight: "off",
+        // 关掉右下角的 "Peek Problem" 等交互
+        lightbulb: { enabled: monaco.editor.ShowLightbulbIconMode.Off },
       });
 
-      // 清理旧 view
-      if (viewRef.current) {
-        viewRef.current.destroy();
-      }
-
-      if (!containerRef.current) return;
-
-      const view = new EditorView({
-        state,
-        parent: containerRef.current,
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+        handleSave();
       });
 
-      viewRef.current = view;
+      contentDisposable = model.onDidChangeContent(() => {
+        const isDirty = model.getValue() !== contentRef.current;
+        markDirty(tabId, isDirty);
+      });
+
+      editorRef.current = editor;
+      modelRef.current = model;
     };
 
     setup();
 
     return () => {
       destroyed = true;
-      viewRef.current?.destroy();
-      viewRef.current = null;
+      contentDisposable?.dispose();
+      editorRef.current?.dispose();
+      modelRef.current?.dispose();
+      editorRef.current = null;
+      modelRef.current = null;
     };
   }, [filePath, tabId, markDirty, handleSave]);
 

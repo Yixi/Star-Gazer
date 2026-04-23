@@ -24,19 +24,7 @@ export default defineConfig(async () => ({
       output: {
         manualChunks: {
           xterm: ["@xterm/xterm", "@xterm/addon-fit", "@xterm/addon-webgl"],
-          codemirror: [
-            "@codemirror/commands",
-            "@codemirror/lang-css",
-            "@codemirror/lang-html",
-            "@codemirror/lang-javascript",
-            "@codemirror/lang-json",
-            "@codemirror/lang-markdown",
-            "@codemirror/lang-python",
-            "@codemirror/lang-rust",
-            "@codemirror/state",
-            "@codemirror/theme-one-dark",
-            "@codemirror/view",
-          ],
+          monaco: ["monaco-editor"],
           "react-diff": ["react-diff-view", "unidiff"],
         },
       },
