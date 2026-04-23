@@ -45,6 +45,30 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Sync version from tag
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "Syncing version to $VERSION (from tag $TAG)"
+
+          node -e "const fs=require('fs');const p='package.json';const j=JSON.parse(fs.readFileSync(p));j.version=process.argv[1];fs.writeFileSync(p,JSON.stringify(j,null,2)+'\n');" "$VERSION"
+          node -e "const fs=require('fs');const p='src-tauri/tauri.conf.json';const j=JSON.parse(fs.readFileSync(p));j.version=process.argv[1];fs.writeFileSync(p,JSON.stringify(j,null,2)+'\n');" "$VERSION"
+
+          awk -v ver="$VERSION" '
+            /^\[package\]/ { inpkg=1 }
+            /^\[/ && !/^\[package\]/ { inpkg=0 }
+            inpkg && /^version[[:space:]]*=/ { sub(/"[^"]*"/, "\"" ver "\"") }
+            { print }
+          ' src-tauri/Cargo.toml > src-tauri/Cargo.toml.new
+          mv src-tauri/Cargo.toml.new src-tauri/Cargo.toml
+
+          echo "--- package.json ---"
+          grep '"version"' package.json | head -1
+          echo "--- tauri.conf.json ---"
+          grep '"version"' src-tauri/tauri.conf.json | head -1
+          echo "--- Cargo.toml ---"
+          grep '^version' src-tauri/Cargo.toml | head -1
+
       - name: Build & publish
         uses: tauri-apps/tauri-action@v0
         env:
