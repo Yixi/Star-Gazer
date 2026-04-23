@@ -179,122 +179,179 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
     // 根据当前 Canvas zoom 决定初始 renderer（WebGL or DOM）
     applyRenderer();
 
-    // IME（中/日/韩输入法）接管 —— 绕开 xterm.js CompositionHelper 的三条上游 bug。
-    // upstream: #5374 / #1939 至今未修，VSCode 终端同样中招但标 upstream。
+    // 字符输入接管 —— 监听"输入内容"(beforeinput)，不监听"键盘事件"。
     //
-    // 【bug A：拼音提交键泄露到 PTY，"你 好 " / "，,"】
-    // xterm.js CompositionHelper.keydown 在 _isComposing=true 时，若按下 space/
-    // enter/标点（keyCode≠229/CapsLock/修饰键），会走 _finalizeComposition(false)
-    // 同步把组字文本 triggerDataEvent 出去，然后 return true 让 _keyDown 继续把
-    // 该按键当普通键再 triggerDataEvent 一次 —— 于是空格本身也被写进 PTY。
+    // 背景：xterm.js 有三条冗余的字符发送路径 —— _keyPress、keydown(229) 的
+    // _handleAnyTextareaChanges setTimeout、compositionend 的 _finalizeComposition
+    // setTimeout；每条都有自己的上游 bug（#5374 / #1939 等至今未修），时序又
+    // 随浏览器/IME/键盘布局而变。在键盘事件层打补丁相当于追浏览器实现细节，
+    // 每修一个场景就叠一个 flag，flag 之间互相踩 —— 历史迭代中出现的 bug A
+    // 选字键泄露、bug B shift+符号丢字、bug C ABC 模式双发/丢字、bug D 数字重复
+    // 都是这样来的。
     //
-    // 【bug A'：_finalizeComposition(true) 把 textarea 尾部残留也送出去】
-    // compositionend 走的是 _finalizeComposition(true)：setTimeout(0) 之后读
-    // textarea.value.substring(start) **不限 end**，设计上是为了兼容"组字后紧
-    // 跟非组字字符"的场景。实际后果是：如果提交键（空格）作为 default action
-    // 落进了隐藏 textarea，就会被一起回读成 "你 " 发给 PTY。
+    // 新架构：把字符输入的入口收敛到浏览器为此设计的 **beforeinput**（Input
+    // Events L2 规范）。它是统一的语义层 —— 无论字符来自物理键、IME 提交、
+    // 粘贴、拖拽，都会派发一次，带 inputType + data，可 preventDefault。直接
+    // 拿 data 发 PTY，不再关心按了什么键、keyCode 是不是 229、IME 如何派发。
     //
-    // 【bug B：shift+@#$ 丢字】
-    // 中/日 IME 下 shift+符号触发瞬时 compositionstart，_handleAnyTextareaChanges
-    // 的 setTimeout 跑时 _isComposing=true，整条 diff 分支被跳过，字符丢失。
+    // 分工：
+    // - beforeinput capture（字符）：insertText / insertFromPaste / insertFromDrop
+    //   → 写 ev.data 到 PTY 并 preventDefault（字符不进 textarea）；
+    //   insertCompositionText → 放行（IME 需要改 textarea 显示候选）；
+    //   其他（delete / history / format / insertLineBreak）→ preventDefault
+    //   但不发，交给 xterm 的 keydown 层统一处理（Enter / Backspace / Tab 都
+    //   是 xterm 特殊键，会自行发对应 ANSI 序列）。
+    // - compositionend capture（IME commit）：ev.data 即提交文本；剥 macOS 拼音
+    //   的选字键尾巴后写 PTY；清空 textarea 让 xterm _finalizeComposition
+    //   setTimeout 回读到空字符串，不再泄露。
+    // - keypress capture：stopPropagation —— xterm _keyPress 再也看不到事件，
+    //   不会 triggerDataEvent 再发一次字符（一举消除所有双发根源）。
+    // - input capture：非组字期清空 textarea —— 断掉 xterm 所有 textarea-diff
+    //   路径（_handleAnyTextareaChanges / _finalizeComposition）的数据来源。
+    // - customKeyEventHandler：只对 keyCode===229 return false；阻止 xterm
+    //   _keyDown 对 IME 消费键 preventDefault（那会连带压制 beforeinput 派发，
+    //   字符就丢了）。其他键全部放行，方向键 / Ctrl+* / Enter / Backspace /
+    //   Tab 等仍由 xterm 处理。普通字符键 xterm 的 evaluateKeyboardEvent 返回
+    //   NO_KEY，不在 keydown 发字符，落到 keypress（被我们 stopPropagation）
+    //   再到 beforeinput，只发一次。
     //
-    // 【bug C：ABC 英文模式吞字 / 快打重复】
-    // 中文 IME 的 ABC 模式 keyCode=229 但不组字，快打踩 xterm 的 setTimeout+
-    // !_isComposing 竞态丢字；若拦 keydown 只 return false 不 preventDefault，
-    // default action 还会把字母注入 textarea，keypress 再触发 xterm.
-    // _keyPress.triggerDataEvent 造成重复。
-    //
-    // 修复策略：
-    // 1) compositionstart/end 用 **capture phase** 挂在 textarea 上 —— 比 xterm
-    //    bubble 阶段先跑，先把 textarea 清空 + 自行把 ev.data 写 PTY。xterm 的
-    //    bubble 回调后续 setTimeout 读到空 textarea，sends nothing → 免 bug A'。
-    // 2) 组字期间的 keydown 一律 return false 阻止 xterm 分发；非 229/非修饰键
-    //    额外 preventDefault，防止提交键作为 default action 落进 textarea（否则
-    //    我们 capture 阶段读到的 ev.data 正确，但 xterm 的 setTimeout 还会读到
-    //    "你 " 的残留 —— 虽然我们清空了，这条双保险防竞态）→ 免 bug A。
-    // 3) 非组字 + keyCode===229 + 单字符 ASCII + 无 ctrl/meta/alt：preventDefault
-    //    阻止 default action 注入 textarea（避免 keypress 重复 + 避免污染后续
-    //    composition 基线），setTimeout(0) 排队发 PTY；同 task 内若 IME 瞬时
-    //    触发 compositionstart 则 cancelAllPending 让 IME 接管 → 免 bug B/C。
-    // 4) 非 229 的 keydown（英文模式的真实 keyCode）走 xterm 原路径，_keyPress
-    //    正常触发一次，不重复。
-    let imeComposing = false;
-    const pendingTimers = new Set<number>();
-    const cancelAllPending = () => {
-      for (const t of pendingTimers) window.clearTimeout(t);
-      pendingTimers.clear();
+    // macOS 拼音选字键尾巴：空格/数字选字后，除 compositionend.data，部分
+    // 时序下还会再独立派发 beforeinput(insertText, " "/数字)。commitWindow
+    // (100ms) + isIMETriggerChar 拦掉这个尾巴；同时 stripCommitTail 处理
+    // "ev.data 本身就带尾巴"的情况（macOS 拼音把空格拼进 commit 文本）。
+    let composing = false;
+    let commitWindowOpen = false;
+    let commitWindowTimer: number | null = null;
+    const COMMIT_WINDOW_MS = 100;
+    const openCommitWindow = () => {
+      commitWindowOpen = true;
+      if (commitWindowTimer !== null) window.clearTimeout(commitWindowTimer);
+      commitWindowTimer = window.setTimeout(() => {
+        commitWindowOpen = false;
+        commitWindowTimer = null;
+      }, COMMIT_WINDOW_MS);
     };
+    const closeCommitWindow = () => {
+      commitWindowOpen = false;
+      if (commitWindowTimer !== null) {
+        window.clearTimeout(commitWindowTimer);
+        commitWindowTimer = null;
+      }
+    };
+    const isCJK = (ch: string): boolean => {
+      const c = ch.charCodeAt(0);
+      return (
+        (c >= 0x4e00 && c <= 0x9fff) ||   // CJK Unified Ideographs
+        (c >= 0x3400 && c <= 0x4dbf) ||   // CJK Extension A
+        (c >= 0x3040 && c <= 0x309f) ||   // Hiragana
+        (c >= 0x30a0 && c <= 0x30ff) ||   // Katakana
+        (c >= 0xac00 && c <= 0xd7af) ||   // Hangul Syllables
+        (c >= 0xff00 && c <= 0xffef)      // Fullwidth forms
+      );
+    };
+    // 剥 commit 尾巴：macOS 拼音选字时把空格/数字并进 compositionend.data，
+    // 尾部出现"CJK + 空格/数字"；只在前一字符是 CJK 时剥，避免误伤
+    // "hello "这类纯英文组字。
+    const stripCommitTail = (text: string): string => {
+      if (text.length < 2) return text;
+      const last = text[text.length - 1];
+      const prev = text[text.length - 2];
+      const lastIsTrigger = last === " " || (last >= "0" && last <= "9");
+      if (lastIsTrigger && isCJK(prev)) return text.slice(0, -1);
+      return text;
+    };
+    const isIMETriggerChar = (s: string): boolean => {
+      if (s === " " || s === "\n") return true;
+      if (s.length === 1 && s >= "0" && s <= "9") return true;
+      return false;
+    };
+
     const ta = terminal.textarea;
     const onCompositionStartCapture = () => {
-      imeComposing = true;
-      // IME 接管：丢弃排队中的 ASCII 发送
-      cancelAllPending();
+      composing = true;
+      closeCommitWindow();
     };
     const onCompositionEndCapture = (ev: CompositionEvent) => {
-      imeComposing = false;
-      // 优先 ev.data（W3C 规定 compositionend.data 为提交文本），textarea.value
-      // 兜底（上游 xterm 注释旧 Chromium ev.data 不可靠，保留 fallback）。
-      const committed = ev.data || (ta ? ta.value : "");
-      // 必须在 xterm bubble 回调前清空 —— 其 setTimeout(0) 回读 textarea，否则
-      // 空格等提交键的 default action 残留会被当成"组字后缀"二次发出。
+      composing = false;
+      // W3C：compositionend.data 即提交文本；textarea.value 兜底（旧 Chromium
+      // 的 ev.data 不可靠，xterm 自己也保留 fallback）。
+      const raw = ev.data || (ta ? ta.value : "");
+      const committed = stripCommitTail(raw);
+      // 必须在 xterm bubble 回调前清空 —— 其 _finalizeComposition setTimeout(0)
+      // 回读 textarea，清空后读到 ""，不会再泄露。
       if (ta) ta.value = "";
       if (committed && generationRef.current === myGeneration) {
         ptyService.writeTerminal(terminalId, committed);
       }
+      openCommitWindow();
+    };
+    // 字符输入唯一入口
+    const onBeforeInputCapture = (ev: InputEvent) => {
+      const inputType = ev.inputType;
+      // 组字中间态：IME 需要向 textarea 写候选字，放行不处理
+      if (inputType === "insertCompositionText") return;
+      // 其余一律 preventDefault：字符不进 textarea，由我们决定是否写 PTY
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (generationRef.current !== myGeneration) return;
+      if (inputType === "insertText" && ev.data) {
+        // commit 窗口内选字键尾巴 —— 吞掉
+        if (commitWindowOpen && isIMETriggerChar(ev.data)) return;
+        ptyService.writeTerminal(terminalId, ev.data);
+        return;
+      }
+      if (
+        (inputType === "insertFromPaste" || inputType === "insertFromDrop") &&
+        ev.data
+      ) {
+        ptyService.writeTerminal(terminalId, ev.data);
+        return;
+      }
+      // insertLineBreak / delete* / history* / format*：不发，让 xterm 的 keydown
+      // 路径统一处理（Enter / Backspace / Tab 都是 xterm 特殊键）。
+    };
+    // 阻断 xterm _keyPress 的字符派发路径 —— 字符输入全由 beforeinput 负责。
+    // stopPropagation 拦到 xterm bubble 监听之前；不 preventDefault，让浏览器
+    // 正常派发后续 beforeinput / input。
+    const onKeyPressCapture = (ev: KeyboardEvent) => {
+      ev.stopPropagation();
+    };
+    // 非组字期清空 textarea —— 断 xterm textarea-diff 读取路径（双保险：
+    // 即使 beforeinput preventDefault 在某条 WKWebView 路径失效，这里兜底）。
+    const onInputCapture = () => {
+      if (composing) return;
+      if (ta && ta.value) ta.value = "";
     };
     if (ta) {
-      // capture: true 保证比 xterm 自己的 bubble 监听先跑
+      // capture: true 保证比 xterm 的 bubble 监听先跑
       ta.addEventListener("compositionstart", onCompositionStartCapture, true);
       ta.addEventListener("compositionend", onCompositionEndCapture, true);
+      ta.addEventListener("beforeinput", onBeforeInputCapture, true);
+      ta.addEventListener("keypress", onKeyPressCapture, true);
+      ta.addEventListener("input", onInputCapture, true);
       unlistenersRef.current.push(() => {
         ta.removeEventListener("compositionstart", onCompositionStartCapture, true);
         ta.removeEventListener("compositionend", onCompositionEndCapture, true);
-        cancelAllPending();
+        ta.removeEventListener("beforeinput", onBeforeInputCapture, true);
+        ta.removeEventListener("keypress", onKeyPressCapture, true);
+        ta.removeEventListener("input", onInputCapture, true);
+        closeCommitWindow();
       });
     }
 
     terminal.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown") return true;
-
-      // 组字期间完全接管。xterm 的 _keyDown 不再分发；提交键不会被 triggerDataEvent。
-      // 非 229/非 IME-passthrough 修饰键额外 preventDefault：阻止空格/enter/标点
-      // 作为 default action 落进 textarea，保证 compositionend 我们读到的是纯组字文本。
-      if (event.isComposing || imeComposing) {
-        const kc = event.keyCode;
-        // 20 CapsLock / 229 composition / 16 Shift / 17 Ctrl / 18 Alt —— IME 内部
-        // 依赖这些键的 default action 维持组字状态，不能 preventDefault
-        if (kc !== 229 && kc !== 20 && kc !== 16 && kc !== 17 && kc !== 18) {
-          event.preventDefault();
-        }
-        return false;
-      }
-
-      // 非组字态下的 keyCode===229：ABC 英文模式、中/日 IME 瞬时 composition 前导。
-      // 窗口极短：同 task 内若 compositionstart 触发，cancelAllPending 让 IME 接管；
-      // 否则 setTimeout 到期时直接写 PTY，纯英文 IME 走 xterm 原路径避免重复。
-      if (
-        event.keyCode === 229 &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        event.key.length === 1
-      ) {
-        const code = event.key.charCodeAt(0);
-        if (code >= 0x20 && code <= 0x7e) {
-          const key = event.key;
-          // preventDefault 防止：① keypress 再送一次（_keyPress.triggerDataEvent 重复）
-          // ② 字符注入隐藏 textarea 污染后续 composition 的基线偏移
-          event.preventDefault();
-          const timer = window.setTimeout(() => {
-            pendingTimers.delete(timer);
-            if (imeComposing) return; // 同 task compositionstart 已取消
-            if (generationRef.current !== myGeneration) return;
-            ptyService.writeTerminal(terminalId, key);
-          }, 0);
-          pendingTimers.add(timer);
-          return false;
-        }
-      }
+      // keyCode===229（IME 消费键 —— 组字态 / ABC 英文模式 / 直接按字符都可能）：
+      // return false 阻止 xterm _keyDown 进而阻止 _compositionHelper.keydown
+      // 的两个副作用：① 对 IME keydown preventDefault 连带压制后续 beforeinput
+      // 派发，字符丢失；② 排队 _handleAnyTextareaChanges setTimeout 读 textarea
+      // diff 造成重复发送。让浏览器走默认路径：beforeinput 正常派发，由
+      // onBeforeInputCapture 统一写 PTY。
+      if (event.keyCode === 229) return false;
+      // 其他键全部交给 xterm：方向键 / Home / End / PgUp / PgDn / 功能键 /
+      // Enter / Backspace / Tab / Ctrl+* / Alt+* / Meta+* 组合键。普通字符键
+      // xterm 的 evaluateKeyboardEvent 返回 NO_KEY，不在 keydown 发字符，落到
+      // keypress（被我们 stopPropagation）再到 beforeinput，只发一次。
       return true;
     });
 

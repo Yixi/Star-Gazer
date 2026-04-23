@@ -1,6 +1,6 @@
 [package]
 name = "stargazer"
-version = "0.2.0"
+version = "0.3.0"
 description = "Star Gazer - Mac 原生轻量开发工作台，为 vibe coding 时代设计"
 authors = ["yixi"]
 edition = "2021"
