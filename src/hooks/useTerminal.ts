@@ -195,8 +195,13 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
     // 拿 data 发 PTY，不再关心按了什么键、keyCode 是不是 229、IME 如何派发。
     //
     // 分工：
-    // - beforeinput capture（字符）：insertText / insertFromPaste / insertFromDrop
-    //   → 写 ev.data 到 PTY 并 preventDefault（字符不进 textarea）；
+    // - beforeinput capture（字符）：insertText / insertFromDrop → 写 ev.data
+    //   到 PTY 并 preventDefault（字符不进 textarea）；
+    //   insertFromPaste → 只 preventDefault（阻止插 textarea），**不写 PTY** ——
+    //   粘贴由 xterm 自己的 'paste' 事件监听（Clipboard.ts#handlePasteEvent）
+    //   处理，读 clipboardData 后做 CRLF 归一化 + bracketed paste 包裹
+    //   (\x1b[200~...\x1b[201~)，再 triggerDataEvent 走 onData 发 PTY。
+    //   我们再发一次会造成双发，且丢失包裹（zsh 多行粘贴会被立即执行）；
     //   insertCompositionText → 放行（IME 需要改 textarea 显示候选）；
     //   其他（delete / history / format / insertLineBreak）→ preventDefault
     //   但不发，交给 xterm 的 keydown 层统一处理（Enter / Backspace / Tab 都
@@ -300,10 +305,10 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
         ptyService.writeTerminal(terminalId, ev.data);
         return;
       }
-      if (
-        (inputType === "insertFromPaste" || inputType === "insertFromDrop") &&
-        ev.data
-      ) {
+      // insertFromPaste：不写 PTY —— xterm 的 'paste' 监听器已经通过
+      // clipboardData 读内容、做 bracketed paste 包裹后走 onData 发一次。
+      // 我们只负责 preventDefault（上面已统一做过）避免内容进 textarea。
+      if (inputType === "insertFromDrop" && ev.data) {
         ptyService.writeTerminal(terminalId, ev.data);
         return;
       }
