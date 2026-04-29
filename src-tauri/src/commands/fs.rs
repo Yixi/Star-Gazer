@@ -127,6 +127,94 @@ pub async fn create_dir(
         .map_err(|e| format!("创建目录失败: {}", e))
 }
 
+/// 创建空文件 — 已存在则报错（避免覆盖用户已有内容）
+#[tauri::command]
+pub async fn create_file(
+    workspace_manager: State<'_, WorkspaceManager>,
+    path: String,
+) -> Result<(), String> {
+    let canonical = resolve_new(&workspace_manager, &path)?;
+    if canonical.exists() {
+        return Err("路径已存在".to_string());
+    }
+    // OpenOptions 的 create_new 在并发场景下也不会覆盖
+    let _ = tokio::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&canonical)
+        .await
+        .map_err(|e| format!("创建文件失败: {}", e))?;
+    Ok(())
+}
+
+/// 复制文件或目录到新路径（目录递归复制）
+#[tauri::command]
+pub async fn copy_entry(
+    workspace_manager: State<'_, WorkspaceManager>,
+    src: String,
+    dest: String,
+) -> Result<(), String> {
+    let src_canonical = resolve_existing(&workspace_manager, &src)?;
+    let dest_canonical = resolve_new(&workspace_manager, &dest)?;
+    if dest_canonical.exists() {
+        return Err("目标路径已存在".to_string());
+    }
+    if src_canonical.is_dir() {
+        // 防止把目录复制到自己内部（无限递归）
+        if dest_canonical.starts_with(&src_canonical) {
+            return Err("不能把目录复制到其子目录中".to_string());
+        }
+        copy_dir_recursive(&src_canonical, &dest_canonical)
+            .await
+            .map_err(|e| format!("复制目录失败: {}", e))
+    } else {
+        tokio::fs::copy(&src_canonical, &dest_canonical)
+            .await
+            .map(|_| ())
+            .map_err(|e| format!("复制文件失败: {}", e))
+    }
+}
+
+/// 把文件或目录移到系统回收站（macOS Trash / Windows Recycle Bin）
+///
+/// `trash` crate 是同步 API，用 spawn_blocking 避免阻塞 tokio runtime。
+#[tauri::command]
+pub async fn trash_entry(
+    workspace_manager: State<'_, WorkspaceManager>,
+    path: String,
+) -> Result<(), String> {
+    let canonical = resolve_existing(&workspace_manager, &path)?;
+    tokio::task::spawn_blocking(move || trash::delete(&canonical))
+        .await
+        .map_err(|e| format!("回收站任务失败: {}", e))?
+        .map_err(|e| format!("移到回收站失败: {}", e))
+}
+
+/// 递归复制目录 — 装箱以支持 async 递归
+fn copy_dir_recursive<'a>(
+    src: &'a Path,
+    dest: &'a Path,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = std::io::Result<()>> + Send + 'a>> {
+    Box::pin(async move {
+        tokio::fs::create_dir_all(dest).await?;
+        let mut rd = tokio::fs::read_dir(src).await?;
+        while let Some(entry) = rd.next_entry().await? {
+            let ty = entry.file_type().await?;
+            let from = entry.path();
+            let to = dest.join(entry.file_name());
+            if ty.is_dir() {
+                copy_dir_recursive(&from, &to).await?;
+            } else if ty.is_symlink() {
+                // 简化：把 symlink 当作普通文件复制内容（vscode 默认也是 dereference）
+                tokio::fs::copy(&from, &to).await?;
+            } else {
+                tokio::fs::copy(&from, &to).await?;
+            }
+        }
+        Ok(())
+    })
+}
+
 /// 删除文件或目录
 #[tauri::command]
 pub async fn remove_entry(

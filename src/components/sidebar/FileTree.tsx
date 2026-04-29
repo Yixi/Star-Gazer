@@ -16,9 +16,18 @@ import { useEffect, useRef, useCallback, useMemo, useState } from "react";
 import { Tree, NodeRendererProps } from "react-arborist";
 import { useProjectStore } from "@/stores/projectStore";
 import { usePanelStore } from "@/stores/panelStore";
+import { useFileTreeUIStore } from "@/stores/fileTreeUIStore";
+import { useFileTreeActions, type FileTreeActions } from "@/hooks/useFileTreeActions";
+import { useFileTreeShortcuts } from "@/hooks/useFileTreeShortcuts";
 import type { FileNode } from "@/types/project";
 import { FileIcon } from "@/utils/fileIcon";
 import { AGENT_COLOR_HEX } from "@/constants/agentColors";
+import { FileTreeInlineInput } from "./FileTreeInlineInput";
+import { FileTreeContextMenu } from "./FileTreeContextMenu";
+import { FileTreeDeleteDialog } from "./FileTreeDeleteDialog";
+
+/** 占位节点的 id 前缀 — 用于在 fileTree 数据中临时插入 inline create 行 */
+const PLACEHOLDER_ID = "__creating__";
 
 /** 始终隐藏的条目（git 内部目录和 macOS 系统文件） */
 const ALWAYS_HIDDEN = new Set([".git", ".DS_Store"]);
@@ -249,13 +258,86 @@ export function FileTree({ project }: FileTreeProps) {
     );
   }
 
-  // 过滤始终隐藏的条目（.git, .DS_Store）
-  const filteredTree = filterHidden(fileTree);
+  // 过滤始终隐藏的条目（.git, .DS_Store）+ 把 inline create 占位行合并进去
+  const editing = useFileTreeUIStore((s) => s.editing);
+  const setFocused = useFileTreeUIStore((s) => s.setFocused);
+  const cancelEditing = useFileTreeUIStore((s) => s.cancelEditing);
+
+  const filteredTree = useMemo(() => {
+    const filtered = filterHidden(fileTree);
+    // 仅当 editing 是当前项目的 create 态时才插入占位行
+    if (
+      editing?.kind === "create-file" || editing?.kind === "create-dir"
+    ) {
+      if (editing.projectId !== project.id) return filtered;
+      return injectCreatePlaceholder(filtered, editing.parentId, editing.kind);
+    }
+    return filtered;
+  }, [fileTree, editing, project.id]);
+
+  // 文件树操作集合（rename / create / delete / copy / cut / paste / reveal / copy path）
+  const actions = useFileTreeActions(project);
+
+  // 容器级右键菜单 state（节点和空白处共用，但内容不同）
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    node: FileNode;
+    targetDirPath: string;
+    targetDirId: string | "__root__";
+  } | null>(null);
+
+  // 删除确认 state
+  const [deleteDialog, setDeleteDialog] = useState<FileNode | null>(null);
+
+  // 文件树快捷键（仅 isFocused=true 时生效）
+  useFileTreeShortcuts(project, actions, (node) => setDeleteDialog(node));
+
+  /** 文件树容器的空白处右键 → 项目根上下文菜单（New File / New Folder / Paste / Reveal） */
+  const handleContainerContextMenu = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest("[data-filetree-node]")) return;
+    e.preventDefault();
+    // 用项目自身作为虚拟节点
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      node: {
+        id: "",
+        name: project.name,
+        path: project.path,
+        isDir: true,
+        children: [],
+      },
+      targetDirPath: project.path,
+      targetDirId: "__root__",
+    });
+  };
 
   const actualHeight = treeHeight || filteredTree.length * ROW_HEIGHT;
 
   return (
-    <div className="filetree-container">
+    <div
+      className="filetree-container outline-none"
+      tabIndex={0}
+      onFocus={() => setFocused(true)}
+      onBlur={(e) => {
+        // 焦点跑到子元素（input / 菜单）也算保持 focus
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+        setFocused(false);
+      }}
+      onContextMenu={handleContainerContextMenu}
+      // 容器级 mousedown：点空白也清编辑态（Esc 同效果）
+      onMouseDown={(e) => {
+        const target = e.target as HTMLElement;
+        if (
+          editing &&
+          !target.closest("[data-filetree-node]") &&
+          !target.closest("input")
+        ) {
+          cancelEditing();
+        }
+      }}
+    >
       <Tree<FileNode>
         ref={treeRef}
         data={filteredTree}
@@ -277,13 +359,79 @@ export function FileTree({ project }: FileTreeProps) {
             {...props}
             ignoredPaths={ignoredPaths}
             projectPath={project.path}
+            projectId={project.id}
             diffByPath={diffByPath}
             statusByPath={statusByPath}
+            actions={actions}
+            onContextMenu={(payload) => setContextMenu(payload)}
           />
         )}
       </Tree>
+
+      {contextMenu && (
+        <FileTreeContextMenu
+          node={contextMenu.node}
+          targetDirPath={contextMenu.targetDirPath}
+          targetDirId={contextMenu.targetDirId}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          actions={actions}
+          onRequestDelete={(n) => setDeleteDialog(n)}
+        />
+      )}
+
+      {deleteDialog && (
+        <FileTreeDeleteDialog
+          name={deleteDialog.name}
+          isDir={deleteDialog.isDir}
+          onCancel={() => setDeleteDialog(null)}
+          onConfirm={() => {
+            const target = deleteDialog;
+            setDeleteDialog(null);
+            void actions.trashNode(target);
+          }}
+        />
+      )}
     </div>
   );
+}
+
+/**
+ * 在 fileTree 数据中插入一个临时占位节点用于 inline create 输入。
+ *
+ * - parentId === "__root__"：插到顶层数组开头
+ * - 其它：递归找到对应目录节点，插到其 children 开头
+ *
+ * 占位节点的 id 用 PLACEHOLDER_ID，name 为空，渲染时识别为 inline input
+ */
+function injectCreatePlaceholder(
+  tree: FileNode[],
+  parentId: string | "__root__",
+  kind: "create-file" | "create-dir",
+): FileNode[] {
+  const placeholder: FileNode = {
+    id: PLACEHOLDER_ID,
+    name: "",
+    path: "",
+    isDir: kind === "create-dir",
+    children: kind === "create-dir" ? [] : undefined,
+  };
+  if (parentId === "__root__") {
+    return [placeholder, ...tree];
+  }
+  const inject = (nodes: FileNode[]): FileNode[] =>
+    nodes.map((n) => {
+      if (n.id === parentId) {
+        const children = n.children ?? [];
+        return { ...n, children: [placeholder, ...children] };
+      }
+      if (n.children) {
+        return { ...n, children: inject(n.children) };
+      }
+      return n;
+    });
+  return inject(tree);
 }
 
 /** 在文件树中递归查找指定 ID 的节点 */
@@ -444,19 +592,49 @@ function FileTreeNode({
   style,
   ignoredPaths,
   projectPath,
+  projectId,
   diffByPath,
   statusByPath,
+  actions,
+  onContextMenu,
 }: NodeRendererProps<FileNode> & {
   ignoredPaths: Set<string>;
   projectPath: string;
+  projectId: string;
   diffByPath: Record<string, { additions: number; deletions: number }>;
   statusByPath: Record<string, string>;
+  actions: FileTreeActions;
+  onContextMenu: (payload: {
+    x: number;
+    y: number;
+    node: FileNode;
+    targetDirPath: string;
+    targetDirId: string | "__root__";
+  }) => void;
 }) {
   const data = node.data;
   const openTab = usePanelStore((s) => s.openTab);
   const activeTabId = usePanelStore((s) => s.activeTabId);
   // writingFiles 是 Set 引用，set 自身变化才触发 re-render；has() O(1)
   const isWriting = useProjectStore((s) => s.writingFiles.has(data.path));
+  const editing = useFileTreeUIStore((s) => s.editing);
+  const clipboard = useFileTreeUIStore((s) => s.clipboard);
+  const setSelected = useFileTreeUIStore((s) => s.setSelected);
+
+  // 占位节点：单独渲染 inline create input 行
+  const isPlaceholder = data.id === PLACEHOLDER_ID;
+
+  // 当前节点是否处于 rename 编辑态
+  const isRenaming =
+    editing?.kind === "rename" &&
+    editing.projectId === projectId &&
+    editing.nodeId === data.id;
+
+  // 是否处于 cut 状态（视觉半透明）
+  const isCut =
+    clipboard?.mode === "cut" &&
+    clipboard.projectId === projectId &&
+    clipboard.paths.includes(data.path);
 
   // 检查是否在 gitignore 中（用相对路径匹配）
   const relativePath = data.path.startsWith(projectPath)
@@ -494,6 +672,9 @@ function FileTreeNode({
   };
 
   const handleClick = () => {
+    // 占位行 / 重命名中的节点不响应点击
+    if (isPlaceholder || isRenaming) return;
+    setSelected({ projectId, nodeId: data.id });
     if (node.isInternal) {
       node.toggle();
     } else {
@@ -502,11 +683,92 @@ function FileTreeNode({
   };
 
   const handleDoubleClick = (e: React.MouseEvent) => {
+    if (isPlaceholder || isRenaming) return;
     if (node.isInternal) return;
     // 阻止单击事件的默认效果重复触发；双击打开为固定 tab
     e.stopPropagation();
     openFileTab(false);
   };
+
+  /** 节点右键菜单 — 文件以"父目录"为操作目标，目录以"自身"为目标 */
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (isPlaceholder || isRenaming) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setSelected({ projectId, nodeId: data.id });
+
+    // 计算 target dir
+    let targetDirPath: string;
+    let targetDirId: string | "__root__";
+    if (data.isDir) {
+      targetDirPath = data.path;
+      targetDirId = data.id;
+    } else {
+      // 父目录：用文件路径推父目录的绝对路径 + 相对 id
+      const lastSlash = data.path.lastIndexOf("/");
+      targetDirPath =
+        lastSlash > 0 ? data.path.slice(0, lastSlash) : projectPath;
+      // 父目录的 id：相对路径去掉最后一段；如果文件在根，targetDirId 用 "__root__"
+      const lastSlashId = data.id.lastIndexOf("/");
+      targetDirId = lastSlashId > 0 ? data.id.slice(0, lastSlashId) : "__root__";
+    }
+
+    onContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      node: data,
+      targetDirPath,
+      targetDirId,
+    });
+  };
+
+  // 占位节点：渲染 inline create 输入行
+  if (isPlaceholder && (editing?.kind === "create-file" || editing?.kind === "create-dir")) {
+    const placeholderEditing = editing;
+    return (
+      <div
+        data-filetree-node
+        style={{
+          ...style,
+          paddingLeft: ((style.paddingLeft as number) || 0) + 30,
+          paddingRight: 14,
+          paddingTop: 2,
+          paddingBottom: 2,
+        }}
+        className="flex items-center"
+      >
+        <div className="flex items-center flex-1 min-w-0" style={{ gap: 6 }}>
+          <span
+            className="flex-shrink-0"
+            style={{ width: 10 }}
+          />
+          <span
+            className="flex-shrink-0 inline-flex items-center justify-center"
+            style={{ width: 14, height: 14 }}
+          >
+            <FileIcon
+              name="placeholder"
+              isDir={placeholderEditing.kind === "create-dir"}
+              isOpen={false}
+              size={14}
+            />
+          </span>
+          <FileTreeInlineInput
+            initialValue=""
+            onSubmit={(name) => {
+              void actions.commitCreate(
+                placeholderEditing.parentPath,
+                placeholderEditing.kind,
+                name,
+              );
+            }}
+            onCancel={() => useFileTreeUIStore.getState().cancelEditing()}
+            blurBehavior="cancel"
+          />
+        </div>
+      </div>
+    );
+  }
 
   const diffStat = data.diffStat || localDiffStat;
   const isDeleted = effectiveGitStatus === "deleted";
@@ -518,6 +780,7 @@ function FileTreeNode({
 
   return (
     <div
+      data-filetree-node
       style={{
         ...style,
         /* 覆盖 react-arborist 的 paddingLeft，加上基础 14px */
@@ -525,13 +788,15 @@ function FileTreeNode({
         paddingRight: 14,
         paddingTop: 2,
         paddingBottom: 2,
-        transition: "background 300ms ease",
+        transition: "background 300ms ease, opacity 200ms ease",
         background: isActiveInPanel ? "rgba(74, 158, 255, 0.08)" : "transparent",
+        opacity: isCut ? 0.5 : 1,
         position: "relative",
       }}
       className="flex items-center cursor-pointer hover:bg-white/[0.04]"
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
+      onContextMenu={handleContextMenu}
     >
       {/* 左侧 2px 颜色竖条（仅 active-in-panel） */}
       <div
@@ -570,28 +835,40 @@ function FileTreeNode({
           />
         </span>
 
-        {/* 文件名 — 13px, active-in-panel 白色500 */}
-        <span
-          className="truncate"
-          style={{
-            fontSize: 13,
-            color: isActiveInPanel
-              ? "#ffffff"
-              : isGitIgnored
-                ? "#4a5263"
-                : isDeleted
-                  ? "#ef4444"
-                  : isAdded
-                    ? "#22c55e"
-                    : "#b8bcc4",
-            fontStyle: isUntracked ? "italic" : "normal",
-            textDecoration: isDeleted ? "line-through" : "none",
-            fontWeight: isActiveInPanel ? 500 : 400,
-            transition: "color 300ms ease, font-weight 300ms ease",
-          }}
-        >
-          {data.name}
-        </span>
+        {/* 文件名 — 13px, active-in-panel 白色500；rename 中替换为 inline input */}
+        {isRenaming ? (
+          <FileTreeInlineInput
+            initialValue={data.name}
+            isFile={!data.isDir}
+            onSubmit={(name) => {
+              void actions.commitRename(data, name);
+            }}
+            onCancel={() => useFileTreeUIStore.getState().cancelEditing()}
+            blurBehavior="commit"
+          />
+        ) : (
+          <span
+            className="truncate"
+            style={{
+              fontSize: 13,
+              color: isActiveInPanel
+                ? "#ffffff"
+                : isGitIgnored
+                  ? "#4a5263"
+                  : isDeleted
+                    ? "#ef4444"
+                    : isAdded
+                      ? "#22c55e"
+                      : "#b8bcc4",
+              fontStyle: isUntracked ? "italic" : "normal",
+              textDecoration: isDeleted ? "line-through" : "none",
+              fontWeight: isActiveInPanel ? 500 : 400,
+              transition: "color 300ms ease, font-weight 300ms ease",
+            }}
+          >
+            {data.name}
+          </span>
+        )}
 
         {/* 实时写入脉动蓝点 */}
         {isWriting && (

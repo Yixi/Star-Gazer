@@ -32,7 +32,22 @@ export async function createDir(path: string): Promise<void> {
   return invoke("create_dir", { path });
 }
 
-/** 删除文件或目录 */
+/** 创建空文件（已存在则后端报错） */
+export async function createFile(path: string): Promise<void> {
+  return invoke("create_file", { path });
+}
+
+/** 复制文件或目录到新路径（目录递归复制） */
+export async function copyEntry(src: string, dest: string): Promise<void> {
+  return invoke("copy_entry", { src, dest });
+}
+
+/** 把文件或目录移到系统回收站 */
+export async function trashEntry(path: string): Promise<void> {
+  return invoke("trash_entry", { path });
+}
+
+/** 永久删除文件或目录（不进回收站） */
 export async function removeEntry(path: string): Promise<void> {
   return invoke("remove_entry", { path });
 }

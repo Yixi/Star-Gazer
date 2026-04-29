@@ -13,8 +13,7 @@
  * - Close Project
  * - Remove from Star Gazer
  */
-import { useState, useRef, useEffect, useMemo } from "react";
-import { createPortal } from "react-dom";
+import { useState, useMemo } from "react";
 import {
   Trash2,
   ExternalLink,
@@ -24,12 +23,20 @@ import {
   Cpu,
   Settings,
   FolderGit2,
+  FilePlus,
+  FolderPlus,
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
 import { useProjectStore } from "@/stores/projectStore";
 import { useCanvasStore } from "@/stores/canvasStore";
+import { useFileTreeUIStore } from "@/stores/fileTreeUIStore";
 import { AGENT_COLOR_HEX } from "@/constants/agentColors";
+import {
+  ContextMenu,
+  ContextMenuItem,
+  MenuDivider,
+} from "@/components/ui/ContextMenu";
 import type { Project } from "@/types/project";
 
 interface ProjectItemProps {
@@ -70,7 +77,7 @@ export function ProjectItem({
     x: number;
     y: number;
   } | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const startCreate = useFileTreeUIStore((s) => s.startCreate);
 
   // 该项目下第一个运行中 agent 的颜色 —— 圆点跟着这个 agent 的色盘走，
   // 视觉上和 AgentCard header 上的圆点对齐，不再固定绿色。
@@ -101,19 +108,20 @@ export function ProjectItem({
     setContextMenu({ x: e.clientX, y: e.clientY });
   };
 
-  // 点击外部关闭上下文菜单
-  useEffect(() => {
-    if (!contextMenu) return;
-    const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setContextMenu(null);
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [contextMenu]);
-
   const closeMenu = () => setContextMenu(null);
+
+  const handleNewFile = () => {
+    // 项目根上新建文件 — 必须先把项目展开，否则占位 input 不会出现在视野里
+    if (!isExpanded) toggleProjectExpanded(project.id);
+    startCreate(project.id, "__root__", project.path, "create-file");
+    closeMenu();
+  };
+
+  const handleNewFolder = () => {
+    if (!isExpanded) toggleProjectExpanded(project.id);
+    startCreate(project.id, "__root__", project.path, "create-dir");
+    closeMenu();
+  };
 
   const handleRemove = () => {
     // 纯前端操作，workspace autosave 会把新 projects 列表写回磁盘
@@ -290,18 +298,26 @@ export function ProjectItem({
       </button>
 
       {/* 右键上下文菜单 — 通过 Portal 渲染到 body，避免被 Sidebar/Panel 遮挡 */}
-      {contextMenu && createPortal(
-        <div
-          ref={menuRef}
-          className="fixed rounded-lg shadow-xl py-1 min-w-[200px]"
-          style={{
-            left: contextMenu.x,
-            top: contextMenu.y,
-            zIndex: 9999,
-            backgroundColor: "#1a1c23",
-            border: "1px solid #2a2d36",
-          }}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={closeMenu}
         >
+          {/* 文件系统操作 */}
+          <ContextMenuItem
+            icon={<FilePlus className="w-3.5 h-3.5" />}
+            label="New File"
+            onClick={handleNewFile}
+          />
+          <ContextMenuItem
+            icon={<FolderPlus className="w-3.5 h-3.5" />}
+            label="New Folder"
+            onClick={handleNewFolder}
+          />
+
+          <MenuDivider />
+
           {/* 新建 Agent 部分 */}
           <div
             className="px-2 py-1 text-[10px] uppercase tracking-wider"
@@ -355,43 +371,8 @@ export function ProjectItem({
             onClick={handleRemove}
             danger
           />
-        </div>,
-        document.body
+        </ContextMenu>
       )}
     </>
-  );
-}
-
-function MenuDivider() {
-  return <div className="my-1 border-t" style={{ borderColor: "#2a2d36" }} />;
-}
-
-function ContextMenuItem({
-  icon,
-  label,
-  shortcut,
-  onClick,
-  danger,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  shortcut?: string;
-  onClick: () => void;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      className="w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors hover:bg-white/5"
-      style={{ color: danger ? "#ef4444" : "#e4e6eb" }}
-      onClick={onClick}
-    >
-      {icon}
-      <span className="flex-1 text-left">{label}</span>
-      {shortcut && (
-        <span className="text-[10px]" style={{ color: "#6b7280" }}>
-          {shortcut}
-        </span>
-      )}
-    </button>
   );
 }

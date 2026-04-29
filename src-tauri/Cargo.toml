@@ -46,3 +46,6 @@ libc = "0.2"
 # Workspace 文件路径哈希 + URL-safe 编码
 sha1 = "0.10"
 base64 = "0.22"
+
+# 文件移到系统回收站（macOS Trash / Windows Recycle Bin）
+trash = "5"

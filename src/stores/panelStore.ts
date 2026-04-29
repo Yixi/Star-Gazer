@@ -32,6 +32,21 @@ interface PanelState {
   closeOtherTabs: (id: string) => void;
   /** 关闭所有 Tab */
   closeAllTabs: () => void;
+  /**
+   * 文件被重命名/移动后同步 Tab — 保留 isDirty / isPreview / type 等运行态，
+   * 只换 id（绝对路径）、filePath、标题。可选 newProjectPath 用于跨项目移动。
+   * 若旧 id 不存在或新 id 已存在则跳过（避免 id 冲突）。
+   */
+  updateTabPath: (
+    oldId: string,
+    newId: string,
+    newProjectPath?: string,
+  ) => void;
+  /**
+   * 关闭某目录（绝对路径）下的所有 Tab — 用于删除目录前批量清理。
+   * 路径必须以 "/" 结尾或精确匹配，避免误命中前缀相同的兄弟路径。
+   */
+  closeTabsUnderPath: (absPath: string) => void;
   /** 设置活动 Tab */
   setActiveTab: (id: string) => void;
   /** 标记 Tab 为已修改（dirty 时自动 pin，脱离 preview 状态） */
@@ -130,6 +145,56 @@ export const usePanelStore = create<PanelState>((set) => ({
 
   closeAllTabs: () =>
     set({ tabs: [], activeTabId: null, isOpen: false }),
+
+  updateTabPath: (oldId, newId, newProjectPath) =>
+    set((state) => {
+      const idx = state.tabs.findIndex((t) => t.id === oldId);
+      if (idx < 0) return state;
+      // 目标 id 已被占用 —— 跳过避免 id 冲突
+      if (oldId !== newId && state.tabs.some((t) => t.id === newId)) {
+        return state;
+      }
+      const old = state.tabs[idx];
+      const newTabs = [...state.tabs];
+      const title = newId.split("/").pop() || newId;
+      newTabs[idx] = {
+        ...old,
+        id: newId,
+        filePath: newId,
+        title,
+        projectPath: newProjectPath ?? old.projectPath,
+      };
+      // 同步迁移 diffStats key
+      let diffStats = state.diffStats;
+      if (state.diffStats[oldId]) {
+        const { [oldId]: stat, ...rest } = state.diffStats;
+        diffStats = { ...rest, [newId]: stat };
+      }
+      return {
+        tabs: newTabs,
+        diffStats,
+        activeTabId: state.activeTabId === oldId ? newId : state.activeTabId,
+      };
+    }),
+
+  closeTabsUnderPath: (absPath) =>
+    set((state) => {
+      const prefix = absPath.endsWith("/") ? absPath : absPath + "/";
+      const survives = (id: string) => id !== absPath && !id.startsWith(prefix);
+      const newTabs = state.tabs.filter((t) => survives(t.id));
+      if (newTabs.length === state.tabs.length) return state;
+      const newActiveId =
+        state.activeTabId && !survives(state.activeTabId)
+          ? newTabs.length > 0
+            ? newTabs[newTabs.length - 1].id
+            : null
+          : state.activeTabId;
+      return {
+        tabs: newTabs,
+        activeTabId: newActiveId,
+        isOpen: newTabs.length > 0 ? state.isOpen : false,
+      };
+    }),
 
   setActiveTab: (id) => set({ activeTabId: id }),
 

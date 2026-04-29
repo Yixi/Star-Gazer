@@ -209,6 +209,19 @@ interface ProjectState {
   setFileWriting: (path: string, writing: boolean) => void;
   /** 更新指定项目中目录节点的子节点（按需加载） */
   updateNodeChildren: (projectId: string, nodeId: string, children: FileNode[]) => void;
+  /**
+   * CRUD 操作后重新拉取某个目录的子节点，写回 store。
+   *
+   * - dirAbsPath === project.path：刷新整棵根目录
+   * - 否则按相对路径定位 nodeId，刷新它的 children
+   *
+   * 失败静默（写 console.warn），调用方不需要 try/catch。
+   */
+  invalidateDir: (
+    projectId: string,
+    projectPath: string,
+    dirAbsPath: string,
+  ) => Promise<void>;
 
   /** 设置侧边栏视图模式（全局） */
   setViewMode: (mode: SidebarViewMode) => void;
@@ -615,6 +628,47 @@ export const useProjectStore = create<ProjectState>((set) => ({
         },
       };
     }),
+
+  invalidateDir: async (projectId, projectPath, dirAbsPath) => {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const entries = await invoke<
+        { name: string; path: string; isDir: boolean }[]
+      >("list_dir", { path: dirAbsPath });
+      const childNodes: FileNode[] = entries.map((e) => {
+        const rel = e.path.startsWith(projectPath)
+          ? e.path.slice(projectPath.length).replace(/^\//, "")
+          : e.name;
+        return {
+          id: rel || e.name,
+          name: e.name,
+          path: e.path,
+          isDir: e.isDir,
+          children: e.isDir ? [] : undefined,
+        };
+      });
+
+      // 根目录直接覆盖整棵树
+      if (dirAbsPath === projectPath) {
+        useProjectStore.getState().setProjectFileTree(projectId, childNodes);
+        return;
+      }
+      // 子目录：按相对路径找到 nodeId
+      const relPath = dirAbsPath.startsWith(projectPath + "/")
+        ? dirAbsPath.slice(projectPath.length + 1)
+        : null;
+      if (!relPath) {
+        console.warn("invalidateDir: dirAbsPath 不在 projectPath 下", {
+          projectPath,
+          dirAbsPath,
+        });
+        return;
+      }
+      useProjectStore.getState().updateNodeChildren(projectId, relPath, childNodes);
+    } catch (err) {
+      console.warn("invalidateDir failed", { projectId, dirAbsPath }, err);
+    }
+  },
 
   setViewMode: (mode) => set({ viewMode: mode }),
 
