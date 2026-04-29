@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import { useProjectStore } from "@/stores/projectStore";
 import { usePanelStore } from "@/stores/panelStore";
 import { ChangedFileRow } from "./ChangedFileRow";
-import { CommitBar } from "./CommitBar";
+import { CommitHeader, CommitForm, useCommitController } from "./CommitBar";
 import type { Project } from "@/types/project";
 import type { GitFileChange } from "@/services/git";
 
@@ -44,6 +44,7 @@ export function ChangesView({ project }: ChangesViewProps) {
   const flat = useProjectStore((s) => s.flatMode);
   const openTab = usePanelStore((s) => s.openTab);
   const openPanel = usePanelStore((s) => s.openPanel);
+  const commitController = useCommitController(project);
 
   // 合并 staged + unstaged + untracked，去重（以 unstaged 优先）
   const changes: MergedChange[] = useMemo(() => {
@@ -106,8 +107,8 @@ export function ChangesView({ project }: ChangesViewProps) {
 
   return (
     <div className="flex flex-col">
-      {/* Commit / Push / Pull / Fetch 操作条 — 即使没有本地改动也常驻，方便 sync */}
-      <CommitBar project={project} />
+      {/* 顶栏：分支 + ahead/behind + sync/fetch — 即使没有改动也常驻，方便 sync */}
+      <CommitHeader controller={commitController} />
 
       {changes.length === 0 ? (
         <div
@@ -143,6 +144,9 @@ export function ChangesView({ project }: ChangesViewProps) {
           )}
         </>
       )}
+
+      {/* Commit 表单 + 主按钮 — 文件列表下方 */}
+      <CommitForm controller={commitController} />
     </div>
   );
 }

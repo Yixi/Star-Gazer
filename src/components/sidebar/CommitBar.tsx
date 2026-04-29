@@ -1,19 +1,24 @@
 /**
- * Commit / Push / Pull / Sync 操作条
+ * Commit / Push / Pull / Sync 操作 — 拆为两段渲染
  *
- * 参考 VSCode Source Control 面板：
- * - 顶栏：分支名 + ahead/behind 角标 + 同步按钮（pull+push）+ fetch 按钮
- * - Message 多行输入框（⌘↩ 提交，placeholder 含分支名）
- * - 主按钮 = 状态机：
- *   · 有 changes → "Commit"
- *   · 无 changes + ahead/behind 任一 > 0 → "Sync Changes ↓N ↑M"
- *   · 完全干净 → 禁用
+ * 视觉布局参考 VSCode SCM：
+ * - CommitHeader：分支名 + ahead/behind 角标 + sync/fetch 图标按钮
+ *   渲染在变更文件列表上方（项目头紧下方），始终显示
+ * - CommitForm：Message 多行输入 + 主按钮 + 错误反馈
+ *   渲染在变更文件列表下方
+ *
+ * 状态由 `useCommitController(project)` 集中托管，两个子组件共享同一份。
+ *
+ * 主按钮状态机：
+ * - 有 changes → "Commit"
+ * - 无 changes + ahead/behind 任一 > 0 → "Sync Changes ↓N ↑M"
+ * - 完全干净 → 禁用
  *
  * 行为：
  * - Commit 后端会 smart-stage：若无 staged 改动自动 `git add -A`
- * - Sync 等价于 pull --ff-only 后 push（任何一步失败都会回报）
+ * - Sync 等价于 pull --ff-only 后 push
  * - Fetch 只跑 `git fetch --all --prune`，更新 ahead/behind 显示但不动 HEAD
- * - 任何操作完成后立即拉一次 gitStatus 写回 store，避免 2s 轮询的延迟感
+ * - 任何操作完成后立即拉一次 gitStatus，避免 2s 轮询的延迟感
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -36,10 +41,6 @@ import {
 } from "@/services/git";
 import type { Project } from "@/types/project";
 
-interface CommitBarProps {
-  project: Project;
-}
-
 type BusyKind = "commit" | "sync" | "fetch" | null;
 
 /** 主按钮派生状态 */
@@ -48,7 +49,23 @@ type Primary =
   | { kind: "sync"; ahead: number; behind: number }
   | { kind: "idle" };
 
-export function CommitBar({ project }: CommitBarProps) {
+export interface CommitController {
+  branch: string;
+  ahead: number;
+  behind: number;
+  message: string;
+  setMessage: (v: string) => void;
+  busy: BusyKind;
+  error: string | null;
+  primary: Primary;
+  canPrimary: boolean;
+  handlePrimary: () => void;
+  handleSync: () => void;
+  handleFetch: () => void;
+  handleKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+}
+
+export function useCommitController(project: Project): CommitController {
   const { t } = useTranslation();
   const status = useProjectStore((s) => s.gitStatusByProject[project.id]);
   const [message, setMessage] = useState("");
@@ -65,26 +82,18 @@ export function CommitBar({ project }: CommitBarProps) {
   const ahead = status?.ahead ?? 0;
   const behind = status?.behind ?? 0;
 
-  // 判定是否有可提交的改动：staged / unstaged / untracked 任一非空
   const hasChanges =
     !!status &&
     (status.staged.length > 0 ||
       status.unstaged.length > 0 ||
       status.untracked.length > 0);
 
-  /**
-   * 主按钮状态机 — 模仿 VSCode SCM actionButton 派生：
-   * - 有改动：commit（即使同时也有 ahead/behind，也优先让用户先提交）
-   * - 无改动 + ahead/behind 任一 > 0：sync（pull + push）
-   * - 完全干净：idle（按钮 disabled）
-   */
   const primary: Primary = useMemo(() => {
     if (hasChanges) return { kind: "commit" };
     if (ahead > 0 || behind > 0) return { kind: "sync", ahead, behind };
     return { kind: "idle" };
   }, [hasChanges, ahead, behind]);
 
-  // commit 需要非空 message；sync 不需要任何输入
   const canPrimary =
     busy === null &&
     (primary.kind === "commit"
@@ -97,7 +106,6 @@ export function CommitBar({ project }: CommitBarProps) {
       setError(null);
       try {
         await fn();
-        // 操作成功后立即刷新 git 状态，避免依赖 2s 轮询的延迟感
         try {
           const next = await gitStatus(project.path);
           useProjectStore.getState().setGitStatus(project.id, next);
@@ -111,7 +119,7 @@ export function CommitBar({ project }: CommitBarProps) {
         setBusy(null);
       }
     },
-    [project.id, project.path],
+    [project.id, project.path, t],
   );
 
   const handleCommit = useCallback(() => {
@@ -124,9 +132,7 @@ export function CommitBar({ project }: CommitBarProps) {
 
   const handleSync = useCallback(() => {
     runWithBusy("sync", async () => {
-      // pull 然后 push —— 任一步失败立即报错，不掩盖
       await gitPull(project.path);
-      // ahead === 0 时 push 也是 no-op，不必判断
       await gitPush(project.path);
     });
   }, [project.path, runWithBusy]);
@@ -137,14 +143,12 @@ export function CommitBar({ project }: CommitBarProps) {
     });
   }, [project.path, runWithBusy]);
 
-  /** 主按钮 — 根据状态机分发 */
   const handlePrimary = useCallback(() => {
     if (!canPrimary) return;
     if (primary.kind === "commit") handleCommit();
     else if (primary.kind === "sync") handleSync();
   }, [canPrimary, primary.kind, handleCommit, handleSync]);
 
-  // ⌘↩ / Ctrl+Enter 触发主按钮（commit 或 sync，由当前状态决定）
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
@@ -152,72 +156,118 @@ export function CommitBar({ project }: CommitBarProps) {
     }
   };
 
+  return {
+    branch,
+    ahead,
+    behind,
+    message,
+    setMessage,
+    busy,
+    error,
+    primary,
+    canPrimary,
+    handlePrimary,
+    handleSync,
+    handleFetch,
+    handleKeyDown,
+  };
+}
+
+/** 顶栏：分支 + ahead/behind + sync/fetch — 渲染在变更列表上方 */
+export function CommitHeader({ controller }: { controller: CommitController }) {
+  const { t } = useTranslation();
+  const { branch, ahead, behind, busy, handleSync, handleFetch } = controller;
+
   return (
     <div
-      className="flex flex-col flex-shrink-0 select-none"
+      className="flex items-center justify-between flex-shrink-0 select-none"
       style={{
-        padding: "8px 12px 10px",
+        padding: "6px 12px",
         borderBottom: "1px solid #161820",
         background: "#0b0c11",
         gap: 6,
       }}
     >
-      {/* 顶栏：分支 + ahead/behind + sync/fetch 操作 */}
-      <div className="flex items-center justify-between" style={{ gap: 6 }}>
-        <div
-          className="flex items-center min-w-0"
-          style={{ gap: 4, fontSize: 11, color: "#8b92a3" }}
-          title={branch}
-        >
-          <GitBranch className="w-3 h-3 flex-shrink-0" />
-          <span className="truncate">{branch}</span>
-          {behind > 0 && (
-            <span
-              className="flex items-center tabular-nums"
-              style={{ color: "#8b92a3", marginLeft: 2 }}
-              title={t("git.behindTooltip", { count: behind })}
-            >
-              <ArrowDown className="w-2.5 h-2.5" />
-              {behind}
-            </span>
-          )}
-          {ahead > 0 && (
-            <span
-              className="flex items-center tabular-nums"
-              style={{ color: "#8b92a3" }}
-              title={t("git.aheadTooltip", { count: ahead })}
-            >
-              <ArrowUp className="w-2.5 h-2.5" />
-              {ahead}
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center" style={{ gap: 2 }}>
-          <IconButton
-            title={
-              ahead > 0 || behind > 0
-                ? t("git.syncWithCounts", { behind, ahead })
-                : t("git.syncTooltip")
-            }
-            onClick={handleSync}
-            disabled={busy !== null}
-            spinning={busy === "sync"}
+      <div
+        className="flex items-center min-w-0"
+        style={{ gap: 4, fontSize: 11, color: "#8b92a3" }}
+        title={branch}
+      >
+        <GitBranch className="w-3 h-3 flex-shrink-0" />
+        <span className="truncate">{branch}</span>
+        {behind > 0 && (
+          <span
+            className="flex items-center tabular-nums"
+            style={{ color: "#8b92a3", marginLeft: 2 }}
+            title={t("git.behindTooltip", { count: behind })}
           >
-            <RefreshCw className="w-3 h-3" />
-          </IconButton>
-          <IconButton
-            title={t("git.fetchTooltip")}
-            onClick={handleFetch}
-            disabled={busy !== null}
-            spinning={busy === "fetch"}
+            <ArrowDown className="w-2.5 h-2.5" />
+            {behind}
+          </span>
+        )}
+        {ahead > 0 && (
+          <span
+            className="flex items-center tabular-nums"
+            style={{ color: "#8b92a3" }}
+            title={t("git.aheadTooltip", { count: ahead })}
           >
-            <RotateCw className="w-3 h-3" />
-          </IconButton>
-        </div>
+            <ArrowUp className="w-2.5 h-2.5" />
+            {ahead}
+          </span>
+        )}
       </div>
 
-      {/* Message 输入框 — 默认单行高度，输入多行时浏览器自动滚动；用户也可以手动 resize */}
+      <div className="flex items-center" style={{ gap: 2 }}>
+        <IconButton
+          title={
+            ahead > 0 || behind > 0
+              ? t("git.syncWithCounts", { behind, ahead })
+              : t("git.syncTooltip")
+          }
+          onClick={handleSync}
+          disabled={busy !== null}
+          spinning={busy === "sync"}
+        >
+          <RefreshCw className="w-3 h-3" />
+        </IconButton>
+        <IconButton
+          title={t("git.fetchTooltip")}
+          onClick={handleFetch}
+          disabled={busy !== null}
+          spinning={busy === "fetch"}
+        >
+          <RotateCw className="w-3 h-3" />
+        </IconButton>
+      </div>
+    </div>
+  );
+}
+
+/** Message 表单 + 主按钮 + 错误反馈 — 渲染在变更列表下方 */
+export function CommitForm({ controller }: { controller: CommitController }) {
+  const { t } = useTranslation();
+  const {
+    branch,
+    message,
+    setMessage,
+    busy,
+    error,
+    primary,
+    canPrimary,
+    handlePrimary,
+    handleKeyDown,
+  } = controller;
+
+  return (
+    <div
+      className="flex flex-col flex-shrink-0 select-none"
+      style={{
+        padding: "8px 12px 10px",
+        borderTop: "1px solid #161820",
+        background: "#0b0c11",
+        gap: 6,
+      }}
+    >
       <textarea
         value={message}
         onChange={(e) => setMessage(e.target.value)}
@@ -247,7 +297,6 @@ export function CommitBar({ project }: CommitBarProps) {
         }}
       />
 
-      {/* 主按钮 — 状态机派生：commit / sync changes / idle */}
       <PrimaryButton
         primary={primary}
         canPrimary={canPrimary}
@@ -255,7 +304,6 @@ export function CommitBar({ project }: CommitBarProps) {
         onClick={handlePrimary}
       />
 
-      {/* 错误反馈 */}
       {error && (
         <div
           style={{
@@ -291,7 +339,6 @@ function PrimaryButton({
   busy: BusyKind;
   onClick: () => void;
 }) {
-  // 文字 + 图标 + busy 判定
   const isBusy =
     (primary.kind === "commit" && busy === "commit") ||
     (primary.kind === "sync" && busy === "sync");
@@ -302,7 +349,6 @@ function PrimaryButton({
     label = "Commit";
     icon = <Check className="w-3 h-3" />;
   } else if (primary.kind === "sync") {
-    // VSCode 风格："Sync Changes ↓N ↑M" — 没有的方向不显示
     const parts: string[] = [];
     if (primary.behind > 0) parts.push(`↓${primary.behind}`);
     if (primary.ahead > 0) parts.push(`↑${primary.ahead}`);
@@ -321,7 +367,6 @@ function PrimaryButton({
     );
     icon = <RefreshCw className="w-3 h-3" />;
   } else {
-    // idle — 按钮在视觉上保持 commit 形态但完全 disabled
     label = "Commit";
     icon = <Check className="w-3 h-3" />;
   }
