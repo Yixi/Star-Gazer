@@ -203,14 +203,6 @@ hr,
   transition: width 150ms ease-out;
 }
 
-/* macOS 窗口拖拽区域（Overlay titleBarStyle） */
-.titlebar-drag {
-  -webkit-app-region: drag;
-}
-.titlebar-no-drag {
-  -webkit-app-region: no-drag;
-}
-
 /* Tab 拖拽样式 */
 .tab-dragging {
   opacity: 0.5;

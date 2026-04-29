@@ -9,7 +9,6 @@
  * - 底部 1px 边框分隔
  * - 整个标题栏可拖拽移动窗口（data-tauri-drag-region）
  */
-import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { usePanelStore } from "@/stores/panelStore";
@@ -18,19 +17,6 @@ import { useWorkspaceStore } from "@/stores/workspaceStore";
 
 export function TitleBar() {
   const { t } = useTranslation();
-  /** 拖拽窗口 — Overlay 模式下需要程序化调用 startDragging */
-  const handleDragStart = useCallback(async (e: React.MouseEvent) => {
-    // 只处理左键，且目标不是按钮等交互元素
-    if (e.button !== 0) return;
-    const target = e.target as HTMLElement;
-    if (target.closest("button, input, a, [role='button']")) return;
-    try {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      await getCurrentWindow().startDragging();
-    } catch {
-      // 非 Tauri 环境忽略
-    }
-  }, []);
   const agents = useCanvasStore((s) => s.agents);
   const activeTabId = usePanelStore((s) => s.activeTabId);
   const tabs = usePanelStore((s) => s.tabs);
@@ -49,9 +35,8 @@ export function TitleBar() {
 
   return (
     <header
-      className="flex items-center flex-shrink-0 select-none titlebar-drag"
+      className="flex items-center flex-shrink-0 select-none"
       data-tauri-drag-region
-      onMouseDown={handleDragStart}
       style={{
         padding: '12px 16px',
         background: 'var(--sg-bg-sidebar)',
@@ -75,9 +60,9 @@ export function TitleBar() {
         {title}
       </div>
 
-      {/* 右侧操作提示 — no-drag 防止拦截拖拽 */}
+      {/* 右侧操作提示 — button 上不会触发 data-tauri-drag-region */}
       <div
-        className="flex items-center flex-shrink-0 titlebar-no-drag"
+        className="flex items-center flex-shrink-0"
         style={{ gap: 4, fontSize: 11 }}
       >
         <button
