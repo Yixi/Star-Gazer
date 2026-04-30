@@ -103,3 +103,10 @@ pub async fn git_fetch(repo_path: String) -> Result<(), String> {
     log::info!("Git fetch: {}", repo_path);
     GitService::fetch(&repo_path)
 }
+
+/// 切换到指定分支
+#[tauri::command]
+pub async fn git_checkout(repo_path: String, branch: String) -> Result<(), String> {
+    log::info!("Git checkout: {} → {}", repo_path, branch);
+    GitService::checkout(&repo_path, &branch)
+}

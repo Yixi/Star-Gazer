@@ -37,6 +37,7 @@ import {
   ContextMenuItem,
   MenuDivider,
 } from "@/components/ui/ContextMenu";
+import { BranchSwitcher } from "./BranchSwitcher";
 import type { Project } from "@/types/project";
 
 interface ProjectItemProps {
@@ -256,24 +257,13 @@ export function ProjectItem({
             }}
           />
         )}
-        {/* Git 分支标签 — 小型 badge */}
+        {/* Git 分支切换器 — badge 形态，点击弹下拉 */}
         {isExpanded && gitBranch && (
-          <span
-            className="flex-shrink-0 tabular-nums"
-            style={{
-              fontSize: 9,
-              color: "#8b92a3",
-              fontWeight: 500,
-              fontFamily: "'SF Mono', Menlo, monospace",
-              padding: "2px 6px",
-              borderRadius: 3,
-              background: "rgba(139,146,163,0.08)",
-              textTransform: "none",
-              letterSpacing: 0,
-            }}
-          >
-            {gitBranch}
-          </span>
+          <BranchSwitcher
+            projectId={project.id}
+            projectPath={project.path}
+            currentBranch={gitBranch}
+          />
         )}
         {/* Changes 视图折叠态：项目级 +/- 统计 */}
         {!isExpanded && diffSummary && (

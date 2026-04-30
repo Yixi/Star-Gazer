@@ -485,6 +485,18 @@ impl GitService {
         Ok(branches)
     }
 
+    /// 切换到指定分支
+    ///
+    /// 直接 shell out `git checkout <branch>`。git 自带 DWIM：传不带 remote
+    /// 前缀的 short name（如 `feature`），若本地不存在但 `origin/feature` 存在，
+    /// 会自动建跟踪分支。所以前端调用时应 strip `origin/` 前缀再传过来。
+    ///
+    /// 失败场景（让 stderr 透传）：工作区有冲突修改 / 分支不存在 / rebase 进行中
+    pub fn checkout(repo_path: &str, branch: &str) -> Result<(), String> {
+        validate_git_ref(branch)?;
+        Self::exec(repo_path, &["checkout", branch]).map(|_| ())
+    }
+
     /// 获取 git 日志
     /// - `--all`: 包含所有分支的 commits（方便画分支图）
     /// - `%P`: 父 commits

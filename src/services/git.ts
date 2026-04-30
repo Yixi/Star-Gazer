@@ -139,3 +139,8 @@ export async function gitPull(repoPath: string): Promise<void> {
 export async function gitFetch(repoPath: string): Promise<void> {
   return invoke("git_fetch", { repoPath });
 }
+
+/** 切换分支 — 远端分支传 short name（不带 remote/ 前缀），让 git DWIM 自动建跟踪分支 */
+export async function gitCheckout(repoPath: string, branch: string): Promise<void> {
+  return invoke("git_checkout", { repoPath, branch });
+}

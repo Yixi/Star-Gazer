@@ -58,6 +58,7 @@ pub fn run() {
             git::git_push,
             git::git_pull,
             git::git_fetch,
+            git::git_checkout,
             // 文件系统命令
             fs::read_file,
             fs::write_file,
