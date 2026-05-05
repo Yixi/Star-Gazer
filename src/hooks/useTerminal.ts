@@ -153,7 +153,9 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
       fontWeight: "400",
       fontWeightBold: "600",
       letterSpacing: 0,
-      lineHeight: 1.35,
+      // 必须是整数倍数（1 / 1.5 / 2 …），否则 fontSize × lineHeight 不是整数像素，
+      // WebGL 渲染器做亚像素 GPU 合成时会在滚动后留下散落的字符残影。
+      lineHeight: 1.5,
       theme: TERMINAL_THEME,
       cursorBlink: true,
       cursorStyle: "bar",
@@ -461,6 +463,9 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
     if (!el || el.clientWidth === 0 || el.clientHeight === 0) return;
     try {
       fitAddonRef.current.fit();
+      // resize 后清纹理图集 —— WKWebView + WebGL 在 viewport 变化后旧 glyph 容易
+      // 残留在右侧 cell 上（xterm 官方文档对纹理损坏推荐的修复）
+      terminalRef.current.clearTextureAtlas();
       const { cols, rows } = terminalRef.current;
       if (cols > 0 && rows > 0) {
         ptyService.resizeTerminal(terminalId, cols, rows);
