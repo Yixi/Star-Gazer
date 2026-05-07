@@ -236,28 +236,6 @@ export function FileTree({ project }: FileTreeProps) {
     [project.id, project.path, fileTree, recalcHeight]
   );
 
-  if (isLoading) {
-    return (
-      <div
-        className="flex items-center justify-center h-32 text-sm"
-        style={{ color: "#6b7280" }}
-      >
-        加载文件树...
-      </div>
-    );
-  }
-
-  if (fileTree.length === 0) {
-    return (
-      <div
-        className="flex items-center justify-center h-32 text-sm"
-        style={{ color: "#6b7280" }}
-      >
-        空目录
-      </div>
-    );
-  }
-
   // 过滤始终隐藏的条目（.git, .DS_Store）+ 把 inline create 占位行合并进去
   const editing = useFileTreeUIStore((s) => s.editing);
   const setFocused = useFileTreeUIStore((s) => s.setFocused);
@@ -292,6 +270,28 @@ export function FileTree({ project }: FileTreeProps) {
 
   // 文件树快捷键（仅 isFocused=true 时生效）
   useFileTreeShortcuts(project, actions, (node) => setDeleteDialog(node));
+
+  if (isLoading) {
+    return (
+      <div
+        className="flex items-center justify-center h-32 text-sm"
+        style={{ color: "#6b7280" }}
+      >
+        加载文件树...
+      </div>
+    );
+  }
+
+  if (fileTree.length === 0) {
+    return (
+      <div
+        className="flex items-center justify-center h-32 text-sm"
+        style={{ color: "#6b7280" }}
+      >
+        空目录
+      </div>
+    );
+  }
 
   /** 文件树容器的空白处右键 → 项目根上下文菜单（New File / New Folder / Paste / Reveal） */
   const handleContainerContextMenu = (e: React.MouseEvent) => {
