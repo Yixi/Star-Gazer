@@ -87,6 +87,29 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
   onExitRef.current = onExit;
 
   /**
+   * 强制 WebGL 渲染器丢弃 glyph atlas + 重画所有可见行。
+   *
+   * 仅清 atlas 是不够的 —— 它只丢 GPU 上的字符纹理缓存，已经画到 framebuffer
+   * 上的污染像素仍在屏幕上，要等到大量新输出冲过去才会被覆盖。必须再调
+   * `refresh(0, rows-1)` 强制 WebGL renderer 重画所有可见行，把脏区位图
+   * 重新生成并提交，污染才会被立刻清掉。
+   *
+   * DOM 渲染器没有 atlas 概念，只 refresh 即可（也基本不会出现这类残影）。
+   */
+  const redraw = useCallback(() => {
+    const t = terminalRef.current;
+    if (!t) return;
+    try {
+      if (webglAddonRef.current) {
+        t.clearTextureAtlas();
+      }
+      t.refresh(0, t.rows - 1);
+    } catch {
+      // terminal 已 dispose 时静默吞掉
+    }
+  }, []);
+
+  /**
    * 根据 Canvas zoom 切换 xterm renderer：zoom === 1 时 WebGL，否则 DOM。
    *
    * 动机：画布用 CSS `zoom` 整体位图化缩放，WebGL canvas 的 backing store
@@ -463,9 +486,11 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
     if (!el || el.clientWidth === 0 || el.clientHeight === 0) return;
     try {
       fitAddonRef.current.fit();
-      // resize 后清纹理图集 —— WKWebView + WebGL 在 viewport 变化后旧 glyph 容易
-      // 残留在右侧 cell 上（xterm 官方文档对纹理损坏推荐的修复）
-      terminalRef.current.clearTextureAtlas();
+      // resize 后清纹理图集并重绘 —— WKWebView + WebGL 在 viewport 变化后旧
+      // glyph 容易残留在右侧 cell 上（xterm 官方文档对纹理损坏推荐的修复）。
+      // 仅清 atlas 不够，已绘制的污染像素留在 framebuffer 里，必须再 refresh
+      // 强制重画所有可见行才能立刻消除。
+      redraw();
       const { cols, rows } = terminalRef.current;
       if (cols > 0 && rows > 0) {
         ptyService.resizeTerminal(terminalId, cols, rows);
@@ -473,7 +498,45 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
     } catch {
       // fit 可能在终端未完全初始化时失败，忽略
     }
-  }, [terminalId]);
+  }, [terminalId, redraw]);
+
+  /**
+   * 被动触发 atlas 清理 + 重绘的场景。这些都不会经过 fit 路径，但同样会
+   * 让 WebGL atlas 失效或被错位采样：
+   * - **visibilitychange**：WKWebView 被切到后台时 GPU 资源可能被回收，
+   *   切回前台后 atlas 已损坏；
+   * - **window focus**：macOS 跨 Space / 跨窗切换后 GL context 状态可能异常；
+   * - **document.fonts.ready**：首屏 atlas 用 fallback 字体烘焙了，等 Nerd
+   *   Font 加载完成后必须重建，否则字符 metrics 错位；
+   * - **DPR 变化**：跨屏拖窗 / 外接显示器拔插，drawing buffer 尺寸变化。
+   */
+  useEffect(() => {
+    const onVisibility = () => {
+      if (!document.hidden) redraw();
+    };
+    const onFocus = () => redraw();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onFocus);
+    document.fonts?.ready.then(() => redraw()).catch(() => {});
+
+    // matchMedia 的 query 在条件被打破后就过期了，每次 change 必须重新创建
+    // 一个新 query 来监听下一次 DPR 变化
+    let currentMq: MediaQueryList | null = null;
+    const onDprChange = () => {
+      redraw();
+      currentMq?.removeEventListener("change", onDprChange);
+      currentMq = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+      currentMq.addEventListener("change", onDprChange);
+    };
+    currentMq = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+    currentMq.addEventListener("change", onDprChange);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onFocus);
+      currentMq?.removeEventListener("change", onDprChange);
+    };
+  }, [redraw]);
 
   /** 清理 */
   useEffect(() => {
