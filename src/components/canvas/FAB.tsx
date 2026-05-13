@@ -1,51 +1,76 @@
 /**
- * FAB (Floating Action Button) — 左下角创建 Agent 按钮
+ * FAB (Floating Action Button) — 画布右下角创建 Agent 按钮
  *
- * 视觉效果：
- * - 渐变蓝色背景：linear-gradient(135deg, #4a9eff 0%, #3b82f6 100%)
- * - 阴影：0 10px 30px rgba(74,158,255,0.45) + 内嵌白色高光
- * - 悬停时轻微放大(1.08) + 阴影扩大
- * - 点击时收缩反馈(0.95)
- * - 入场淡入动画
+ * 设计稿规格：
+ * - 48x48 圆形，绝对定位 right:24 bottom:24
+ * - 渐变填充：accent-hover → accent-active（180deg）
+ * - 阴影：0 14px 40px rgba(74,158,255,.45) + inset 高光
+ * - 外圈 ring-pulse：inset -6px 1px 边框，scale .9→1.25 + opacity .6→0，2.4s 循环
+ * - 内容：+ 字符 24px / weight 300
+ * - hover 阴影扩大；点击轻微缩小
  */
-import { Plus } from "lucide-react";
+import { useState } from "react";
 
 interface FABProps {
   onClick: () => void;
 }
 
 export function FAB({ onClick }: FABProps) {
+  const [pressed, setPressed] = useState(false);
+  const [hovered, setHovered] = useState(false);
+
   return (
     <button
-      className="absolute bottom-5 left-5 z-20 flex items-center justify-center w-11 h-11 rounded-full text-white outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+      type="button"
+      className="absolute outline-none focus-visible:ring-2 focus-visible:ring-white/30"
       style={{
-        background: "linear-gradient(135deg, #4a9eff 0%, #3b82f6 100%)",
-        boxShadow:
-          "0 10px 30px rgba(74,158,255,0.45), inset 0 0 0 1px rgba(255,255,255,0.15)",
-        transition:
-          "transform 150ms var(--sg-ease-out, ease-out), box-shadow 200ms var(--sg-ease-in-out, ease)",
-        animation: "sg-fade-in-up 300ms var(--sg-ease-out, ease-out) both",
+        right: 24,
+        bottom: 24,
+        width: 48,
+        height: 48,
+        borderRadius: 9999,
+        background: "linear-gradient(180deg, var(--sg-accent-hover) 0%, var(--sg-accent-active) 100%)",
+        border: "1px solid rgba(255, 255, 255, 0.08)",
+        boxShadow: hovered
+          ? "0 18px 50px rgba(74,158,255,0.55), inset 0 1px 0 rgba(255,255,255,0.25)"
+          : "0 14px 40px rgba(74,158,255,0.45), inset 0 1px 0 rgba(255,255,255,0.25)",
+        color: "#fff",
+        fontSize: 24,
+        fontWeight: 300,
+        lineHeight: 1,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: "pointer",
+        zIndex: 4,
+        transform: pressed ? "scale(0.95)" : "scale(1)",
+        transition: "box-shadow 200ms var(--sg-ease-in-out), transform 100ms var(--sg-ease-out)",
+        animation: "sg-fade-in-up 300ms var(--sg-ease-out) both",
       }}
       onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => {
+        setHovered(false);
+        setPressed(false);
+      }}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
       title="新建 Agent (Cmd+N)"
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = "scale(1.08)";
-        e.currentTarget.style.boxShadow =
-          "0 14px 40px rgba(74,158,255,0.55), inset 0 0 0 1px rgba(255,255,255,0.2)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = "scale(1)";
-        e.currentTarget.style.boxShadow =
-          "0 10px 30px rgba(74,158,255,0.45), inset 0 0 0 1px rgba(255,255,255,0.15)";
-      }}
-      onMouseDown={(e) => {
-        e.currentTarget.style.transform = "scale(0.95)";
-      }}
-      onMouseUp={(e) => {
-        e.currentTarget.style.transform = "scale(1.08)";
-      }}
     >
-      <Plus className="w-6 h-6" strokeWidth={1.5} />
+      {/* 外圈脉动光环 — 2.4s 无限循环 */}
+      <span
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: -6,
+          borderRadius: 9999,
+          border: "1px solid rgba(74, 158, 255, 0.4)",
+          animation: "sg-fab-ring 2.4s ease-out infinite",
+          pointerEvents: "none",
+        }}
+      />
+      {/* + 字符 */}
+      <span style={{ position: "relative" }}>+</span>
     </button>
   );
 }

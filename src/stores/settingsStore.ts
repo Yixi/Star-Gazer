@@ -43,7 +43,7 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
-      sidebarWidth: 240,
+      sidebarWidth: 264,
       sidebarOpen: true,
       sidebarCollapsedWidth: 48,
       editorFontSize: 13,

@@ -9,7 +9,7 @@
  * - 拖拽排序
  */
 import { useState, useRef, useEffect } from "react";
-import { X, File, GitCompare } from "lucide-react";
+import { X } from "lucide-react";
 import { usePanelStore } from "@/stores/panelStore";
 import type { PanelTab } from "@/types/panel";
 
@@ -92,7 +92,14 @@ export function TabBar() {
   };
 
   return (
-    <div className="relative flex items-center flex-shrink-0" style={{ height: 36, borderBottom: "1px solid #1a1c23" }}>
+    <div
+      className="relative flex items-center flex-shrink-0"
+      style={{
+        height: 34,
+        background: "var(--sg-bg-sidebar)",
+        borderBottom: "1px solid var(--sg-border-primary)",
+      }}
+    >
       {/* Tab 滚动容器 */}
       <div
         ref={scrollRef}
@@ -117,12 +124,13 @@ export function TabBar() {
         ))}
       </div>
 
-      {/* 右侧渐变 fade */}
+      {/* 右侧渐变 fade — 提示有更多 tab 可滚动 */}
       {showFadeRight && (
         <div
-          className="absolute right-8 top-0 bottom-0 w-8 pointer-events-none"
+          className="absolute right-9 top-0 bottom-0 w-8 pointer-events-none"
           style={{
-            background: "linear-gradient(to right, transparent, #0f1116)",
+            background:
+              "linear-gradient(to right, transparent, var(--sg-bg-sidebar))",
           }}
         />
       )}
@@ -132,31 +140,40 @@ export function TabBar() {
         <div
           className="flex items-center justify-center flex-shrink-0"
           style={{
-            height: 36,
-            padding: '0 10px',
-            color: '#6b7280',
+            height: 34,
+            padding: "0 8px",
+            color: "var(--sg-text-hint)",
             fontSize: 14,
-            borderLeft: '1px solid #1a1c23',
-            background: '#0d0e13',
+            borderLeft: "1px solid var(--sg-border-primary)",
+            background: "var(--sg-bg-sidebar)",
           }}
         >
           ⋯
         </div>
       )}
 
-      {/* 面板关闭按钮 */}
+      {/* 面板关闭按钮 — 与 tabbar 等高 */}
       <button
-        className="flex-shrink-0 flex items-center justify-center text-[#6b7280] bg-[#0d0e13] hover:bg-[#1a1c23] hover:text-[#e4e6eb] transition-colors"
+        className="flex-shrink-0 flex items-center justify-center transition-colors"
         style={{
-          width: 36,
-          height: 36,
-          borderLeft: '1px solid #1a1c23',
-          fontSize: 16,
+          width: 34,
+          height: 34,
+          background: "var(--sg-bg-sidebar)",
+          color: "var(--sg-text-hint)",
+          borderLeft: "1px solid var(--sg-border-primary)",
         }}
         onClick={closePanel}
         title="关闭面板 (⌘\\)"
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = "rgba(255, 255, 255, 0.05)";
+          e.currentTarget.style.color = "var(--sg-text-primary)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = "var(--sg-bg-sidebar)";
+          e.currentTarget.style.color = "var(--sg-text-hint)";
+        }}
       >
-        <X style={{ width: 16, height: 16 }} />
+        <X style={{ width: 14, height: 14 }} />
       </button>
 
       {/* 右键上下文菜单 */}
@@ -198,7 +215,11 @@ export function TabBar() {
   );
 }
 
-/** 单个 Tab 项 */
+/** 单个 Tab 项 — 设计稿样式：dot + ic 色方块 + 文件名 + x
+ *  - active: bg-canvas + 顶部 1px accent line
+ *  - preview: 文件名斜体（secondary 文字色）
+ *  - dirty: dot 变黄色 + 发光
+ */
 function TabItem({
   tab,
   isActive,
@@ -225,16 +246,38 @@ function TabItem({
   onDragEnd: () => void;
 }) {
   const isPreview = tab.isPreview === true;
+  const ext = (tab.filePath?.split(".").pop() ?? "").toLowerCase();
+  // 文件类型 → 12x12 色方块的颜色
+  const icColor =
+    tab.type === "diff"
+      ? "#1a2438" // diff: 偏蓝灰
+      : ext === "md" || ext === "mdx"
+        ? "#2a2a3a"
+        : ext === "css"
+          ? "#2a2a3a"
+          : ext === "ts" || ext === "tsx"
+            ? "#1a2438"
+            : ext === "rs"
+              ? "#2b1c1c"
+              : ext === "json"
+                ? "#1d2b1f"
+                : "#2a2f3b";
+
   return (
     <div
-      className={`group flex items-center gap-1.5 px-3 text-xs cursor-pointer select-none transition-colors relative flex-shrink-0 ${
-        isActive ? "bg-[#0f1116]" : "hover:bg-[#13151c]"
-      }`}
+      className="group inline-flex items-center cursor-pointer select-none transition-colors relative flex-shrink-0"
       style={{
-        height: 36,
-        color: isActive ? "#e4e6eb" : "#8b92a3",
-        borderRight: "1px solid #1a1c23",
+        height: 34,
+        padding: "0 12px",
+        gap: 8,
+        fontSize: 12,
+        color: isActive
+          ? "var(--sg-text-primary)"
+          : "var(--sg-text-tertiary)",
+        background: isActive ? "var(--sg-bg-canvas)" : "transparent",
+        borderRight: "1px solid var(--sg-border-primary)",
         opacity: isDragging ? 0.5 : 1,
+        whiteSpace: "nowrap",
       }}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
@@ -244,65 +287,89 @@ function TabItem({
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDragEnd={onDragEnd}
-      title={isPreview ? "双击固定此 tab" : undefined}
+      title={isPreview ? "双击固定此 tab" : tab.filePath}
+      onMouseEnter={(e) => {
+        if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,0.025)";
+      }}
+      onMouseLeave={(e) => {
+        if (!isActive) e.currentTarget.style.background = "transparent";
+      }}
     >
-      {/* 激活时顶部 2px 蓝色边条 */}
+      {/* 激活时顶部 1px accent 线 */}
       {isActive && (
-        <div
-          className="absolute top-0 left-0 right-0 h-0.5"
-          style={{ backgroundColor: "#4a9eff" }}
+        <span
+          aria-hidden
+          className="absolute top-0 left-0 right-0"
+          style={{ height: 1, background: "var(--sg-accent)" }}
         />
       )}
 
-      {/* 文件图标 */}
-      {tab.type === "diff" ? (
-        <GitCompare className="w-3 h-3 flex-shrink-0" style={{ color: "#4a9eff" }} />
-      ) : (
-        <File className="w-3 h-3 flex-shrink-0" />
-      )}
-
-      {/* dirty 标记 */}
-      {tab.isDirty && (
-        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: "#ff8c42" }} />
-      )}
-
-      {/* 文件名 — preview 状态用斜体提示"临时打开" */}
+      {/* 6x6 状态 dot — dirty 时变黄并发光 */}
       <span
-        className="truncate max-w-[120px]"
-        style={{ fontStyle: isPreview ? "italic" : "normal" }}
+        aria-hidden
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: 999,
+          background: tab.isDirty
+            ? "var(--sg-warning)"
+            : "var(--sg-text-hint)",
+          boxShadow: tab.isDirty ? "0 0 6px rgba(254, 188, 46, 0.6)" : "none",
+          flexShrink: 0,
+        }}
+      />
+
+      {/* 12x12 文件类型色方块 — 替代 lucide icon */}
+      <span
+        aria-hidden
+        style={{
+          width: 12,
+          height: 12,
+          borderRadius: 2,
+          background: icColor,
+          flexShrink: 0,
+        }}
+      />
+
+      {/* 文件名 — preview 状态斜体 + secondary 色 */}
+      <span
+        className="truncate max-w-[160px]"
+        style={{
+          fontStyle: isPreview ? "italic" : "normal",
+          color: isPreview && !isActive ? "var(--sg-text-secondary)" : undefined,
+        }}
       >
         {tab.title}
       </span>
 
-      {/* 模式徽章 */}
-      <span
-        className="text-[9px] uppercase flex-shrink-0"
-        style={{
-          padding: '1px 5px',
-          borderRadius: 2,
-          fontFamily: "'SF Mono', monospace",
-          fontWeight: 600,
-          letterSpacing: '0.3px',
-          backgroundColor: tab.type === "diff" ? "rgba(74, 158, 255, 0.18)" : "rgba(107, 114, 128, 0.2)",
-          color: tab.type === "diff" ? "#4a9eff" : "#9ca3af",
-        }}
-      >
-        {tab.type}
-      </span>
-
-      {/* 关闭按钮 */}
+      {/* 关闭按钮 — 14x14 hover 高亮
+          非 active tab：默认隐藏，group-hover 时半透明显示；
+          active tab：默认 0.55 透明度，self-hover 时全显示 */}
       <button
-        className={`flex items-center justify-center text-[#6b7280] hover:bg-[#2a2f3b] hover:text-[#e4e6eb] transition-all ml-0.5 flex-shrink-0 ${
-          isActive ? "opacity-70 hover:opacity-100" : "opacity-0 group-hover:opacity-100"
+        type="button"
+        className={`flex items-center justify-center transition-all flex-shrink-0 hover:!opacity-100 ${
+          isActive
+            ? "opacity-[0.55]"
+            : "opacity-0 group-hover:opacity-[0.55]"
         }`}
         style={{
+          marginLeft: 4,
           width: 14,
           height: 14,
           borderRadius: 3,
+          color: "var(--sg-text-hint)",
+          background: "transparent",
+          border: "none",
         }}
         onClick={(e) => {
           e.stopPropagation();
           onClose();
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = "rgba(255, 255, 255, 0.05)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = "transparent";
         }}
       >
         <X style={{ width: 11, height: 11 }} />

@@ -78,11 +78,14 @@
     "confirmCloseButton": "确认关闭"
   },
   "sidebar": {
-    "files": "Files — 完整文件树",
-    "changes": "Changes — 仅显示未提交的变更",
-    "history": "History — 浏览 commit 历史",
-    "treeLayout": "Tree — 按目录树展示",
-    "flatLayout": "Flat — 拍平列表"
+    "files": "Files",
+    "changes": "Changes",
+    "history": "History",
+    "treeLayout": "Tree",
+    "flatLayout": "Flat",
+    "filesHint": "完整文件树",
+    "changesHint": "仅显示未提交的变更",
+    "historyHint": "浏览 commit 历史"
   },
   "changesView": {
     "loadingGitStatus": "加载 git 状态...",
@@ -127,10 +130,15 @@
   "statusBar": {
     "acrossFiles": "涉及 {{count}} 个文件",
     "agents_one": "{{count}} agent",
-    "agents_other": "{{count}} agents"
+    "agents_other": "{{count}} agents",
+    "connected": "已连接",
+    "ahead": "{{count}} 待推送",
+    "behind": "{{count}} 落后"
   },
   "titleBar": {
-    "focusMode": "Focus 模式",
+    "focusMode": "专注模式",
+    "search": "搜索 & 命令",
+    "running": "运行中",
     "diff": "(diff)"
   },
   "error": {

@@ -877,29 +877,42 @@ function FileTreeNode({
           </span>
         )}
 
-        {/* Git diff 统计 — 右对齐, 10px, SF Mono */}
+        {/* Git diff 统计 — 设计稿: mono 9.5px, gap 4 */}
         {diffStat && !node.isInternal && (
           <span
             className="ml-auto flex items-center flex-shrink-0 tabular-nums"
-            style={{ gap: 4, fontSize: 10, fontFamily: "'SF Mono', Menlo, monospace" }}
+            style={{
+              gap: 4,
+              fontSize: 9.5,
+              fontWeight: 500,
+              fontFamily: "var(--sg-font-mono)",
+            }}
           >
             {diffStat.additions > 0 && (
-              <span style={{ color: "#22c55e" }}>+{diffStat.additions}</span>
+              <span style={{ color: "var(--sg-success)" }}>+{diffStat.additions}</span>
             )}
             {diffStat.deletions > 0 && (
-              <span style={{ color: "#ef4444" }}>-{diffStat.deletions}</span>
+              <span style={{ color: "var(--sg-error)" }}>−{diffStat.deletions}</span>
             )}
           </span>
         )}
 
-        {/* Agent 颜色标记圆点 */}
-        {data.agentColor && !isWriting && !diffStat && (
+        {/* Agent rail — 3px x 12px 色条 stack（设计稿 .tree-row .rail .p） */}
+        {data.agentColor && !node.isInternal && (
           <span
-            className="w-2 h-2 rounded-full ml-auto flex-shrink-0"
-            style={{
-              backgroundColor: AGENT_COLOR_HEX[data.agentColor] ?? "#4a9eff",
-            }}
-          />
+            className={`flex items-center flex-shrink-0 ${diffStat ? "" : "ml-auto"}`}
+            style={{ gap: 3, marginLeft: diffStat ? 6 : "auto" }}
+          >
+            <span
+              aria-hidden
+              style={{
+                width: 3,
+                height: 12,
+                borderRadius: 2,
+                background: AGENT_COLOR_HEX[data.agentColor] ?? "#4a9eff",
+              }}
+            />
+          </span>
         )}
       </div>
     </div>

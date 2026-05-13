@@ -22,7 +22,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, GitBranch, Loader2 } from "lucide-react";
+import { Check, GitBranch, Loader2 } from "lucide-react";
 import {
   gitBranches,
   gitCheckout,
@@ -202,30 +202,23 @@ export function BranchSwitcher({
         role="button"
         tabIndex={0}
         aria-label={`当前分支 ${currentBranch}，点击切换`}
-        className="flex-shrink-0 tabular-nums inline-flex items-center gap-1 cursor-pointer transition-colors"
+        className="flex-shrink-0 tabular-nums inline-flex items-center cursor-pointer transition-colors truncate"
         style={{
-          fontSize: 9,
-          color: open ? "#c8ccd3" : "#8b92a3",
+          fontSize: 10.5,
+          color: open ? "var(--sg-text-secondary)" : "var(--sg-text-tertiary)",
           fontWeight: 500,
-          fontFamily: "'SF Mono', Menlo, monospace",
-          padding: "2px 4px 2px 6px",
-          borderRadius: 3,
-          background: open
-            ? "rgba(139,146,163,0.18)"
-            : "rgba(139,146,163,0.08)",
-          textTransform: "none",
+          fontFamily: "var(--sg-font-mono)",
           letterSpacing: 0,
           maxWidth: 180,
+          textDecoration: "underline dotted",
+          textUnderlineOffset: 3,
+          textDecorationColor: "var(--sg-border-divider)",
         }}
         onMouseEnter={(e) => {
-          if (!open) {
-            e.currentTarget.style.background = "rgba(139,146,163,0.16)";
-          }
+          if (!open) e.currentTarget.style.color = "var(--sg-text-secondary)";
         }}
         onMouseLeave={(e) => {
-          if (!open) {
-            e.currentTarget.style.background = "rgba(139,146,163,0.08)";
-          }
+          if (!open) e.currentTarget.style.color = "var(--sg-text-tertiary)";
         }}
         onMouseDown={(e) => {
           // 阻止父 button 把 mousedown 当成拖拽起点
@@ -248,10 +241,6 @@ export function BranchSwitcher({
         }}
       >
         <span className="truncate">{currentBranch}</span>
-        <ChevronDown
-          className="flex-shrink-0"
-          style={{ width: 8, height: 8, opacity: 0.7 }}
-        />
       </span>
 
       {open &&

@@ -110,7 +110,19 @@ export function CommandPalette() {
       }
     };
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+
+    // 外部呼出（TitleBar 的 chip 点击等）
+    const openCommandPalette = () => {
+      setMode("command");
+      setSearch("");
+      setOpen(true);
+    };
+    window.addEventListener("stargazer:open-command-palette", openCommandPalette);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("stargazer:open-command-palette", openCommandPalette);
+    };
     // handleAddProject 稳定引用来自 useCallback，依赖 addProject/setActiveProject
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mode]);

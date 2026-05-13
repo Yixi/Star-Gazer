@@ -127,23 +127,48 @@ export function AddProjectButton({ collapsed }: AddProjectButtonProps) {
     if (collapsed) {
       return (
         <button
-          className="p-2 rounded-md hover:bg-white/5 transition-colors mt-auto"
-          style={{ color: "#8b92a3" }}
+          className="p-2 rounded-md transition-colors mt-auto"
+          style={{ color: "var(--sg-text-tertiary)" }}
           onClick={handleAddProject}
           title="添加项目"
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "rgba(255, 255, 255, 0.05)";
+            e.currentTarget.style.color = "var(--sg-text-primary)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "transparent";
+            e.currentTarget.style.color = "var(--sg-text-tertiary)";
+          }}
         >
           <Plus className="w-4 h-4" />
         </button>
       );
     }
+    // 设计稿 sb-label .mini：18x18 圆角按钮，hint 色，hover 高亮
     return (
       <button
-        className="p-1 rounded-md hover:bg-white/10 transition-colors"
-        style={{ color: "#8b92a3" }}
+        className="inline-flex items-center justify-center transition-colors"
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: 4,
+          color: "var(--sg-text-hint)",
+          background: "transparent",
+          border: "none",
+          cursor: "pointer",
+        }}
         onClick={handleAddProject}
         title="添加项目"
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = "rgba(255, 255, 255, 0.04)";
+          e.currentTarget.style.color = "var(--sg-text-secondary)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = "transparent";
+          e.currentTarget.style.color = "var(--sg-text-hint)";
+        }}
       >
-        <Plus className="w-4 h-4" />
+        <Plus className="w-3 h-3" />
       </button>
     );
   };

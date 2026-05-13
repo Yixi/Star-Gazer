@@ -123,7 +123,8 @@ export function SlidePanel() {
         pointerEvents: isOpen ? "auto" : "none",
       }}
     >
-      {/* 左缘拖拽握把 — 4px 命中区，视觉 1px 分隔 + hover 高亮 */}
+      {/* 左缘拖拽握把 — 4px 命中区
+          设计稿：中间一个 3x32 圆角条，默认 border-divider，hover 变 accent */}
       <div
         className="h-full cursor-col-resize group flex-shrink-0 relative"
         style={{ width: 4 }}
@@ -135,15 +136,27 @@ export function SlidePanel() {
           className="absolute top-0 bottom-0 left-0"
           style={{ width: 1, backgroundColor: "var(--sg-border-primary)" }}
         />
-        {/* 悬停高亮 */}
+        {/* 中间圆角握把 — 默认 border-divider，hover 变 accent */}
         <div
-          className="absolute top-0 bottom-0 left-0 opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ width: 2, backgroundColor: "var(--sg-accent)" }}
+          className="absolute top-1/2 left-1/2 transition-colors"
+          style={{
+            width: 3,
+            height: 32,
+            borderRadius: 2,
+            transform: "translate(-50%, -50%)",
+            backgroundColor: "var(--sg-border-divider)",
+          }}
         />
-        {/* 中间握把 */}
+        {/* hover 时把握把变 accent — 借助 group-hover */}
         <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ backgroundColor: "var(--sg-accent)" }}
+          className="absolute top-1/2 left-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{
+            width: 3,
+            height: 32,
+            borderRadius: 2,
+            transform: "translate(-50%, -50%)",
+            backgroundColor: "var(--sg-accent)",
+          }}
         />
       </div>
 

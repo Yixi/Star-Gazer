@@ -1,15 +1,21 @@
 /**
- * 全局视图切换条 — 24px 高度
+ * 全局视图切换条 — Files / Changes / History segmented control
  *
- * 左侧：Files / Changes / History 三个图标按钮（互斥）
- * 右侧：tree/flat 排版切换（仅 Changes/History 模式显示）
+ * 设计稿规格：
+ * - 外层 scope-row：padding 8px 12px
+ * - 内部 scope 容器：bg-elevated + border + radius 6 + padding 2px
+ * - 每个 button：flex:1，padding 5px 8px，radius 4，文字 + count badge
+ * - active button：bg-card + 内嵌高光阴影
+ * - count badge：mono 9.5px，rounded-full，hint 文字
+ *   active 状态下 badge 是 accent 色 + accent-muted 底
  *
- * 状态全局共享 — 所有项目同时切换到相同模式，避免逐项目点击。
- * 渲染位置：Sidebar 顶部（PROJECTS 标题栏下方），每次只有一份
+ * 右侧的 tree/flat 切换在设计稿中没有，但我们已有这个能力（Changes 模式下显示）。
+ * 这里把它做成 scope 容器右侧的两个紧凑 icon 按钮，仅在 Changes 模式显示。
  */
-import { Files, GitCompare, History, LayoutList, FolderTree } from "lucide-react";
+import { FolderTree, LayoutList } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useProjectStore } from "@/stores/projectStore";
+import { useMemo } from "react";
 
 export function ScopeSwitcher() {
   const { t } = useTranslation();
@@ -18,93 +24,185 @@ export function ScopeSwitcher() {
   const setViewMode = useProjectStore((s) => s.setViewMode);
   const setFlatMode = useProjectStore((s) => s.setFlatMode);
 
-  // tree/flat 切换只和 Changes 视图相关：Files 是完整文件树（始终 tree），
-  // History 只有 commit 列表（根本没有树/拍平区别）
+  const gitStatusByProject = useProjectStore((s) => s.gitStatusByProject);
+  const projectFileTrees = useProjectStore((s) => s.projectFileTrees);
+
+  // 全局聚合计数 —
+  //   files: 顶层文件树展开数（粗略指标，避免遍历整树）
+  //   changes: staged + unstaged 总和
+  //   history: 暂不计（git log 较重，按需触发）
+  const counts = useMemo(() => {
+    let filesN = 0;
+    for (const tree of Object.values(projectFileTrees)) {
+      filesN += tree?.length ?? 0;
+    }
+    let changesN = 0;
+    for (const s of Object.values(gitStatusByProject)) {
+      if (!s) continue;
+      changesN += s.staged.length + s.unstaged.length;
+    }
+    return { files: filesN, changes: changesN };
+  }, [projectFileTrees, gitStatusByProject]);
+
   const showFlat = mode === "changes";
 
   return (
     <div
-      className="flex items-center justify-between flex-shrink-0 select-none"
+      className="flex items-center flex-shrink-0 select-none"
       style={{
-        height: 28,
-        padding: "0 10px 0 14px",
-        borderBottom: "1px solid #161820",
-        background: "#0b0c11",
-        gap: 4,
+        padding: "8px 12px",
+        gap: 6,
+        borderBottom: "1px solid var(--sg-border-primary)",
+        background: "var(--sg-bg-sidebar)",
       }}
     >
-      {/* 左：三视图切换 */}
-      <div className="flex items-center" style={{ gap: 2 }}>
-        <ScopeButton
-          icon={<Files className="w-3 h-3" />}
+      {/* 三段 segmented control */}
+      <div
+        className="flex items-center flex-1 min-w-0"
+        style={{
+          background: "var(--sg-bg-elevated)",
+          border: "1px solid var(--sg-border-secondary)",
+          borderRadius: 6,
+          padding: 2,
+        }}
+      >
+        <ScopeBtn
+          label={t("sidebar.files") ?? "Files"}
+          count={counts.files}
           active={mode === "files"}
           onClick={() => setViewMode("files")}
-          title={t("sidebar.files")}
         />
-        <ScopeButton
-          icon={<GitCompare className="w-3 h-3" />}
+        <ScopeBtn
+          label={t("sidebar.changes") ?? "Changes"}
+          count={counts.changes}
           active={mode === "changes"}
           onClick={() => setViewMode("changes")}
-          title={t("sidebar.changes")}
         />
-        <ScopeButton
-          icon={<History className="w-3 h-3" />}
+        <ScopeBtn
+          label={t("sidebar.history") ?? "History"}
           active={mode === "history"}
           onClick={() => setViewMode("history")}
-          title={t("sidebar.history")}
         />
       </div>
 
-      {/* 右：tree/flat 切换 */}
+      {/* tree/flat 切换 — 仅 Changes 模式 */}
       {showFlat && (
-        <div className="flex items-center" style={{ gap: 2 }}>
-          <ScopeButton
-            icon={<FolderTree className="w-3 h-3" />}
+        <div
+          className="flex items-center"
+          style={{
+            background: "var(--sg-bg-elevated)",
+            border: "1px solid var(--sg-border-secondary)",
+            borderRadius: 6,
+            padding: 2,
+          }}
+        >
+          <MiniIconBtn
             active={!flat}
             onClick={() => setFlatMode(false)}
-            title={t("sidebar.treeLayout")}
-            small
-          />
-          <ScopeButton
-            icon={<LayoutList className="w-3 h-3" />}
+            title={t("sidebar.treeLayout") ?? "Tree"}
+          >
+            <FolderTree className="w-3 h-3" />
+          </MiniIconBtn>
+          <MiniIconBtn
             active={flat}
             onClick={() => setFlatMode(true)}
-            title={t("sidebar.flatLayout")}
-            small
-          />
+            title={t("sidebar.flatLayout") ?? "Flat"}
+          >
+            <LayoutList className="w-3 h-3" />
+          </MiniIconBtn>
         </div>
       )}
     </div>
   );
 }
 
-function ScopeButton({
-  icon,
+/** 三段选择器中的一段 */
+function ScopeBtn({
+  label,
+  count,
   active,
   onClick,
-  title,
-  small,
 }: {
-  icon: React.ReactNode;
+  label: string;
+  count?: number;
   active: boolean;
   onClick: () => void;
-  title: string;
-  small?: boolean;
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      title={title}
-      className="flex items-center justify-center transition-colors"
+      className="transition-colors inline-flex items-center justify-center"
       style={{
-        width: small ? 18 : 20,
-        height: 18,
-        borderRadius: 3,
-        backgroundColor: active ? "rgba(74, 158, 255, 0.12)" : "transparent",
-        color: active ? "#4a9eff" : "#6b7280",
+        flex: 1,
+        gap: 5,
+        padding: "5px 8px",
+        borderRadius: 4,
+        background: active ? "var(--sg-bg-card)" : "transparent",
+        boxShadow: active
+          ? "0 1px 0 rgba(255,255,255,0.04) inset, 0 1px 3px rgba(0,0,0,0.4)"
+          : undefined,
+        color: active ? "var(--sg-text-primary)" : "var(--sg-text-tertiary)",
+        fontFamily: "var(--sg-font-ui)",
+        fontSize: 11,
+        fontWeight: 500,
+        lineHeight: 1,
+        border: "none",
+        cursor: "pointer",
       }}
     >
-      {icon}
+      <span>{label}</span>
+      {typeof count === "number" && count > 0 && (
+        <span
+          style={{
+            fontFamily: "var(--sg-font-mono)",
+            fontSize: 9.5,
+            fontWeight: 500,
+            lineHeight: 1,
+            color: active ? "var(--sg-accent)" : "var(--sg-text-hint)",
+            padding: "2px 5px",
+            borderRadius: 999,
+            background: active
+              ? "var(--sg-accent-muted)"
+              : "rgba(255, 255, 255, 0.04)",
+          }}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+/** Changes 模式下的 tree/flat icon 切换按钮 */
+function MiniIconBtn({
+  children,
+  active,
+  onClick,
+  title,
+}: {
+  children: React.ReactNode;
+  active: boolean;
+  onClick: () => void;
+  title: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className="inline-flex items-center justify-center transition-colors"
+      style={{
+        width: 22,
+        height: 18,
+        borderRadius: 3,
+        background: active ? "var(--sg-bg-card)" : "transparent",
+        color: active ? "var(--sg-accent)" : "var(--sg-text-tertiary)",
+        border: "none",
+        cursor: "pointer",
+      }}
+    >
+      {children}
     </button>
   );
 }

@@ -23,7 +23,6 @@ import { X, Minus, Maximize2, Minimize2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { TerminalView } from "@/components/terminal/TerminalView";
-import { PulsingDot } from "@/components/ui/PulsingDot";
 import type { Agent } from "@/types/agent";
 import { AGENT_COMMANDS } from "@/types/agent";
 import { AGENT_COLOR_HEX } from "@/constants/agentColors";
@@ -53,8 +52,10 @@ type ResizeDirection =
 /** 最小卡片尺寸 */
 const MIN_WIDTH = 300;
 const MIN_HEIGHT = 200;
-/** 头部高度 */
-const HEADER_HEIGHT = 36;
+/** 头部高度 — 设计稿 34px */
+const HEADER_HEIGHT = 34;
+/** 底部状态条高度 — 设计稿 26px */
+const FOOTER_HEIGHT = 26;
 /** 调整手柄的检测区域宽度 */
 const RESIZE_EDGE = 8;
 
@@ -403,11 +404,12 @@ export function AgentCard({ agent }: AgentCardProps) {
     <>
       <div
         ref={cardRef}
-        className="absolute rounded-xl border overflow-hidden"
+        className="absolute border overflow-hidden"
         style={{
           ...getCardStyle(),
           ...animationStyle,
           background: "var(--sg-bg-card)",
+          borderRadius: displayMode === "maximized" ? 0 : 10,
           cursor: hoverEdge ? getResizeCursor(hoverEdge) : undefined,
         }}
         onClick={() => selectAgent(agent.id)}
@@ -425,35 +427,56 @@ export function AgentCard({ agent }: AgentCardProps) {
         data-agent-id={agent.id}
         data-agent-color={agent.color}
       >
-        {/* 标题栏 */}
+        {/* 左侧 agent 色 stripe — 2px 全高 + 发光 */}
+        <span
+          aria-hidden
+          className="absolute pointer-events-none"
+          style={{
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 2,
+            background: colorHex,
+            boxShadow: `0 0 12px ${colorHex}`,
+            zIndex: 1,
+          }}
+        />
+        {/* 标题栏 — 34px 高，padding 0 10 0 14 */}
         <div
           className="flex items-center justify-between cursor-move select-none"
           style={{
             height: HEADER_HEIGHT,
-            padding: "10px 14px",
+            padding: "0 10px 0 14px",
             background: "var(--sg-bg-card-header)",
             borderBottom:
               displayMode === "minimized"
                 ? "none"
-                : "1px solid var(--sg-border-secondary)",
+                : "1px solid var(--sg-border-primary)",
           }}
           onMouseDown={handleDragStart}
           onDoubleClick={handleHeaderDoubleClick}
         >
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center min-w-0" style={{ gap: 8, flex: 1 }}>
+            {/* agent 色 ring — 8x8 圆形 + 发光 */}
             <span
-              className="w-2 h-2 rounded-full flex-shrink-0"
+              className="rounded-full flex-shrink-0"
               style={{
-                backgroundColor: colorHex,
-                boxShadow: `0 0 6px ${colorHex}60`,
+                width: 8,
+                height: 8,
+                background: colorHex,
+                boxShadow: `0 0 8px ${colorHex}`,
               }}
             />
             {isEditingName ? (
               <input
                 ref={nameInputRef}
-                className="text-xs font-semibold bg-transparent outline-none px-1 py-0.5 rounded min-w-[60px] max-w-[160px]"
+                className="bg-transparent outline-none rounded min-w-[60px] max-w-[180px] flex-shrink-0"
                 style={{
                   color: "var(--sg-text-primary)",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: "-0.005em",
+                  padding: "1px 4px",
                   border: `1px solid ${colorHex}60`,
                 }}
                 value={editName}
@@ -469,43 +492,41 @@ export function AgentCard({ agent }: AgentCardProps) {
               />
             ) : (
               <span
-                className="text-xs font-semibold truncate max-w-[160px] cursor-text"
-                style={{ color: "var(--sg-text-primary)" }}
+                className="truncate cursor-text flex-shrink-0"
+                style={{
+                  color: "var(--sg-text-primary)",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: "-0.005em",
+                  maxWidth: 180,
+                }}
                 onDoubleClick={handleNameDoubleClick}
               >
                 {agent.name}
               </span>
             )}
-            <span
-              className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full font-medium uppercase tracking-wide flex-shrink-0"
-              style={{
-                background: `${statusInfo.color}18`,
-                color: statusInfo.color,
-                transition: "all var(--sg-duration-slow) var(--sg-ease-in-out)",
-              }}
-            >
-              {statusInfo.animate && (
-                <PulsingDot
-                  color={agent.status === "error" ? "red" : agent.status === "waiting" ? "yellow" : "green"}
-                  size={4}
-                />
-              )}
-              {t(statusInfo.key)}
-            </span>
+            {/* br — mono 10.5px：cwd basename */}
             {agent.cwd && (
               <span
-                className="text-[10px] truncate max-w-[100px] flex-shrink-0"
-                style={{ color: "var(--sg-text-hint)", marginLeft: "auto" }}
+                className="truncate min-w-0"
+                style={{
+                  fontFamily: "var(--sg-font-mono)",
+                  fontSize: 10.5,
+                  color: "var(--sg-text-tertiary)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
                 title={agent.cwd}
               >
-                {agent.cwd.split("/").pop() || ""}
+                <span style={{ color: "var(--sg-text-secondary)" }}>
+                  ~/{agent.cwd.split("/").slice(-2).join("/")}
+                </span>
               </span>
             )}
           </div>
-          <div className="flex items-center gap-0.5 flex-shrink-0">
-            <button
-              className="p-1 rounded-md hover:bg-white/5 transition-colors"
-              style={{ color: "var(--sg-text-hint)" }}
+          <div className="flex items-center flex-shrink-0" style={{ gap: 2 }}>
+            <CardCtlBtn
               onClick={handleMinimize}
               title={displayMode === "minimized" ? t("card.expand") : t("card.minimize")}
             >
@@ -514,10 +535,8 @@ export function AgentCard({ agent }: AgentCardProps) {
               ) : (
                 <Minus className="w-3 h-3" />
               )}
-            </button>
-            <button
-              className="p-1 rounded-md hover:bg-white/5 transition-colors"
-              style={{ color: "var(--sg-text-hint)" }}
+            </CardCtlBtn>
+            <CardCtlBtn
               onClick={handleMaximize}
               title={displayMode === "maximized" ? t("card.restore") : t("card.maximize")}
             >
@@ -526,15 +545,10 @@ export function AgentCard({ agent }: AgentCardProps) {
               ) : (
                 <Maximize2 className="w-3 h-3" />
               )}
-            </button>
-            <button
-              className="p-1 rounded-md hover:bg-red-500/20 transition-colors"
-              style={{ color: "var(--sg-text-hint)" }}
-              onClick={handleClose}
-              title={t("card.close")}
-            >
+            </CardCtlBtn>
+            <CardCtlBtn onClick={handleClose} title={t("card.close")} danger>
               <X className="w-3 h-3" />
-            </button>
+            </CardCtlBtn>
           </div>
         </div>
 
@@ -574,8 +588,8 @@ export function AgentCard({ agent }: AgentCardProps) {
             display: displayMode === "minimized" ? "none" : "flex",
             height:
               displayMode === "maximized"
-                ? `calc(100% - ${HEADER_HEIGHT}px)`
-                : agent.size.height - HEADER_HEIGHT,
+                ? `calc(100% - ${HEADER_HEIGHT}px - ${FOOTER_HEIGHT}px)`
+                : agent.size.height - HEADER_HEIGHT - FOOTER_HEIGHT,
             background: "var(--sg-bg-code)",
           }}
         >
@@ -604,6 +618,59 @@ export function AgentCard({ agent }: AgentCardProps) {
             </div>
           )}
         </div>
+
+        {/* 底部状态条 — 26px：左 stat + 右 worktree/pty */}
+        {displayMode !== "minimized" && (
+          <div
+            className="flex items-center select-none"
+            style={{
+              height: FOOTER_HEIGHT,
+              padding: "0 12px",
+              gap: 8,
+              background: "var(--sg-bg-card-header)",
+              borderTop: "1px solid var(--sg-border-primary)",
+              fontFamily: "var(--sg-font-mono)",
+              fontSize: 10.5,
+              fontWeight: 500,
+              lineHeight: 1,
+              color: "var(--sg-text-hint)",
+            }}
+          >
+            {/* stat — dot + 状态文字 */}
+            <span
+              className="inline-flex items-center"
+              style={{ gap: 5, color: "var(--sg-text-tertiary)" }}
+            >
+              <span
+                aria-hidden
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 999,
+                  background: agent.status === "idle" ? "var(--sg-text-hint)" : statusInfo.color,
+                  boxShadow:
+                    agent.status === "idle"
+                      ? "none"
+                      : `0 0 6px ${statusInfo.color}`,
+                  animation: statusInfo.animate
+                    ? "sg-breathe 1.6s ease-in-out infinite"
+                    : undefined,
+                }}
+              />
+              {t(statusInfo.key)}
+            </span>
+            {/* 右侧：worktree · pty */}
+            <span className="inline-flex items-center" style={{ gap: 10, marginLeft: "auto" }}>
+              {agent.cwd && (
+                <span title={agent.cwd}>
+                  worktree · {agent.cwd.split("/").pop() || ""}
+                </span>
+              )}
+              <span style={{ color: "var(--sg-border-divider)" }}>·</span>
+              <span>pty {agent.terminalId.slice(-4) || "0"}</span>
+            </span>
+          </div>
+        )}
       </div>
 
       {/* 关闭确认对话框 — Portal 到 body，避免被卡片的 transform/z-index stacking context 遮挡 */}
@@ -668,5 +735,50 @@ export function AgentCard({ agent }: AgentCardProps) {
           document.body,
         )}
     </>
+  );
+}
+
+/** AgentCard 头部右侧的小按钮 — 22x22 圆角 hover 高亮 */
+function CardCtlBtn({
+  children,
+  onClick,
+  title,
+  danger,
+}: {
+  children: React.ReactNode;
+  onClick: (e: React.MouseEvent) => void;
+  title?: string;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className="inline-flex items-center justify-center transition-colors"
+      style={{
+        width: 22,
+        height: 22,
+        borderRadius: 4,
+        color: "var(--sg-text-hint)",
+        background: "transparent",
+        border: "none",
+        cursor: "pointer",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = danger
+          ? "rgba(239, 68, 68, 0.15)"
+          : "rgba(255, 255, 255, 0.05)";
+        e.currentTarget.style.color = danger
+          ? "#fca5a5"
+          : "var(--sg-text-primary)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "transparent";
+        e.currentTarget.style.color = "var(--sg-text-hint)";
+      }}
+    >
+      {children}
+    </button>
   );
 }

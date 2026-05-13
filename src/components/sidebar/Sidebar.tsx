@@ -421,27 +421,18 @@ export function Sidebar() {
             animation: "sg-fade-in 150ms var(--sg-ease-out, ease-out) both",
           }}
         >
-          {/* Workspace switcher —— 置于所有内容最上方 */}
-          <WorkspaceSwitcher />
-
-          {/* 标题栏 — 设计稿: padding 12px 14px */}
+          {/* sb-head — workspace switcher + add project (设计稿 grid 1fr auto) */}
           <div
-            className="flex items-center justify-between flex-shrink-0 border-b"
+            className="flex items-center flex-shrink-0"
             style={{
-              padding: "12px 14px",
-              borderColor: "var(--sg-border-primary, #1a1c23)",
+              padding: "0 6px 0 0",
+              gap: 4,
+              borderBottom: "1px solid var(--sg-border-primary)",
             }}
           >
-            <h2
-              className="font-semibold uppercase"
-              style={{
-                color: "var(--sg-text-tertiary, #8b92a3)",
-                fontSize: 10,
-                letterSpacing: "0.8px",
-              }}
-            >
-              Projects
-            </h2>
+            <div className="flex-1 min-w-0">
+              <WorkspaceSwitcher />
+            </div>
             <AddProjectButton />
           </div>
 

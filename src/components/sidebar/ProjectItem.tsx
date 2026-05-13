@@ -22,7 +22,6 @@ import {
   Code,
   Cpu,
   Settings,
-  FolderGit2,
   FilePlus,
   FolderPlus,
   ChevronDown,
@@ -80,16 +79,13 @@ export function ProjectItem({
   } | null>(null);
   const startCreate = useFileTreeUIStore((s) => s.startCreate);
 
-  // 该项目下第一个运行中 agent 的颜色 —— 圆点跟着这个 agent 的色盘走，
-  // 视觉上和 AgentCard header 上的圆点对齐，不再固定绿色。
-  //
+  // 该项目下所有关联的 agent 颜色（去重 + 保序）
   // 匹配优先级：
   // 1. agent.scope.kind === "project" 显式关联这个 project
   // 2. agent.scope.kind === "group" 关联这个 project 所属的组
   // 3. 老 agent 没 scope 字段 → 降级到 cwd.startsWith(project.path)
-  const runningAgentColorHex = (() => {
-    const match = agents.find((a) => {
-      if (a.status !== "running") return false;
+  const projectAgents = useMemo(() => {
+    return agents.filter((a) => {
       if (a.scope?.kind === "project" && a.scope.projectId === project.id) return true;
       if (
         a.scope?.kind === "group" &&
@@ -101,8 +97,22 @@ export function ProjectItem({
       if (!a.scope && a.cwd.startsWith(project.path)) return true;
       return false;
     });
-    return match ? AGENT_COLOR_HEX[match.color] : null;
-  })();
+  }, [agents, project.id, project.groupId, project.path]);
+
+  const agentColors = useMemo(() => {
+    const seen = new Set<string>();
+    const colors: string[] = [];
+    for (const a of projectAgents) {
+      const hex = AGENT_COLOR_HEX[a.color];
+      if (!seen.has(hex)) {
+        seen.add(hex);
+        colors.push(hex);
+      }
+    }
+    return colors;
+  }, [projectAgents]);
+
+  const hasRunningAgent = projectAgents.some((a) => a.status === "running");
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -162,15 +172,15 @@ export function ProjectItem({
     (s) => s.gitStatusByProject[project.id]?.branch ?? "",
   );
 
-  // Changes 视图下，折叠态也要在 header 展示项目总 +/- 统计
-  const viewMode = useProjectStore((s) => s.viewMode);
+  // Lane head 总览：ahead/behind + +/- 总改动 + agent stack
+  // —— 任何视图下都显示在 header 右侧（设计稿的 lane-head .meta）
   const projectGitStatus = useProjectStore(
     (s) => s.gitStatusByProject[project.id],
   );
+  const ahead = projectGitStatus?.ahead ?? 0;
+  const behind = projectGitStatus?.behind ?? 0;
   const diffSummary = useMemo(() => {
-    if (viewMode !== "changes" || !projectGitStatus) return null;
-    // staged + unstaged 全部累加。ChangesView 的合并策略是按 path dedupe 后
-    // 再各自 += additions/deletions —— 总和等价于这里的简单相加。
+    if (!projectGitStatus) return null;
     let add = 0;
     let del = 0;
     for (const c of projectGitStatus.staged) {
@@ -183,26 +193,32 @@ export function ProjectItem({
     }
     if (add === 0 && del === 0) return null;
     return { add, del };
-  }, [viewMode, projectGitStatus]);
+  }, [projectGitStatus]);
+
+  // 项目首字母 glyph — 最多 3 字符，用作 22x22 色块的标识
+  const glyph = project.name
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .slice(0, 3)
+    .toUpperCase() || "★";
+
+  // 项目代表色 — 优先使用第一个 agent 颜色，否则 accent
+  const projectColor = agentColors[0] ?? "#4a9eff";
 
   return (
     <>
       <button
-        className="w-full flex items-center cursor-pointer select-none group"
+        className="w-full flex items-center cursor-pointer select-none group transition-colors"
         style={{
-          padding: `9px 12px 9px ${10 + depth * 16}px`,
+          height: 34,
+          padding: `0 12px 0 ${10 + depth * 16}px`,
           gap: 8,
-          fontSize: 12,
-          color: isActive ? "#ffffff" : "#c8ccd3",
-          fontWeight: 600,
-          letterSpacing: "0.2px",
-          textTransform: "uppercase",
-          /* 项目作为一级容器：顶部分隔线 + 浅色背景 */
+          color: isActive ? "var(--sg-text-primary)" : "var(--sg-text-secondary)",
           background: isActive
-            ? "linear-gradient(90deg, rgba(74,158,255,0.08) 0%, rgba(74,158,255,0.02) 100%)"
-            : "#0b0c11",
-          borderTop: "1px solid #1a1c23",
-          borderBottom: isExpanded ? "1px solid #13151b" : "none",
+            ? "rgba(74, 158, 255, 0.04)"
+            : "var(--sg-bg-sidebar)",
+          border: "none",
+          borderTop: "1px solid var(--sg-border-primary)",
+          borderBottom: isExpanded ? "1px solid var(--sg-border-primary)" : "none",
           position: "relative",
         }}
         onClick={() => {
@@ -210,79 +226,138 @@ export function ProjectItem({
           setActiveProject(project);
         }}
         onContextMenu={handleContextMenu}
+        onMouseEnter={(e) => {
+          if (!isActive) e.currentTarget.style.background = "rgba(255, 255, 255, 0.025)";
+        }}
+        onMouseLeave={(e) => {
+          if (!isActive)
+            e.currentTarget.style.background = "var(--sg-bg-sidebar)";
+        }}
         {...(dragProps ?? {})}
       >
-        {/* 左侧高亮竖条 — active 状态 */}
+        {/* 左侧高亮竖条 — active 状态，2px 项目色 + 发光 */}
         {isActive && (
           <span
-            className="absolute left-0 top-0 bottom-0"
+            className="absolute left-0 top-0 bottom-0 pointer-events-none"
             style={{
               width: 2,
-              backgroundColor: "#4a9eff",
-              boxShadow: "0 0 8px rgba(74,158,255,0.6)",
+              background: projectColor,
+              boxShadow: `0 0 8px ${projectColor}80`,
             }}
           />
         )}
-        {/* Caret — lucide 图标 */}
+        {/* Caret */}
         {isExpanded ? (
-          <ChevronDown className="w-3 h-3 flex-shrink-0" style={{ color: "#8b92a3" }} />
+          <ChevronDown className="w-3 h-3 flex-shrink-0" style={{ color: "var(--sg-text-hint)" }} />
         ) : (
-          <ChevronRight className="w-3 h-3 flex-shrink-0" style={{ color: "#8b92a3" }} />
+          <ChevronRight className="w-3 h-3 flex-shrink-0" style={{ color: "var(--sg-text-hint)" }} />
         )}
-        {/* 项目图标 — FolderGit2 强化区分 */}
-        <FolderGit2
-          className="w-4 h-4 flex-shrink-0"
-          style={{ color: isActive ? "#4a9eff" : "#8b92a3" }}
-        />
-        {/* 项目名 */}
+        {/* 22x22 项目 glyph — 项目色背景 + 首字母 */}
         <span
-          className="truncate flex-1 text-left"
+          aria-hidden
+          className="flex-shrink-0 inline-flex items-center justify-center"
           style={{
-            fontSize: 12,
-            fontWeight: 600,
-            textTransform: "none",
-            letterSpacing: 0,
-            color: isActive ? "#ffffff" : "#e4e6eb",
+            width: 22,
+            height: 22,
+            borderRadius: 5,
+            background: projectColor,
+            fontFamily: "var(--sg-font-mono)",
+            fontWeight: 700,
+            fontSize: 8.5,
+            lineHeight: 1,
+            color: "#06121f",
+            boxShadow: "0 0 0 1px rgba(255, 255, 255, 0.06) inset",
           }}
         >
-          {project.name}
+          {glyph}
         </span>
-        {/* 运行状态指示 —— 颜色跟第一个匹配 running agent 对齐 */}
-        {runningAgentColorHex && (
+        {/* 项目名 + branch 内联 — name 用 ui font，branch 用 mono / hint 色 */}
+        <span
+          className="truncate flex items-baseline min-w-0 flex-1"
+          style={{ gap: 8 }}
+        >
           <span
-            className="w-2 h-2 rounded-full flex-shrink-0"
+            className="truncate"
             style={{
-              backgroundColor: runningAgentColorHex,
-              boxShadow: `0 0 6px ${runningAgentColorHex}60`,
-            }}
-          />
-        )}
-        {/* Git 分支切换器 — badge 形态，点击弹下拉 */}
-        {isExpanded && gitBranch && (
-          <BranchSwitcher
-            projectId={project.id}
-            projectPath={project.path}
-            currentBranch={gitBranch}
-          />
-        )}
-        {/* Changes 视图折叠态：项目级 +/- 统计 */}
-        {!isExpanded && diffSummary && (
-          <span
-            className="flex-shrink-0 tabular-nums flex items-center gap-1"
-            style={{
-              fontSize: 10,
-              fontFamily: "'SF Mono', Menlo, monospace",
-              fontWeight: 500,
-              textTransform: "none",
-              letterSpacing: 0,
+              fontSize: 12.5,
+              fontWeight: 600,
+              letterSpacing: "-0.005em",
+              color: "var(--sg-text-primary)",
             }}
           >
-            {diffSummary.add > 0 && (
-              <span style={{ color: "#22c55e" }}>+{diffSummary.add}</span>
-            )}
-            {diffSummary.del > 0 && (
-              <span style={{ color: "#ef4444" }}>-{diffSummary.del}</span>
-            )}
+            {project.name}
+          </span>
+          {gitBranch && (
+            <BranchSwitcher
+              projectId={project.id}
+              projectPath={project.path}
+              currentBranch={gitBranch}
+            />
+          )}
+        </span>
+
+        {/* Lane meta：ahead/behind + +/- + agents stack + live dot */}
+        <span
+          className="flex-shrink-0 inline-flex items-center"
+          style={{
+            gap: 6,
+            fontFamily: "var(--sg-font-mono)",
+            fontSize: 10,
+            fontWeight: 500,
+            lineHeight: 1,
+            color: "var(--sg-text-hint)",
+          }}
+        >
+          {ahead > 0 && (
+            <span style={{ color: "var(--sg-success)" }}>↑{ahead}</span>
+          )}
+          {behind > 0 && (
+            <span style={{ color: "var(--sg-warning)" }}>↓{behind}</span>
+          )}
+          {diffSummary?.add ? (
+            <span style={{ color: "var(--sg-success)" }}>+{diffSummary.add}</span>
+          ) : null}
+          {diffSummary?.del ? (
+            <span style={{ color: "var(--sg-error)" }}>−{diffSummary.del}</span>
+          ) : null}
+          {!ahead && !behind && !diffSummary && (
+            <span style={{ color: "var(--sg-text-hint)" }}>clean</span>
+          )}
+          {hasRunningAgent && (
+            <span
+              aria-hidden
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 999,
+                background: "var(--sg-accent)",
+                boxShadow: "0 0 6px var(--sg-accent)",
+                animation: "sg-breathe 1.4s ease-in-out infinite",
+                marginLeft: 2,
+              }}
+            />
+          )}
+        </span>
+
+        {/* Agents 色点 stack */}
+        {agentColors.length > 0 && (
+          <span
+            className="flex-shrink-0 inline-flex items-center"
+            style={{ gap: 3, marginLeft: 2 }}
+          >
+            {agentColors.slice(0, 4).map((c, i) => (
+              <span
+                key={i}
+                aria-hidden
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 999,
+                  background: c,
+                  boxShadow: `0 0 4px ${c}80`,
+                }}
+              />
+            ))}
           </span>
         )}
       </button>

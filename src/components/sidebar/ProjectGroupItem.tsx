@@ -11,7 +11,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import {
-  Folders,
   ChevronDown,
   ChevronRight,
   Edit2,
@@ -150,21 +149,25 @@ export function ProjectGroupItem({
     closeMenu();
   };
 
+  const groupGlyph =
+    resolveGroupDisplayName(group)
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .slice(0, 3)
+      .toUpperCase() || "GRP";
+
   return (
     <>
       <button
-        className="w-full flex items-center cursor-pointer select-none group"
+        className="w-full flex items-center cursor-pointer select-none group transition-colors"
         style={{
-          padding: "9px 12px 9px 10px",
+          height: 34,
+          padding: "0 12px 0 10px",
           gap: 8,
-          fontSize: 12,
-          color: "#c8ccd3",
-          fontWeight: 600,
-          letterSpacing: "0.2px",
-          textTransform: "uppercase",
-          background: "#0a0b10",
-          borderTop: "1px solid #1a1c23",
-          borderBottom: isExpanded ? "1px solid #13151b" : "none",
+          color: "var(--sg-text-secondary)",
+          background: "var(--sg-bg-sidebar)",
+          border: "none",
+          borderTop: "1px solid var(--sg-border-primary)",
+          borderBottom: isExpanded ? "1px solid var(--sg-border-primary)" : "none",
           position: "relative",
         }}
         onClick={() => {
@@ -172,37 +175,56 @@ export function ProjectGroupItem({
           onToggleExpanded();
         }}
         onContextMenu={handleContextMenu}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = "rgba(255, 255, 255, 0.025)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = "var(--sg-bg-sidebar)";
+        }}
         {...(dragProps ?? {})}
       >
         {/* caret */}
         {isExpanded ? (
           <ChevronDown
             className="w-3 h-3 flex-shrink-0"
-            style={{ color: "#8b92a3" }}
+            style={{ color: "var(--sg-text-hint)" }}
           />
         ) : (
           <ChevronRight
             className="w-3 h-3 flex-shrink-0"
-            style={{ color: "#8b92a3" }}
+            style={{ color: "var(--sg-text-hint)" }}
           />
         )}
-        {/* 组图标 */}
-        <Folders
-          className="w-4 h-4 flex-shrink-0"
-          style={{ color: "#4a9eff" }}
-        />
+        {/* 22x22 组 glyph — 紫色渐变（区别于 project 的纯色） */}
+        <span
+          aria-hidden
+          className="flex-shrink-0 inline-flex items-center justify-center"
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 5,
+            background: "linear-gradient(135deg, #a78bfa, #4a9eff)",
+            fontFamily: "var(--sg-font-mono)",
+            fontWeight: 700,
+            fontSize: 8.5,
+            lineHeight: 1,
+            color: "#06121f",
+            boxShadow: "0 0 0 1px rgba(255, 255, 255, 0.06) inset",
+          }}
+        >
+          {groupGlyph}
+        </span>
         {/* 组名（或编辑输入） */}
         {isEditing ? (
           <input
             ref={inputRef}
             className="flex-1 bg-transparent outline-none"
             style={{
-              color: "#ffffff",
-              fontSize: 12,
+              color: "var(--sg-text-primary)",
+              fontSize: 12.5,
               fontWeight: 600,
-              textTransform: "none",
-              letterSpacing: 0,
-              border: "1px solid #4a9eff",
+              letterSpacing: "-0.005em",
+              border: "1px solid var(--sg-accent)",
               borderRadius: 3,
               padding: "1px 4px",
             }}
@@ -220,29 +242,26 @@ export function ProjectGroupItem({
           <span
             className="truncate flex-1 text-left min-w-0"
             style={{
-              fontSize: 12,
+              fontSize: 12.5,
               fontWeight: 600,
-              textTransform: "none",
-              letterSpacing: 0,
-              color: "#e4e6eb",
+              letterSpacing: "-0.005em",
+              color: "var(--sg-text-primary)",
             }}
           >
             {resolveGroupDisplayName(group)}
           </span>
         )}
-        {/* 成员计数 */}
+        {/* 成员计数 — 圆角胶囊 */}
         <span
           className="flex-shrink-0 tabular-nums"
           style={{
-            fontSize: 9,
-            color: "#8b92a3",
+            fontSize: 9.5,
+            color: "var(--sg-text-hint)",
             fontWeight: 500,
-            fontFamily: "'SF Mono', Menlo, monospace",
-            padding: "2px 6px",
-            borderRadius: 3,
-            background: "rgba(74,158,255,0.08)",
-            textTransform: "none",
-            letterSpacing: 0,
+            fontFamily: "var(--sg-font-mono)",
+            padding: "2px 5px",
+            borderRadius: 999,
+            background: "rgba(255, 255, 255, 0.04)",
           }}
         >
           {members.length}
@@ -250,10 +269,13 @@ export function ProjectGroupItem({
         {/* 运行指示点 */}
         {hasRunningAgent && (
           <span
-            className="w-2 h-2 rounded-full flex-shrink-0"
+            className="flex-shrink-0"
             style={{
-              backgroundColor: "#22c55e",
-              boxShadow: "0 0 6px rgba(34,197,94,0.6)",
+              width: 6,
+              height: 6,
+              borderRadius: 999,
+              background: "var(--sg-success)",
+              boxShadow: "0 0 6px rgba(34, 197, 94, 0.6)",
             }}
           />
         )}

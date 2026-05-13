@@ -80,6 +80,14 @@ body {
   /* 使用 macOS 风格的字体渲染 */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Geist 字符变体：启用 ss01 / cv11，让 a / g / l 等字符更现代 */
+  font-feature-settings: "ss01", "cv11";
+}
+
+/* 文本选区色 — 与 accent 对齐 */
+::selection {
+  background: rgba(74, 158, 255, 0.35);
+  color: #fff;
 }
 
 /* ========================================
@@ -196,6 +204,29 @@ hr,
 }
 [role="treeitem"] {
   outline: none;
+}
+
+/* ========================================
+   FAB 外圈脉动光环（48px 圆形按钮专用）
+   - inset: -6px，扩散到按钮外侧 6px
+   - 2.4s ease-out 无限循环；缩放 .9 → 1.25 + 透明度 .6 → 0
+   ======================================== */
+@keyframes sg-fab-ring {
+  0% { transform: scale(0.9); opacity: 0.6; }
+  100% { transform: scale(1.25); opacity: 0; }
+}
+
+/* ========================================
+   Canvas 背景：radial 蓝色光晕 + 1px 点阵网格
+   ——背景图分两层：radial-gradient（顶部蓝晕 + 紫晕）+ 点阵 22px 排列
+   ======================================== */
+.sg-canvas-bg {
+  background-color: var(--sg-bg-canvas);
+  background-image:
+    radial-gradient(900px 600px at 18% 8%, rgba(74, 158, 255, 0.08), transparent 60%),
+    radial-gradient(800px 500px at 92% 90%, rgba(167, 139, 250, 0.06), transparent 60%),
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.04) 1px, transparent 0);
+  background-size: auto, auto, 22px 22px;
 }
 
 /* Slide panel 动画 */

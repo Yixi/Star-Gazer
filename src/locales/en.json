@@ -78,11 +78,14 @@
     "confirmCloseButton": "Confirm Close"
   },
   "sidebar": {
-    "files": "Files — Full file tree",
-    "changes": "Changes — Uncommitted changes only",
-    "history": "History — Browse commit history",
-    "treeLayout": "Tree — Directory tree layout",
-    "flatLayout": "Flat — Flat list layout"
+    "files": "Files",
+    "changes": "Changes",
+    "history": "History",
+    "treeLayout": "Tree",
+    "flatLayout": "Flat",
+    "filesHint": "Full file tree",
+    "changesHint": "Uncommitted changes only",
+    "historyHint": "Browse commit history"
   },
   "changesView": {
     "loadingGitStatus": "Loading git status...",
@@ -127,10 +130,15 @@
   "statusBar": {
     "acrossFiles": "across {{count}} files",
     "agents_one": "{{count}} agent",
-    "agents_other": "{{count}} agents"
+    "agents_other": "{{count}} agents",
+    "connected": "Connected",
+    "ahead": "{{count}} ahead",
+    "behind": "{{count}} behind"
   },
   "titleBar": {
     "focusMode": "Focus Mode",
+    "search": "Search & commands",
+    "running": "running",
     "diff": "(diff)"
   },
   "error": {
