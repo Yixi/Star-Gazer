@@ -16,7 +16,7 @@
  *
  * 行为：
  * - Commit 后端会 smart-stage：若无 staged 改动自动 `git add -A`
- * - Sync 等价于 pull --ff-only 后 push
+ * - Sync 等价于 pull --rebase 后 push（diverged 时把本地 commits rebase 到远端之上）
  * - Fetch 只跑 `git fetch --all --prune`，更新 ahead/behind 显示但不动 HEAD
  * - 任何操作完成后立即拉一次 gitStatus，避免 2s 轮询的延迟感
  */

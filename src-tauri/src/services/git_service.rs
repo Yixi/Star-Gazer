@@ -701,15 +701,19 @@ impl GitService {
         Err(stderr)
     }
 
-    /// Pull 当前分支 — 显式指定 `origin <branch> --ff-only`
+    /// Pull 当前分支 — 显式指定 `origin <branch> --rebase`
     ///
-    /// 裸 `git pull --ff-only` 在 `fetch --all` 拉了多个远端分支后会报
-    /// "Cannot fast-forward to multiple branches"，所以必须带上远端名和分支名。
-    /// 遇 diverged 让用户自己决定 rebase/merge。
+    /// 用 `--rebase` 而不是 `--ff-only`：能 fast-forward 时 git 仍直接 ff（不会
+    /// 生成多余的 merge/空 rebase），diverged 时才把本地 commits rebase 到远端
+    /// 之上，保持线性历史。裸命令带远端名和分支名是为了避免 `fetch --all` 后
+    /// 出现 "Cannot fast-forward to multiple branches"。
+    ///
+    /// 冲突时 rebase 会中断（仓库留在 `.git/rebase-merge/` 状态），stderr 透传
+    /// 给前端展示，由用户去终端 `git rebase --abort/--continue`。
     pub fn pull(repo_path: &str) -> Result<(), String> {
         let branch = Self::current_branch(repo_path)
             .ok_or_else(|| "当前处于 detached HEAD，无法 pull".to_string())?;
-        Self::exec(repo_path, &["pull", "--ff-only", "origin", &branch]).map(|_| ())
+        Self::exec(repo_path, &["pull", "--rebase", "origin", &branch]).map(|_| ())
     }
 
     /// Fetch 所有远端 + prune 掉已删除的远端分支

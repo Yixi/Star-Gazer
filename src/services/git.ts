@@ -130,7 +130,7 @@ export async function gitPush(repoPath: string): Promise<void> {
   return invoke("git_push", { repoPath });
 }
 
-/** Pull 当前分支（--ff-only） */
+/** Pull 当前分支（--rebase；能 ff 时 git 自己走 ff） */
 export async function gitPull(repoPath: string): Promise<void> {
   return invoke("git_pull", { repoPath });
 }
