@@ -183,14 +183,14 @@ export function CommitHeader({ controller }: { controller: CommitController }) {
       className="flex items-center justify-between flex-shrink-0 select-none"
       style={{
         padding: "6px 12px",
-        borderBottom: "1px solid #161820",
-        background: "#0b0c11",
+        borderBottom: "1px solid var(--sg-border-primary)",
+        background: "var(--sg-bg-elevated)",
         gap: 6,
       }}
     >
       <div
         className="flex items-center min-w-0"
-        style={{ gap: 4, fontSize: 11, color: "#8b92a3" }}
+        style={{ gap: 4, fontSize: 11, color: "var(--sg-text-tertiary)" }}
         title={branch}
       >
         <GitBranch className="w-3 h-3 flex-shrink-0" />
@@ -198,7 +198,7 @@ export function CommitHeader({ controller }: { controller: CommitController }) {
         {behind > 0 && (
           <span
             className="flex items-center tabular-nums"
-            style={{ color: "#8b92a3", marginLeft: 2 }}
+            style={{ color: "var(--sg-text-tertiary)", marginLeft: 2 }}
             title={t("git.behindTooltip", { count: behind })}
           >
             <ArrowDown className="w-2.5 h-2.5" />
@@ -208,7 +208,7 @@ export function CommitHeader({ controller }: { controller: CommitController }) {
         {ahead > 0 && (
           <span
             className="flex items-center tabular-nums"
-            style={{ color: "#8b92a3" }}
+            style={{ color: "var(--sg-text-tertiary)" }}
             title={t("git.aheadTooltip", { count: ahead })}
           >
             <ArrowUp className="w-2.5 h-2.5" />
@@ -263,8 +263,8 @@ export function CommitForm({ controller }: { controller: CommitController }) {
       className="flex flex-col flex-shrink-0 select-none"
       style={{
         padding: "8px 12px 10px",
-        borderTop: "1px solid #161820",
-        background: "#0b0c11",
+        borderTop: "1px solid var(--sg-border-primary)",
+        background: "var(--sg-bg-elevated)",
         gap: 6,
       }}
     >
@@ -282,18 +282,20 @@ export function CommitForm({ controller }: { controller: CommitController }) {
           fontSize: 12,
           lineHeight: 1.5,
           fontFamily: "inherit",
-          color: "#e4e6eb",
-          background: "#0e1017",
-          border: "1px solid #1f232c",
+          color: "var(--sg-text-primary)",
+          /* 容器已经是 sg-bg-elevated（浮起来的层），textarea 用同色 + 1px 边框
+             让它"溶进"容器，避免嵌套出黑色块；focus 时才高亮边框 */
+          background: "transparent",
+          border: "1px solid var(--sg-border-primary)",
           borderRadius: 4,
           outline: "none",
           minHeight: 26,
         }}
         onFocus={(e) => {
-          e.currentTarget.style.borderColor = "#4a9eff";
+          e.currentTarget.style.borderColor = "var(--sg-accent)";
         }}
         onBlur={(e) => {
-          e.currentTarget.style.borderColor = "#1f232c";
+          e.currentTarget.style.borderColor = "var(--sg-border-primary)";
         }}
       />
 
@@ -380,12 +382,14 @@ function PrimaryButton({
         height: 26,
         fontSize: 12,
         fontWeight: 500,
-        color: canPrimary ? "#e4e6eb" : "#6b7280",
+        color: canPrimary ? "var(--sg-text-primary)" : "var(--sg-text-tertiary)",
+        /* 不可用态用比 elevated 略亮的 card 色，配合实边框 — 避免在
+           elevated 容器上塌成"黑色按钮空洞"。可用态走 accent 半透明 */
         background: canPrimary
           ? "rgba(74, 158, 255, 0.18)"
-          : "rgba(255, 255, 255, 0.04)",
+          : "var(--sg-bg-card)",
         border: `1px solid ${
-          canPrimary ? "rgba(74, 158, 255, 0.3)" : "#1f232c"
+          canPrimary ? "rgba(74, 158, 255, 0.3)" : "var(--sg-border-secondary)"
         }`,
         borderRadius: 4,
         gap: 6,
@@ -429,7 +433,7 @@ function IconButton({
         width: 22,
         height: 20,
         borderRadius: 3,
-        color: disabled ? "#4a5263" : "#8b92a3",
+        color: disabled ? "var(--sg-text-placeholder)" : "var(--sg-text-tertiary)",
         background: "transparent",
       }}
       onMouseEnter={(e) => {

@@ -427,20 +427,39 @@ export function AgentCard({ agent }: AgentCardProps) {
         data-agent-id={agent.id}
         data-agent-color={agent.color}
       >
-        {/* 左侧 agent 色 stripe — 2px 全高 + 发光 */}
+        {/*
+          左侧 agent 色 stripe — 拆两段：只在 header / footer 区贴左缘 2px 色条，
+          terminal 区域不画（让 terminal 视觉上是干净的"屏幕"，色条只点缀两端）。
+          z-index 1 让它盖在 header / footer 之上（normal flow 默认 auto）。
+        */}
         <span
           aria-hidden
           className="absolute pointer-events-none"
           style={{
             left: 0,
             top: 0,
-            bottom: 0,
             width: 2,
+            height: HEADER_HEIGHT,
             background: colorHex,
-            boxShadow: `0 0 12px ${colorHex}`,
+            boxShadow: `0 0 4px ${colorHex}99`,
             zIndex: 1,
           }}
         />
+        {displayMode !== "minimized" && (
+          <span
+            aria-hidden
+            className="absolute pointer-events-none"
+            style={{
+              left: 0,
+              bottom: 0,
+              width: 2,
+              height: FOOTER_HEIGHT,
+              background: colorHex,
+              boxShadow: `0 0 4px ${colorHex}99`,
+              zIndex: 1,
+            }}
+          />
+        )}
         {/* 标题栏 — 34px 高，padding 0 10 0 14 */}
         <div
           className="flex items-center justify-between cursor-move select-none"

@@ -9,57 +9,62 @@
 
 /* === Star Gazer 全局样式 === */
 
-/* shadcn/ui CSS 变量 - 暗色主题为默认 */
+/* shadcn/ui Tailwind 主题映射 ——
+   全部走 var(--*)，让运行时 :root / .dark 设置的 sg- token 值生效。
+   不要在这里直接写 oklch 字面值，否则会被 Tailwind 编译期固化。 */
 @theme inline {
-  --color-background: oklch(0.145 0 0);
-  --color-foreground: oklch(0.985 0 0);
-  --color-card: oklch(0.145 0 0);
-  --color-card-foreground: oklch(0.985 0 0);
-  --color-popover: oklch(0.145 0 0);
-  --color-popover-foreground: oklch(0.985 0 0);
-  --color-primary: oklch(0.985 0 0);
-  --color-primary-foreground: oklch(0.205 0 0);
-  --color-secondary: oklch(0.269 0 0);
-  --color-secondary-foreground: oklch(0.985 0 0);
-  --color-muted: oklch(0.269 0 0);
-  --color-muted-foreground: oklch(0.708 0 0);
-  --color-accent: oklch(0.269 0 0);
-  --color-accent-foreground: oklch(0.985 0 0);
-  --color-destructive: oklch(0.396 0.141 25.723);
-  --color-destructive-foreground: oklch(0.637 0.237 25.331);
-  --color-border: oklch(0.269 0 0);
-  --color-input: oklch(0.269 0 0);
-  --color-ring: oklch(0.556 0 0);
-  --color-sidebar-background: oklch(0.145 0 0);
-  --color-sidebar-foreground: oklch(0.708 0 0);
-  --color-sidebar-primary: oklch(0.985 0 0);
-  --color-sidebar-primary-foreground: oklch(0.205 0 0);
-  --color-sidebar-accent: oklch(0.269 0 0);
-  --color-sidebar-accent-foreground: oklch(0.985 0 0);
-  --color-sidebar-border: oklch(0.269 0 0);
-  --color-sidebar-ring: oklch(0.556 0 0);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  /* destructive 背景上的前景色 — 用纯白避免和红底自指造成不可读 */
+  --color-destructive-foreground: #ffffff;
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Agent 色盘 — 直接引用 sg agent token，和 design-tokens.css 一致 */
+  --color-agent-blue: var(--sg-agent-blue);
+  --color-agent-orange: var(--sg-agent-orange);
+  --color-agent-purple: var(--sg-agent-purple);
+  --color-agent-green: var(--sg-agent-green);
+  --color-agent-pink: var(--sg-agent-pink);
+  --color-agent-yellow: var(--sg-agent-yellow);
+  --color-agent-cyan: var(--sg-agent-cyan);
+  --color-agent-red: var(--sg-agent-red);
+
+  --font-sans: 'Geist Variable', sans-serif;
+  --font-heading: var(--font-sans);
+
   --radius-sm: 0.25rem;
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
   --radius-xl: 0.75rem;
-
-  /* Agent 颜色盘 */
-  --color-agent-blue: oklch(0.623 0.214 259.815);
-  --color-agent-green: oklch(0.723 0.191 149.579);
-  --color-agent-orange: oklch(0.705 0.213 47.604);
-  --color-agent-purple: oklch(0.627 0.265 303.9);
-  --color-agent-pink: oklch(0.656 0.241 354.308);
-  --color-agent-cyan: oklch(0.715 0.143 215.221);
-  --color-agent-yellow: oklch(0.795 0.184 86.047);
-  --color-agent-red: oklch(0.577 0.245 27.325);
-  --font-heading: var(--font-sans);
-  --font-sans: 'Geist Variable', sans-serif;
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
@@ -73,14 +78,24 @@
 }
 
 body {
-  background-color: var(--sg-bg-app, var(--color-background));
+  /*
+    底层走最深的 #04060d（比 sg-bg-app 再深一档），
+    叠两层 radial-gradient 模拟设计稿的「宇宙感」环境光：
+    - 左上 900x600 蓝晕（accent 7%）
+    - 右下 800x500 紫晕（agent-purple 6%）
+    画布外缘 / Loading / WorkspacePicker 这些没有面板覆盖的场景会透出。
+  */
+  background-color: #04060d;
+  background-image:
+    radial-gradient(900px 600px at 18% 8%, rgba(74, 158, 255, 0.07), transparent 60%),
+    radial-gradient(800px 500px at 92% 90%, rgba(167, 139, 250, 0.06), transparent 60%);
   color: var(--sg-text-primary, var(--color-foreground));
   font-family: var(--sg-font-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
   overflow: hidden;
-  /* 使用 macOS 风格的字体渲染 */
+  /* macOS 风格字体渲染 */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Geist 字符变体：启用 ss01 / cv11，让 a / g / l 等字符更现代 */
+  /* Geist 字符变体：ss01 / cv11 让 a / g / l 等字符更现代 */
   font-feature-settings: "ss01", "cv11";
 }
 
@@ -133,7 +148,7 @@ select:not(:disabled),
 /* 所有分隔线使用统一颜色 */
 hr,
 [data-slot="separator"] {
-  border-color: var(--sg-border-divider, #2a2f3b);
+  border-color: var(--sg-border-divider);
 }
 
 /* ========================================
@@ -217,15 +232,17 @@ hr,
 }
 
 /* ========================================
-   Canvas 背景：radial 蓝色光晕 + 1px 点阵网格
-   ——背景图分两层：radial-gradient（顶部蓝晕 + 紫晕）+ 点阵 22px 排列
+   Canvas 背景：左上蓝晕 + 右下紫晕 + 1px 点阵网格（22px 间距）
+   —— 设计稿 1440x900 窗口里蓝晕非常明显；应用全屏面积大稀释更多。
+   这里强度按全屏校准：蓝晕 0.16，紫晕 0.10，叠加在 sg-bg-canvas 上
+   形成清晰的「左上钢蓝辉光 → 右下紫调」环境光。
    ======================================== */
 .sg-canvas-bg {
   background-color: var(--sg-bg-canvas);
   background-image:
-    radial-gradient(900px 600px at 18% 8%, rgba(74, 158, 255, 0.08), transparent 60%),
-    radial-gradient(800px 500px at 92% 90%, rgba(167, 139, 250, 0.06), transparent 60%),
-    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.04) 1px, transparent 0);
+    radial-gradient(1400px 1000px at 12% -10%, rgba(74, 158, 255, 0.16), transparent 60%),
+    radial-gradient(1100px 800px at 100% 110%, rgba(167, 139, 250, 0.10), transparent 60%),
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.03) 1px, transparent 0);
   background-size: auto, auto, 22px 22px;
 }
 
@@ -303,7 +320,7 @@ hr,
   user-select: none;
   padding: 0 8px;
   font-size: 11px;
-  border-right: 1px solid #1a1c23;
+  border-right: 1px solid var(--sg-border-primary);
 }
 .diff-container .diff-code {
   white-space: pre-wrap;
@@ -325,73 +342,90 @@ hr,
   color: #ef4444;
 }
 
+/* ========================================
+   shadcn/ui 变量映射 ——
+   全部对齐 sg- design tokens（见 design-tokens.css）。
+   原本 shadcn init 生成的是 light theme + 通用灰阶 dark theme，
+   两套都不是我们的 sg 配色，会污染所有 bg-background/bg-card/border-border 等
+   shadcn utility class。这里统一指到 sg 暗色 token，
+   让 shadcn 组件原生就和设计稿一致，不再需要 .dark 类区分。
+   ======================================== */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --background: var(--sg-bg-app);
+  --foreground: var(--sg-text-primary);
+  --card: var(--sg-bg-card);
+  --card-foreground: var(--sg-text-primary);
+  --popover: var(--sg-bg-elevated);
+  --popover-foreground: var(--sg-text-primary);
+  --primary: var(--sg-accent);
+  --primary-foreground: #06121f;
+  --secondary: var(--sg-bg-elevated);
+  --secondary-foreground: var(--sg-text-primary);
+  --muted: var(--sg-bg-elevated);
+  --muted-foreground: var(--sg-text-tertiary);
+  --accent: var(--sg-accent-muted);
+  --accent-foreground: var(--sg-text-primary);
+  --destructive: var(--sg-error);
+  --border: var(--sg-border-secondary);
+  --input: var(--sg-border-secondary);
+  --ring: var(--sg-accent);
+
+  /* chart 色对齐 agent 色盘（数据可视化用） */
+  --chart-1: var(--sg-agent-blue);
+  --chart-2: var(--sg-agent-orange);
+  --chart-3: var(--sg-agent-purple);
+  --chart-4: var(--sg-agent-green);
+  --chart-5: var(--sg-agent-pink);
+
+  /* shadcn 默认 radius — 保持原值，避免影响 Dialog/Card 等用 --radius 的组件 */
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+
+  --sidebar: var(--sg-bg-sidebar);
+  --sidebar-foreground: var(--sg-text-secondary);
+  --sidebar-primary: var(--sg-accent);
+  --sidebar-primary-foreground: #06121f;
+  --sidebar-accent: var(--sg-accent-muted);
+  --sidebar-accent-foreground: var(--sg-text-primary);
+  --sidebar-border: var(--sg-border-primary);
+  --sidebar-ring: var(--sg-accent);
 }
 
+/* .dark 显式启用时也走同一套 sg 暗色 —— 保留是为了兼容
+   App.tsx 上的 className="dark"（@custom-variant dark 依赖它生效）。 */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: var(--sg-bg-app);
+  --foreground: var(--sg-text-primary);
+  --card: var(--sg-bg-card);
+  --card-foreground: var(--sg-text-primary);
+  --popover: var(--sg-bg-elevated);
+  --popover-foreground: var(--sg-text-primary);
+  --primary: var(--sg-accent);
+  --primary-foreground: #06121f;
+  --secondary: var(--sg-bg-elevated);
+  --secondary-foreground: var(--sg-text-primary);
+  --muted: var(--sg-bg-elevated);
+  --muted-foreground: var(--sg-text-tertiary);
+  --accent: var(--sg-accent-muted);
+  --accent-foreground: var(--sg-text-primary);
+  --destructive: var(--sg-error);
+  --border: var(--sg-border-secondary);
+  --input: var(--sg-border-secondary);
+  --ring: var(--sg-accent);
+
+  --chart-1: var(--sg-agent-blue);
+  --chart-2: var(--sg-agent-orange);
+  --chart-3: var(--sg-agent-purple);
+  --chart-4: var(--sg-agent-green);
+  --chart-5: var(--sg-agent-pink);
+
+  --sidebar: var(--sg-bg-sidebar);
+  --sidebar-foreground: var(--sg-text-secondary);
+  --sidebar-primary: var(--sg-accent);
+  --sidebar-primary-foreground: #06121f;
+  --sidebar-accent: var(--sg-accent-muted);
+  --sidebar-accent-foreground: var(--sg-text-primary);
+  --sidebar-border: var(--sg-border-primary);
+  --sidebar-ring: var(--sg-accent);
 }
 
 @layer base {

@@ -254,8 +254,8 @@ export function BranchSwitcher({
               width: POPOVER_WIDTH,
               maxHeight: POPOVER_MAX_HEIGHT,
               zIndex: 9999,
-              backgroundColor: "#1a1c23",
-              border: "1px solid #2a2d36",
+              backgroundColor: "var(--sg-bg-elevated)",
+              border: "1px solid var(--sg-border-divider)",
             }}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
@@ -263,7 +263,7 @@ export function BranchSwitcher({
             {/* 搜索框 */}
             <div
               className="px-2 py-2 border-b"
-              style={{ borderColor: "#2a2d36" }}
+              style={{ borderColor: "var(--sg-border-divider)" }}
             >
               <input
                 autoFocus
@@ -275,8 +275,8 @@ export function BranchSwitcher({
                 style={{
                   fontSize: 11,
                   color: "#e4e6eb",
-                  background: "#0b0c11",
-                  border: "1px solid #2a2d36",
+                  background: "var(--sg-bg-canvas)",
+                  border: "1px solid var(--sg-border-divider)",
                 }}
               />
             </div>
@@ -351,7 +351,7 @@ export function BranchSwitcher({
               <div
                 className="px-3 py-2 border-t"
                 style={{
-                  borderColor: "#2a2d36",
+                  borderColor: "var(--sg-border-divider)",
                   fontSize: 10,
                   color: "#ef4444",
                   fontFamily: "'SF Mono', Menlo, monospace",

@@ -6,7 +6,7 @@
  * - WebGL 渲染器（@xterm/addon-webgl）
  * - FitAddon 自适应大小
  * - ResizeObserver 监听卡片大小变化
- * - 深色终端主题（背景 #0d0f14，SF Mono 字体）
+ * - 深色终端主题（背景 var(--sg-bg-code)，SF Mono 字体）
  * - 支持 256 色和 true color
  * - 通过 Tauri IPC 与后端 PTY 双向通信
  */
@@ -50,7 +50,7 @@ export function TerminalView({ terminalId, cwd, agentId, command, onReady, onExi
     <div
       ref={containerRef}
       className="w-full h-full"
-      style={{ background: "#0d0f14" }}
+      style={{ background: "var(--sg-bg-code)" }}
     />
   );
 }

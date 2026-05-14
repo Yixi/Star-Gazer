@@ -286,7 +286,7 @@ function TooltipContent({ detail }: { detail: GitCommitDetail }) {
             gap: 4,
             padding: "2px 6px",
             borderRadius: 3,
-            backgroundColor: "var(--sg-border-primary)",
+            backgroundColor: "var(--sg-bg-elevated)",
             color: "var(--sg-accent)",
             fontFamily: "var(--sg-font-mono)",
             fontSize: 10,

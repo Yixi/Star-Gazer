@@ -74,9 +74,9 @@ export function CanvasEmptyState() {
                     key={i}
                     className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-medium"
                     style={{
-                      background: "var(--sg-bg-card-header, #1a1d26)",
-                      border: "1px solid var(--sg-border-divider, #2a2f3b)",
-                      color: "var(--sg-text-secondary, #b8bcc4)",
+                      background: "var(--sg-bg-card-header)",
+                      border: "1px solid var(--sg-border-divider)",
+                      color: "var(--sg-text-secondary)",
                     }}
                   >
                     {part}

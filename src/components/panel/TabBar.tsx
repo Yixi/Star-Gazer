@@ -13,6 +13,32 @@ import { X } from "lucide-react";
 import { usePanelStore } from "@/stores/panelStore";
 import type { PanelTab } from "@/types/panel";
 
+/**
+ * Tab 12x12 文件类型徽章色 — 不进 sg- token 体系
+ *
+ * 设计原则：低饱和度的"调色后"色块，比 agent 色更暗，让 tab 头清爽。
+ * 故意和 agent 色盘错开（agent 色更亮），便于一眼区分"agent vs 文件类型"。
+ * 改这里只影响 tab 上的小图标，不影响其他 UI。
+ */
+const TAB_ICON_COLORS = {
+  diff: "#1a2438",      // diff 视图：偏蓝灰
+  ts: "#1a2438",        // .ts / .tsx：偏蓝灰
+  md: "#2a2a3a",        // .md / .mdx：紫灰
+  css: "#2a2a3a",       // .css：紫灰
+  rs: "#2b1c1c",        // .rs：暗红
+  json: "#1d2b1f",      // .json：暗绿
+} as const;
+
+function pickTabIconColor(tabType: PanelTab["type"], ext: string): string {
+  if (tabType === "diff") return TAB_ICON_COLORS.diff;
+  if (ext === "ts" || ext === "tsx") return TAB_ICON_COLORS.ts;
+  if (ext === "md" || ext === "mdx") return TAB_ICON_COLORS.md;
+  if (ext === "css") return TAB_ICON_COLORS.css;
+  if (ext === "rs") return TAB_ICON_COLORS.rs;
+  if (ext === "json") return TAB_ICON_COLORS.json;
+  return "var(--sg-border-divider)"; // 兜底：未知类型用通用分隔色
+}
+
 export function TabBar() {
   const { tabs, activeTabId, setActiveTab, closeTab, closeOtherTabs, closeAllTabs, closePanel, reorderTabs, pinTab } =
     usePanelStore();
@@ -184,8 +210,8 @@ export function TabBar() {
           style={{
             left: contextMenu.x,
             top: contextMenu.y,
-            backgroundColor: "#1a1c23",
-            border: "1px solid #2a2d36",
+            backgroundColor: "var(--sg-bg-elevated)",
+            border: "1px solid var(--sg-border-divider)",
           }}
         >
           <button
@@ -247,21 +273,10 @@ function TabItem({
 }) {
   const isPreview = tab.isPreview === true;
   const ext = (tab.filePath?.split(".").pop() ?? "").toLowerCase();
-  // 文件类型 → 12x12 色方块的颜色
-  const icColor =
-    tab.type === "diff"
-      ? "#1a2438" // diff: 偏蓝灰
-      : ext === "md" || ext === "mdx"
-        ? "#2a2a3a"
-        : ext === "css"
-          ? "#2a2a3a"
-          : ext === "ts" || ext === "tsx"
-            ? "#1a2438"
-            : ext === "rs"
-              ? "#2b1c1c"
-              : ext === "json"
-                ? "#1d2b1f"
-                : "#2a2f3b";
+  // 12x12 色方块按文件类型染色 — 这套色不属于 sg- 设计 token 体系
+  // （token 用于全局结构色），是 tab 内徽章专用的"低饱和度类型色"。
+  // 与 agent 色刻意区分（避免和 agent 蓝/绿混淆）。
+  const icColor = pickTabIconColor(tab.type, ext);
 
   return (
     <div

@@ -121,7 +121,7 @@ export function CommitGraphColumn({
         cx={myX}
         cy={centerY}
         r={selected ? NODE_RADIUS + 1.5 : NODE_RADIUS}
-        fill={selected ? node.color : "#0b0d12"}
+        fill={selected ? node.color : "var(--sg-bg-sidebar)"}
         stroke={node.color}
         strokeWidth={selected ? 2 : 1.5}
       />

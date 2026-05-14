@@ -4,7 +4,7 @@
  * 功能：
  * - 初始化 @xterm/xterm 终端实例（DOM 渲染器，支持 CSS zoom 无模糊）
  * - 加载 FitAddon 自适应大小
- * - 深色主题：背景 #0d0f14，SF Mono 字体
+ * - 深色主题：背景 = --sg-bg-code，SF Mono 字体
  * - 支持 256 色 和 true color
  * - 通过 Tauri IPC 创建后端 PTY 并双向通信
  *   - 监听 terminal-output event 写入 xterm
@@ -32,18 +32,29 @@ interface UseTerminalOptions {
 }
 
 /**
- * 深色终端主题 - 参考 Mockup 中的配色
- * 背景色 #0d0f14，支持 256 色和 true color
+ * 深色终端主题 — 结构色对齐 design-tokens.css
+ *
+ * xterm.js 不接受 CSS var，必须传十六进制。为避免改 sg- token 时
+ * 这里漏改，启动时从 `:root` 读 CSS 变量动态构造主题；读不到（如 SSR /
+ * 测试环境）再回落到静态 fallback。
+ *
+ * 16 色 ANSI 中：
+ * - background / cursorAccent → --sg-bg-code（终端底色）
+ * - foreground / brightWhite → --sg-text-primary
+ * - white → --sg-text-secondary
+ * - black → --sg-border-primary（设计稿同样用边框色当 ANSI black）
+ * - brightBlack → --sg-text-placeholder
+ * 其他色（red/green/blue/yellow/magenta/cyan + bright 系）属 agent 色盘，
+ * 保持硬编码 —— 它们本身就是设计意图，不应跟着结构色 token 一起换。
  */
-const TERMINAL_THEME = {
-  background: "#0d0f14",
+const FALLBACK_THEME = {
+  background: "#121b2f",
   foreground: "#e4e6eb",
   cursor: "#4a9eff",
-  cursorAccent: "#0d0f14",
+  cursorAccent: "#121b2f",
   selectionBackground: "rgba(74, 158, 255, 0.3)",
   selectionForeground: undefined,
-  // 基础 16 色（ANSI）
-  black: "#1a1c23",
+  black: "#232c46",
   red: "#ef4444",
   green: "#22c55e",
   yellow: "#eab308",
@@ -60,6 +71,29 @@ const TERMINAL_THEME = {
   brightCyan: "#22d3ee",
   brightWhite: "#e4e6eb",
 };
+
+function readCssVar(name: string, fallback: string): string {
+  if (typeof window === "undefined" || !document?.documentElement) return fallback;
+  const v = getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
+  return v || fallback;
+}
+
+function buildTerminalTheme() {
+  const bg = readCssVar("--sg-bg-code", FALLBACK_THEME.background);
+  return {
+    ...FALLBACK_THEME,
+    background: bg,
+    cursorAccent: bg,
+    foreground: readCssVar("--sg-text-primary", FALLBACK_THEME.foreground),
+    cursor: readCssVar("--sg-accent", FALLBACK_THEME.cursor),
+    black: readCssVar("--sg-border-primary", FALLBACK_THEME.black),
+    white: readCssVar("--sg-text-secondary", FALLBACK_THEME.white),
+    brightBlack: readCssVar("--sg-text-placeholder", FALLBACK_THEME.brightBlack),
+    brightWhite: readCssVar("--sg-text-primary", FALLBACK_THEME.brightWhite),
+  };
+}
 
 /** zoom 判 1 的浮点容差（Cmd+滚轮会产生 1.0000001 之类的浮点值） */
 const ZOOM_EPS = 0.01;
@@ -179,7 +213,7 @@ export function useTerminal({ terminalId, cwd, agentId, command, fontSize = 12, 
       // 必须是整数倍数（1 / 1.5 / 2 …），否则 fontSize × lineHeight 不是整数像素，
       // WebGL 渲染器做亚像素 GPU 合成时会在滚动后留下散落的字符残影。
       lineHeight: 1.5,
-      theme: TERMINAL_THEME,
+      theme: buildTerminalTheme(),
       cursorBlink: true,
       cursorStyle: "bar",
       cursorWidth: 2,

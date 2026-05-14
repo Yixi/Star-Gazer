@@ -49,7 +49,7 @@ export function TitleBar() {
         gridTemplateColumns: "1fr auto 1fr",
         alignItems: "center",
         padding: "0 12px",
-        background: "linear-gradient(180deg, #101218 0%, #0a0b0f 100%)",
+        background: "linear-gradient(180deg, #1a2236 0%, #131a2c 100%)",
         borderBottom: "1px solid var(--sg-border-primary)",
       }}
     >

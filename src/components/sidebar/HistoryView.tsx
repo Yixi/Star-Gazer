@@ -178,8 +178,8 @@ export function HistoryView({ project }: HistoryViewProps) {
         style={{
           height: 24,
           padding: "0 8px 0 14px",
-          background: "#0d0e13",
-          borderBottom: "1px solid #161820",
+          background: "var(--sg-bg-sidebar)",
+          borderBottom: "1px solid var(--sg-bg-card)",
           fontSize: 10,
         }}
       >
@@ -241,8 +241,8 @@ export function HistoryView({ project }: HistoryViewProps) {
         <div
           className="flex-shrink-0"
           style={{
-            background: "#0d0e13",
-            borderBottom: "1px solid #161820",
+            background: "var(--sg-bg-sidebar)",
+            borderBottom: "1px solid var(--sg-bg-card)",
             maxHeight: 180,
             overflowY: "auto",
           }}

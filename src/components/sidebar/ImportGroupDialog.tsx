@@ -99,14 +99,14 @@ export function ImportGroupDialog({
         style={{
           width: 560,
           maxHeight: "80vh",
-          backgroundColor: "#161820",
-          border: "1px solid #1f2128",
+          backgroundColor: "var(--sg-bg-card)",
+          border: "1px solid var(--sg-border-secondary)",
         }}
       >
         {/* 头部 */}
         <div
           className="flex items-center gap-3 px-5 py-4"
-          style={{ borderBottom: "1px solid #1f2128" }}
+          style={{ borderBottom: "1px solid var(--sg-border-secondary)" }}
         >
           <Folders className="w-5 h-5" style={{ color: "#4a9eff" }} />
           <div className="flex-1 min-w-0">
@@ -177,8 +177,8 @@ export function ImportGroupDialog({
           <div
             className="rounded-md py-1"
             style={{
-              backgroundColor: "#0b0c11",
-              border: "1px solid #1f2128",
+              backgroundColor: "var(--sg-bg-canvas)",
+              border: "1px solid var(--sg-border-secondary)",
             }}
           >
             {members.map((m) => {
@@ -222,7 +222,7 @@ export function ImportGroupDialog({
         {/* 按钮区 */}
         <div
           className="flex items-center justify-end gap-2 px-5 py-3"
-          style={{ borderTop: "1px solid #1f2128" }}
+          style={{ borderTop: "1px solid var(--sg-border-secondary)" }}
         >
           <button
             className="px-3 py-1.5 rounded text-xs hover:bg-white/5"
@@ -233,7 +233,7 @@ export function ImportGroupDialog({
           </button>
           <button
             className="px-3 py-1.5 rounded text-xs hover:bg-white/10"
-            style={{ color: "#b8bcc4", border: "1px solid #2a2d36" }}
+            style={{ color: "#b8bcc4", border: "1px solid var(--sg-border-divider)" }}
             onClick={onImportParentOnly}
             title={t("project.addParentOnlyTooltip")}
           >

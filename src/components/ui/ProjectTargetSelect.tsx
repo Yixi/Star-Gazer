@@ -89,8 +89,8 @@ export function ProjectTargetSelect({
       <Select.Trigger
         className="w-full px-3 py-2 rounded-lg text-sm text-white flex items-center gap-2 outline-none transition-colors"
         style={{
-          background: "#0d0f14",
-          border: "1px solid #1f2128",
+          background: "var(--sg-bg-code)",
+          border: "1px solid var(--sg-border-secondary)",
         }}
       >
         <span className="flex-1 flex items-center gap-2 min-w-0 text-left">
@@ -137,10 +137,16 @@ export function ProjectTargetSelect({
           <Select.Popup
             className="rounded-lg shadow-2xl py-1 max-h-[360px] overflow-y-auto"
             style={{
-              background: "#161820",
-              border: "1px solid #2a2d36",
+              background: "var(--sg-bg-card)",
+              border: "1px solid var(--sg-border-divider)",
               minWidth: "var(--anchor-width, 320px)",
             }}
+            /*
+              Portal 出去的 Popup 在 React 事件树上仍会冒泡到 Canvas，
+              而 Canvas 的 onWheel 会 preventDefault + 平移视口。
+              这里 stopPropagation 阻断 wheel 上传，下拉滚动时背后画布静止。
+            */
+            onWheel={(e) => e.stopPropagation()}
           >
             {standaloneProjects.length > 0 && (
               <Select.Group>

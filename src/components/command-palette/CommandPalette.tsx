@@ -332,8 +332,8 @@ export function CommandPalette() {
         loop
         className="relative w-[540px] rounded-xl shadow-2xl overflow-hidden"
         style={{
-          backgroundColor: "#1a1c23",
-          border: "1px solid #2a2d36",
+          backgroundColor: "var(--sg-bg-elevated)",
+          border: "1px solid var(--sg-border-divider)",
         }}
         onKeyDown={(e: React.KeyboardEvent) => {
           if (e.key === "Escape") handleClose();
@@ -342,7 +342,7 @@ export function CommandPalette() {
         {/* 搜索输入 */}
         <div
           className="flex items-center gap-2 px-4"
-          style={{ borderBottom: "1px solid #2a2d36" }}
+          style={{ borderBottom: "1px solid var(--sg-border-divider)" }}
         >
           {/* 模式徽章 */}
           <span
@@ -590,40 +590,40 @@ export function CommandPalette() {
         <div
           className="flex items-center justify-between px-4 py-2 text-[10px]"
           style={{
-            borderTop: "1px solid #2a2d36",
+            borderTop: "1px solid var(--sg-border-divider)",
             color: "#6b7280",
           }}
         >
           <div className="flex items-center gap-3">
             <span>
-              <kbd className="px-1 py-0.5 rounded" style={{ backgroundColor: "#2a2d36" }}>
+              <kbd className="px-1 py-0.5 rounded" style={{ backgroundColor: "var(--sg-bg-card-header)" }}>
                 &gt;
               </kbd>{" "}
               {t("commandPalette.command")}
             </span>
             <span>
-              <kbd className="px-1 py-0.5 rounded" style={{ backgroundColor: "#2a2d36" }}>
+              <kbd className="px-1 py-0.5 rounded" style={{ backgroundColor: "var(--sg-bg-card-header)" }}>
                 #
               </kbd>{" "}
               {t("commandPalette.file")}
             </span>
             <span>
-              <kbd className="px-1 py-0.5 rounded" style={{ backgroundColor: "#2a2d36" }}>
+              <kbd className="px-1 py-0.5 rounded" style={{ backgroundColor: "var(--sg-bg-card-header)" }}>
                 @
               </kbd>{" "}
               Agent
             </span>
           </div>
           <div className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 rounded" style={{ backgroundColor: "#2a2d36" }}>
+            <kbd className="px-1 py-0.5 rounded" style={{ backgroundColor: "var(--sg-bg-card-header)" }}>
               ↑↓
             </kbd>{" "}
             {t("commandPalette.navigate")}
-            <kbd className="px-1 py-0.5 rounded ml-1" style={{ backgroundColor: "#2a2d36" }}>
+            <kbd className="px-1 py-0.5 rounded ml-1" style={{ backgroundColor: "var(--sg-bg-card-header)" }}>
               ↵
             </kbd>{" "}
             {t("commandPalette.select")}
-            <kbd className="px-1 py-0.5 rounded ml-1" style={{ backgroundColor: "#2a2d36" }}>
+            <kbd className="px-1 py-0.5 rounded ml-1" style={{ backgroundColor: "var(--sg-bg-card-header)" }}>
               Esc
             </kbd>{" "}
             {t("common.close")}
@@ -670,7 +670,7 @@ function CommandItem({
 }) {
   return (
     <Command.Item
-      className="group flex items-center gap-2 px-2 py-2 rounded-md text-sm cursor-pointer transition-colors text-[#e4e6eb] data-[selected=true]:bg-[#2a2d36] data-[selected=true]:text-white hover:bg-[#242731]"
+      className="group flex items-center gap-2 px-2 py-2 rounded-md text-sm cursor-pointer transition-colors text-[#e4e6eb] data-[selected=true]:bg-[var(--sg-border-divider)] data-[selected=true]:text-white hover:bg-[#242731]"
       keywords={keywords}
       onSelect={onSelect}
       value={label}
@@ -688,7 +688,7 @@ function CommandItem({
       )}
       {shortcut && (
         <kbd
-          className="text-[10px] px-1.5 py-0.5 rounded bg-[#2a2d36] text-[#8b92a3] group-data-[selected=true]:bg-[#3a3d48] group-data-[selected=true]:text-[#e4e6eb]"
+          className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--sg-border-divider)] text-[#8b92a3] group-data-[selected=true]:bg-[#3a3d48] group-data-[selected=true]:text-[#e4e6eb]"
         >
           {shortcut}
         </kbd>

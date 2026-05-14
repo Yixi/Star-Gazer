@@ -11,21 +11,27 @@
    ======================================== */
 
 :root {
-  /* --- 背景层次（从深到浅） --- */
-  --sg-bg-app: #06070a;          /* 应用最底层背景 */
-  --sg-bg-window: #0a0b0f;      /* 窗口背景 */
-  --sg-bg-sidebar: #0d0e13;     /* 侧边栏 & 标题栏 */
-  --sg-bg-canvas: #0f1116;      /* 画布 / 面板背景 */
-  --sg-bg-card: #161820;        /* 卡片主体 */
-  --sg-bg-card-header: #1a1d26; /* 卡片头部 */
-  --sg-bg-code: #0d0f14;        /* 代码区域 / 终端背景 */
-  --sg-bg-elevated: #13151c;    /* 悬浮卡片 / 弹出菜单 */
+  /* --- 背景层次（从深到浅）---
+     "Midnight navy" 调色：明度档位从 #0a→#22 区间，色相 H≈222°（深海军蓝）。
+     设计稿原 token (#06070a 系) 是给浏览器 HTML 设的底色，依赖叠加的
+     radial gradients 提亮；在 Tauri 实际渲染里那种提亮拿不到，所以这里
+     把 token 明度直接提一档，让面板自身就是深蓝灰而不是黑。
+     层次：app(最深) < window < canvas/code < sidebar < elevated < card < card-header
+   */
+  --sg-bg-app: #0a0f1d;          /* 应用最底层背景 */
+  --sg-bg-window: #0e1424;       /* 窗口背景 */
+  --sg-bg-sidebar: #131a2c;      /* 侧边栏 & 标题栏 */
+  --sg-bg-canvas: #0f1626;       /* 画布 / 面板背景（蓝晕透出更明显） */
+  --sg-bg-card: #1a2236;         /* 卡片主体（terminal 上下夹的中间层） */
+  --sg-bg-card-header: #232e4c;  /* 卡片头部 / 页脚（明显比 card 亮一档） */
+  --sg-bg-code: #121b2f;         /* 代码区域 / 终端背景（深海军，不要黑） */
+  --sg-bg-elevated: #1d2740;     /* 悬浮卡片 / 弹出菜单 */
 
-  /* --- 边框 & 分隔线 --- */
-  --sg-border-primary: #1a1c23;   /* 主要边框（侧边栏/面板分隔） */
-  --sg-border-secondary: #1f2128; /* 次要边框（卡片/按钮） */
-  --sg-border-divider: #2a2f3b;   /* 分隔线（工具栏内部） */
-  --sg-border-subtle: #141620;    /* 微妙边框（几乎不可见） */
+  /* --- 边框 & 分隔线 — 同色调，比相邻面板亮 1-2 档 --- */
+  --sg-border-primary: #232c46;   /* 主要边框（侧边栏/面板分隔） */
+  --sg-border-secondary: #2c365a; /* 次要边框（卡片/按钮） */
+  --sg-border-divider: #3a456a;   /* 分隔线（工具栏内部） */
+  --sg-border-subtle: #1a2236;    /* 微妙边框（几乎不可见） */
 
   /* --- 文字层次 --- */
   --sg-text-primary: #e4e6eb;   /* 主要文字 */

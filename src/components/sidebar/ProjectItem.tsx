@@ -195,12 +195,6 @@ export function ProjectItem({
     return { add, del };
   }, [projectGitStatus]);
 
-  // 项目首字母 glyph — 最多 3 字符，用作 22x22 色块的标识
-  const glyph = project.name
-    .replace(/[^a-zA-Z0-9]/g, "")
-    .slice(0, 3)
-    .toUpperCase() || "★";
-
   // 项目代表色 — 优先使用第一个 agent 颜色，否则 accent
   const projectColor = agentColors[0] ?? "#4a9eff";
 
@@ -252,25 +246,6 @@ export function ProjectItem({
         ) : (
           <ChevronRight className="w-3 h-3 flex-shrink-0" style={{ color: "var(--sg-text-hint)" }} />
         )}
-        {/* 22x22 项目 glyph — 项目色背景 + 首字母 */}
-        <span
-          aria-hidden
-          className="flex-shrink-0 inline-flex items-center justify-center"
-          style={{
-            width: 22,
-            height: 22,
-            borderRadius: 5,
-            background: projectColor,
-            fontFamily: "var(--sg-font-mono)",
-            fontWeight: 700,
-            fontSize: 8.5,
-            lineHeight: 1,
-            color: "#06121f",
-            boxShadow: "0 0 0 1px rgba(255, 255, 255, 0.06) inset",
-          }}
-        >
-          {glyph}
-        </span>
         {/* 项目名 + branch 内联 — name 用 ui font，branch 用 mono / hint 色 */}
         <span
           className="truncate flex items-baseline min-w-0 flex-1"
@@ -320,9 +295,6 @@ export function ProjectItem({
           {diffSummary?.del ? (
             <span style={{ color: "var(--sg-error)" }}>−{diffSummary.del}</span>
           ) : null}
-          {!ahead && !behind && !diffSummary && (
-            <span style={{ color: "var(--sg-text-hint)" }}>clean</span>
-          )}
           {hasRunningAgent && (
             <span
               aria-hidden

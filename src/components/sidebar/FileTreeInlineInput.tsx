@@ -93,7 +93,7 @@ export function FileTreeInlineInput({
         fontSize: 13,
         lineHeight: "18px",
         color: "#e4e6eb",
-        background: "#0e1017",
+        background: "var(--sg-bg-code)",
         border: "1px solid #4a9eff",
         borderRadius: 3,
         outline: "none",

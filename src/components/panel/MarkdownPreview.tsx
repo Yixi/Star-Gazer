@@ -32,13 +32,13 @@ function ImagePreview({ filePath }: { filePath: string }) {
   return (
     <div
       className="h-full overflow-auto flex flex-col items-center justify-center gap-4 p-8"
-      style={{ backgroundColor: "#0f1116" }}
+      style={{ backgroundColor: "var(--sg-bg-canvas)" }}
     >
       <img
         src={src}
         alt={name}
         className="max-w-full max-h-[80%] object-contain rounded-lg"
-        style={{ border: "1px solid #1f2128" }}
+        style={{ border: "1px solid var(--sg-border-secondary)" }}
       />
       <span className="text-xs" style={{ color: "#6b7280" }}>{name}</span>
     </div>
@@ -80,23 +80,23 @@ function MarkdownContent({ filePath }: { filePath: string }) {
   return (
     <div
       className="h-full overflow-auto px-6 py-4"
-      style={{ backgroundColor: "#0f1116" }}
+      style={{ backgroundColor: "var(--sg-bg-canvas)" }}
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         children={content}
         components={{
-          h1: ({ children }) => <h1 className="text-2xl font-bold mt-6 mb-3 pb-2" style={{ color: "#e4e6eb", borderBottom: "1px solid #1f2128" }}>{children}</h1>,
-          h2: ({ children }) => <h2 className="text-xl font-semibold mt-5 mb-2 pb-1.5" style={{ color: "#e4e6eb", borderBottom: "1px solid #1f2128" }}>{children}</h2>,
-          h3: ({ children }) => <h3 className="text-lg font-semibold mt-4 mb-2" style={{ color: "#e4e6eb" }}>{children}</h3>,
-          h4: ({ children }) => <h4 className="text-base font-semibold mt-3 mb-1" style={{ color: "#e4e6eb" }}>{children}</h4>,
-          p: ({ children }) => <p className="my-2 leading-relaxed text-sm" style={{ color: "#b8bcc4" }}>{children}</p>,
-          a: ({ href, children }) => <a href={href} className="underline" style={{ color: "#4a9eff" }}>{children}</a>,
-          ul: ({ children }) => <ul className="my-2 pl-6 list-disc text-sm" style={{ color: "#b8bcc4" }}>{children}</ul>,
-          ol: ({ children }) => <ol className="my-2 pl-6 list-decimal text-sm" style={{ color: "#b8bcc4" }}>{children}</ol>,
+          h1: ({ children }) => <h1 className="text-2xl font-bold mt-6 mb-3 pb-2" style={{ color: "var(--sg-text-primary)", borderBottom: "1px solid var(--sg-border-secondary)" }}>{children}</h1>,
+          h2: ({ children }) => <h2 className="text-xl font-semibold mt-5 mb-2 pb-1.5" style={{ color: "var(--sg-text-primary)", borderBottom: "1px solid var(--sg-border-secondary)" }}>{children}</h2>,
+          h3: ({ children }) => <h3 className="text-lg font-semibold mt-4 mb-2" style={{ color: "var(--sg-text-primary)" }}>{children}</h3>,
+          h4: ({ children }) => <h4 className="text-base font-semibold mt-3 mb-1" style={{ color: "var(--sg-text-primary)" }}>{children}</h4>,
+          p: ({ children }) => <p className="my-2 leading-relaxed text-sm" style={{ color: "var(--sg-text-secondary)" }}>{children}</p>,
+          a: ({ href, children }) => <a href={href} className="underline" style={{ color: "var(--sg-accent)" }}>{children}</a>,
+          ul: ({ children }) => <ul className="my-2 pl-6 list-disc text-sm" style={{ color: "var(--sg-text-secondary)" }}>{children}</ul>,
+          ol: ({ children }) => <ol className="my-2 pl-6 list-decimal text-sm" style={{ color: "var(--sg-text-secondary)" }}>{children}</ol>,
           li: ({ children }) => <li className="my-0.5">{children}</li>,
           blockquote: ({ children }) => (
-            <blockquote className="my-3 pl-4 text-sm" style={{ borderLeft: "3px solid #4a9eff", color: "#8b92a3" }}>
+            <blockquote className="my-3 pl-4 text-sm" style={{ borderLeft: "3px solid var(--sg-accent)", color: "var(--sg-text-tertiary)" }}>
               {children}
             </blockquote>
           ),
@@ -104,13 +104,13 @@ function MarkdownContent({ filePath }: { filePath: string }) {
             const isBlock = className?.startsWith("language-");
             if (isBlock) {
               return (
-                <pre className="my-3 p-4 rounded-lg overflow-x-auto text-xs" style={{ backgroundColor: "#0d0e13", border: "1px solid #1f2128" }}>
-                  <code className="font-mono" style={{ color: "#e4e6eb" }}>{children}</code>
+                <pre className="my-3 p-4 rounded-lg overflow-x-auto text-xs" style={{ backgroundColor: "var(--sg-bg-sidebar)", border: "1px solid var(--sg-border-secondary)" }}>
+                  <code className="font-mono" style={{ color: "var(--sg-text-primary)" }}>{children}</code>
                 </pre>
               );
             }
             return (
-              <code className="px-1.5 py-0.5 rounded text-xs font-mono" style={{ backgroundColor: "#1a1c23", color: "#e4e6eb" }}>
+              <code className="px-1.5 py-0.5 rounded text-xs font-mono" style={{ backgroundColor: "var(--sg-bg-card-header)", color: "var(--sg-text-primary)" }}>
                 {children}
               </code>
             );
@@ -124,16 +124,16 @@ function MarkdownContent({ filePath }: { filePath: string }) {
             </div>
           ),
           th: ({ children }) => (
-            <th className="px-3 py-2 text-left text-xs font-semibold" style={{ color: "#e4e6eb", borderBottom: "2px solid #1f2128", backgroundColor: "#1a1c23" }}>
+            <th className="px-3 py-2 text-left text-xs font-semibold" style={{ color: "var(--sg-text-primary)", borderBottom: "2px solid var(--sg-border-secondary)", backgroundColor: "var(--sg-bg-card-header)" }}>
               {children}
             </th>
           ),
           td: ({ children }) => (
-            <td className="px-3 py-2 text-sm" style={{ color: "#b8bcc4", borderBottom: "1px solid #1f2128" }}>
+            <td className="px-3 py-2 text-sm" style={{ color: "var(--sg-text-secondary)", borderBottom: "1px solid var(--sg-border-secondary)" }}>
               {children}
             </td>
           ),
-          hr: () => <hr className="my-4" style={{ borderColor: "#1f2128" }} />,
+          hr: () => <hr className="my-4" style={{ borderColor: "var(--sg-border-secondary)" }} />,
           img: ({ src, alt }) => <img src={src} alt={alt} className="max-w-full rounded my-2" />,
           input: ({ type, checked, ...props }) => {
             if (type === "checkbox") {

@@ -48,8 +48,8 @@ export function FileTreeDeleteDialog({
         style={{
           minWidth: 360,
           maxWidth: 480,
-          background: "#161820",
-          border: "1px solid #2a2d36",
+          background: "var(--sg-bg-card)",
+          border: "1px solid var(--sg-border-divider)",
           padding: 20,
         }}
         onClick={(e) => e.stopPropagation()}
@@ -89,7 +89,7 @@ export function FileTreeDeleteDialog({
               fontSize: 12,
               color: "#c8ccd3",
               background: "rgba(255,255,255,0.06)",
-              border: "1px solid #2a2d36",
+              border: "1px solid var(--sg-border-divider)",
               borderRadius: 4,
               cursor: "pointer",
             }}

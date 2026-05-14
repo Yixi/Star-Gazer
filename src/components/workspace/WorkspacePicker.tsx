@@ -153,8 +153,8 @@ export function WorkspacePicker({ closable = true, onClose }: WorkspacePickerPro
         style={{
           width: 520,
           maxHeight: "80vh",
-          backgroundColor: "#161820",
-          border: "1px solid #1f2128",
+          backgroundColor: "var(--sg-bg-card)",
+          border: "1px solid var(--sg-border-secondary)",
           display: "flex",
           flexDirection: "column",
         }}
@@ -162,7 +162,7 @@ export function WorkspacePicker({ closable = true, onClose }: WorkspacePickerPro
         {/* 头部 */}
         <div
           className="flex items-center gap-3 px-5 py-4"
-          style={{ borderBottom: "1px solid #1f2128" }}
+          style={{ borderBottom: "1px solid var(--sg-border-secondary)" }}
         >
           <Layers className="w-5 h-5" style={{ color: "#4a9eff" }} />
           <div className="flex-1 min-w-0">
@@ -211,11 +211,11 @@ export function WorkspacePicker({ closable = true, onClose }: WorkspacePickerPro
           <button
             className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-md transition-colors"
             style={{
-              backgroundColor: "#1a1c23",
+              backgroundColor: "var(--sg-bg-elevated)",
               color: "#e4e6eb",
               fontSize: 12,
               fontWeight: 600,
-              border: "1px solid #2a2d36",
+              border: "1px solid var(--sg-border-divider)",
               opacity: busy ? 0.6 : 1,
               cursor: busy ? "not-allowed" : "pointer",
             }}

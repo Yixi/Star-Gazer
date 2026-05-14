@@ -89,8 +89,8 @@ export function ContextMenu({
         top: pos.top,
         minWidth,
         zIndex: 9999,
-        backgroundColor: "#1a1c23",
-        border: "1px solid #2a2d36",
+        backgroundColor: "var(--sg-bg-elevated)",
+        border: "1px solid var(--sg-border-divider)",
       }}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -142,5 +142,5 @@ export function ContextMenuItem({
 }
 
 export function MenuDivider() {
-  return <div className="my-1 border-t" style={{ borderColor: "#2a2d36" }} />;
+  return <div className="my-1 border-t" style={{ borderColor: "var(--sg-border-divider)" }} />;
 }

@@ -200,15 +200,15 @@ export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
       <div
         className="w-[420px] rounded-xl overflow-hidden"
         style={{
-          background: "#161820",
-          border: "1px solid #1f2128",
+          background: "var(--sg-bg-card)",
+          border: "1px solid var(--sg-border-secondary)",
           boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
         }}
       >
         {/* 头部 */}
         <div
           className="flex items-center justify-between px-5 py-4"
-          style={{ background: "#1a1d26", borderBottom: "1px solid #1f2128" }}
+          style={{ background: "var(--sg-bg-card-header)", borderBottom: "1px solid var(--sg-border-secondary)" }}
         >
           <h2 className="text-sm font-semibold text-white">{t("agent.createNew")}</h2>
           <button
@@ -270,7 +270,7 @@ export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
                 aria-checked={bypassPermissions}
                 onClick={() => setBypassPermissions((v) => !v)}
                 className={`relative flex-shrink-0 mt-0.5 w-8 h-[18px] rounded-full transition-colors ${
-                  bypassPermissions ? "bg-[#4a9eff]" : "bg-[#2a2d36]"
+                  bypassPermissions ? "bg-[#4a9eff]" : "bg-[var(--sg-border-divider)]"
                 }`}
               >
                 <span
@@ -305,8 +305,8 @@ export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
               placeholder={`${AGENT_TYPES.find((t) => t.id === selectedType)?.name ?? "Agent"} #${agents.length + 1}`}
               className="w-full px-3 py-2 rounded-lg text-sm text-white placeholder-[#4a5263] outline-none focus:ring-1 focus:ring-[#4a9eff] transition-colors"
               style={{
-                background: "#0d0f14",
-                border: "1px solid #1f2128",
+                background: "var(--sg-bg-code)",
+                border: "1px solid var(--sg-border-secondary)",
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleCreate();
@@ -332,7 +332,7 @@ export function AgentPicker({ onClose, initialType }: AgentPickerProps) {
         {/* 底部操作 */}
         <div
           className="flex items-center justify-end gap-3 px-5 py-4"
-          style={{ borderTop: "1px solid #1f2128" }}
+          style={{ borderTop: "1px solid var(--sg-border-secondary)" }}
         >
           <button
             className="px-4 py-2 rounded-lg text-xs text-[#8b92a3] hover:text-white hover:bg-white/10 transition-colors"

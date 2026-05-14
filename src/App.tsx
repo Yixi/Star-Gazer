@@ -42,7 +42,7 @@ function App() {
     return (
       <div
         className="flex items-center justify-center h-screen w-screen dark"
-        style={{ backgroundColor: "#0d0e13", color: "#6b7280", fontSize: 12 }}
+        style={{ backgroundColor: "var(--sg-bg-sidebar)", color: "#6b7280", fontSize: 12 }}
       >
         Loading workspace…
       </div>
@@ -54,7 +54,7 @@ function App() {
     return (
       <div
         className="h-screen w-screen dark"
-        style={{ backgroundColor: "#0d0e13" }}
+        style={{ backgroundColor: "var(--sg-bg-sidebar)" }}
       >
         <WorkspacePicker closable={false} />
       </div>

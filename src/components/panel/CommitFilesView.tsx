@@ -223,8 +223,8 @@ export function CommitFilesView({ tabId }: CommitFilesViewProps) {
         className="flex flex-col flex-shrink-0"
         style={{
           width: leftWidth,
-          borderRight: "1px solid #1a1c23",
-          backgroundColor: "#0b0d12",
+          borderRight: "1px solid var(--sg-border-primary)",
+          backgroundColor: "var(--sg-bg-sidebar)",
         }}
       >
         {/* 左栏工具栏 */}
@@ -233,8 +233,8 @@ export function CommitFilesView({ tabId }: CommitFilesViewProps) {
           style={{
             height: 32,
             padding: "0 10px 0 14px",
-            borderColor: "#1a1c23",
-            backgroundColor: "#0d0f14",
+            borderColor: "var(--sg-border-primary)",
+            backgroundColor: "var(--sg-bg-code)",
           }}
         >
           <span className="text-[10px] uppercase tracking-wider" style={{ color: "#6b7280" }}>
@@ -310,7 +310,7 @@ export function CommitFilesView({ tabId }: CommitFilesViewProps) {
       {/* 分隔条 */}
       <div
         className="flex-shrink-0 h-full cursor-col-resize group relative"
-        style={{ width: 1, backgroundColor: "#1a1c23" }}
+        style={{ width: 1, backgroundColor: "var(--sg-border-primary)" }}
         onMouseDown={handleResizeMouseDown}
       >
         <div
@@ -320,7 +320,7 @@ export function CommitFilesView({ tabId }: CommitFilesViewProps) {
       </div>
 
       {/* 右栏 — 文件路径面包屑 + diff */}
-      <div className="flex-1 min-w-0 flex flex-col" style={{ backgroundColor: "#0d0f14" }}>
+      <div className="flex-1 min-w-0 flex flex-col" style={{ backgroundColor: "var(--sg-bg-code)" }}>
         {/* 文件路径面包屑 */}
         {selectedFile && (
           <div
@@ -328,8 +328,8 @@ export function CommitFilesView({ tabId }: CommitFilesViewProps) {
             style={{
               height: 30,
               padding: "0 14px",
-              borderBottom: "1px solid #1a1c23",
-              backgroundColor: "#0f1116",
+              borderBottom: "1px solid var(--sg-border-primary)",
+              backgroundColor: "var(--sg-bg-canvas)",
               fontFamily: "'SF Mono', Menlo, monospace",
               fontSize: 11,
             }}

@@ -149,12 +149,6 @@ export function ProjectGroupItem({
     closeMenu();
   };
 
-  const groupGlyph =
-    resolveGroupDisplayName(group)
-      .replace(/[^a-zA-Z0-9]/g, "")
-      .slice(0, 3)
-      .toUpperCase() || "GRP";
-
   return (
     <>
       <button
@@ -195,25 +189,6 @@ export function ProjectGroupItem({
             style={{ color: "var(--sg-text-hint)" }}
           />
         )}
-        {/* 22x22 组 glyph — 紫色渐变（区别于 project 的纯色） */}
-        <span
-          aria-hidden
-          className="flex-shrink-0 inline-flex items-center justify-center"
-          style={{
-            width: 22,
-            height: 22,
-            borderRadius: 5,
-            background: "linear-gradient(135deg, #a78bfa, #4a9eff)",
-            fontFamily: "var(--sg-font-mono)",
-            fontWeight: 700,
-            fontSize: 8.5,
-            lineHeight: 1,
-            color: "#06121f",
-            boxShadow: "0 0 0 1px rgba(255, 255, 255, 0.06) inset",
-          }}
-        >
-          {groupGlyph}
-        </span>
         {/* 组名（或编辑输入） */}
         {isEditing ? (
           <input
@@ -290,8 +265,8 @@ export function ProjectGroupItem({
               left: contextMenu.x,
               top: contextMenu.y,
               zIndex: 9999,
-              backgroundColor: "#1a1c23",
-              border: "1px solid #2a2d36",
+              backgroundColor: "var(--sg-bg-elevated)",
+              border: "1px solid var(--sg-border-divider)",
             }}
           >
             <MenuItem
@@ -304,7 +279,7 @@ export function ProjectGroupItem({
               label="解组（成员变独立项目）"
               onClick={handleUngroup}
             />
-            <div className="my-1 border-t" style={{ borderColor: "#2a2d36" }} />
+            <div className="my-1 border-t" style={{ borderColor: "var(--sg-border-divider)" }} />
             <MenuItem
               icon={<Trash2 className="w-3.5 h-3.5" />}
               label="删除整组（含所有成员）"

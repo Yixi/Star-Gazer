@@ -334,8 +334,8 @@ export function Sidebar() {
         /* 宽度平滑过渡：240px ↔ 48px；拖拽时关闭过渡避免延迟感 */
         width: sidebarOpen ? sidebarWidth : sidebarCollapsedWidth,
         minWidth: sidebarOpen ? sidebarWidth : sidebarCollapsedWidth,
-        backgroundColor: "var(--sg-bg-sidebar, #0d0e13)",
-        borderColor: "var(--sg-border-primary, #1a1c23)",
+        backgroundColor: "var(--sg-bg-sidebar)",
+        borderColor: "var(--sg-border-primary)",
         transition: isResizing
           ? "none"
           : "width 200ms var(--sg-ease-out, ease-out), min-width 200ms var(--sg-ease-out, ease-out)",
